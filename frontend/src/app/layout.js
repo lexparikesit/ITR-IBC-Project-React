@@ -23,9 +23,9 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en">
+    <html lang="en" >
       <body className={`${geistSans.variable} ${geistMono.variable}`}>
-        <MantineProvider withGlobalClasses withNormalizeCSS>
+        <MantineProvider withGlobalClasses withNormalizeCSS defaultColorScheme="light">
           {children}
         </MantineProvider>
       </body>
