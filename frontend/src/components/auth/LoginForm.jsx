@@ -34,6 +34,17 @@ const LoginForm = () => {
 			console.error("Login error:", error);
 		}
 	};
+
+	const inputStyles = {
+            label: { color: '#A91D3A' },
+            input: {
+                borderColor: '#151515',
+                color: '#333',
+                backgroundColor: '#fff',
+                },
+            placeholder: { color: '#aaa' }
+        }
+
 	return (
 		<Stack>
 			<TextInput
@@ -42,6 +53,7 @@ const LoginForm = () => {
 				value={username}
 				onChange={(e) => setUsername(e.currentTarget.value)}
 				required
+				styles={inputStyles}
 			/>
 
 			<PasswordInput
@@ -51,6 +63,7 @@ const LoginForm = () => {
 				onChange={(e) => setPassword(e.currentTarget.value)}
 				required
 				mt="md"
+				styles={inputStyles}
 			/>
 
 			<Group position="apart" mt="xs">
@@ -58,6 +71,7 @@ const LoginForm = () => {
 					label="Remember Me"
 					checked={remember}
 					onChange={(e) => setRemember(e.currentTarget.checked)}
+					styles={inputStyles}
 				/>
 				<Anchor href="#" size="sm">
 					{" "}
@@ -65,7 +79,7 @@ const LoginForm = () => {
 				</Anchor>
 			</Group>
 
-			<Button fullWidth mt="xl" onClick={handleLogin}>
+			<Button fullWidth mt="xl" onClick={handleLogin} color="#A91D3A">
 				Login
 			</Button>
 		</Stack>

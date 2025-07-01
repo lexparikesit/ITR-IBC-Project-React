@@ -2,16 +2,9 @@
 
 import { useState } from "react";
 import {
-	TextInput,
-	PasswordInput,
-	Checkbox,
 	Paper,
-	Title,
 	Container,
-	Button,
-	Group,
 	Anchor,
-	Stack,
 	Center,
 	Text,
 } from "@mantine/core";
@@ -19,7 +12,7 @@ import LoginForm from "@/components/auth/LoginForm";
 
 export default function LoginPage() {
 	return (
-		<div className="min-h-screen bg-gradient-to-r from-blue-200 to-purple-200 flex items-center justify-center">
+		<div className="min-h-screen bg-gradient-to-r from-[#A91D3A] to-[#EE4266] px-4 flex items-center justify-center">
 			<Container size={600} my={40}>
 				<Paper
 					withBorder
@@ -29,14 +22,14 @@ export default function LoginPage() {
 					radius="md"
 					className="w-full max-w-md bg-white"
 				>
-					<h1 align="center" mb="md" className="text-xl md:text-2xl text-black">
+					<h1 align="center" mb="md" className="text-xl md:text-2xl text-[#A91D3A]">
 						Login User
 					</h1>
 
 					<LoginForm />
 
 					<Center mt="xl" style={{ flexDirection: "column" }}>
-						<Text>Don't have an account?</Text>
+						<Text style={{ color: "#A91D3A" }}>Don't have an account?</Text>
 						<Anchor href="/register" size="sm">
 							Sign up Here!
 						</Anchor>
