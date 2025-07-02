@@ -7,8 +7,10 @@ import {
     Button,
     Stack,
 } from '@mantine/core';
+import { useRouter } from 'next/navigation';
 
 export default function RegisterForm() {
+    const router = useRouter();
     const [form, setForm] = useState({
         username: '',
         firstName: '',
@@ -32,6 +34,8 @@ export default function RegisterForm() {
         }
 
         try {
+            setIsLoading(true);
+
             const response = await fetch('http://localhost:5000/api/register', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -42,11 +46,14 @@ export default function RegisterForm() {
 
             if (response.ok) {
                 alert('Registration Successful!');
+                router.push('/login'); // Redirect to login page after successful registration
             } else {
                 alert(data.message || 'Registration Failed!');
             }
         } catch (error) {
             console.error("Registration Error!", error);
+        } finally {
+            setIsLoading(false);
         }
     };
 

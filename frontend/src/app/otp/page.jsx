@@ -5,8 +5,6 @@ import {
     Container,
     Paper,
     Title,
-    Center,
-    Text
 } from "@mantine/core";
 import OtpForm from "@/components/auth/OtpForm";
 
@@ -33,10 +31,6 @@ export default function OtpPage() {
 
                     <OtpForm />
 
-                    <Center mt="xl" style={{ flexDirection: "column" }}>
-                        <Text color="black">Didn't receive the code?</Text>
-                        <Text size="sm" color="blue" className="cursor-pointer"> Resend OTP </Text>
-                    </Center>
                 </Paper>
             </Container>
         </div>

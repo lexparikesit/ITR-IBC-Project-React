@@ -8,17 +8,20 @@ import {
 	TextInput,
 } from "@mantine/core";
 import React, { useState } from "react";
+import { useRouter } from "next/navigation";
 
 const LoginForm = () => {
 	const [username, setUsername] = useState("");
 	const [password, setPassword] = useState("");
 	const [remember, setRemember] = useState(false);
+	const router = useRouter();
 
 	const handleLogin = async () => {
 		try {
 			const response = await fetch("http://localhost:5000/api/login", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
+				credentials: "include", // Include cookies for session management
 				body: JSON.stringify({ username, password, remember }),
 			});
 
@@ -27,6 +30,8 @@ const LoginForm = () => {
 
 			if (response.ok) {
 				alert("Login Successfully!");
+				localStorage.setItem("otp_sent", "true"); // Set flag for OTP sent
+				router.push("/otp"); // Redirect to OTP page
 			} else {
 				alert(data.message || "Login Failed!");
 			}
