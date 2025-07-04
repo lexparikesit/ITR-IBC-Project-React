@@ -9,7 +9,7 @@ export function LinksGroup({ label, icon: Icon, initiallyOpened, links }) {
     const [opened, { toggle }] = useDisclosure(initiallyOpened || false);
 
     const items = (links || []).map((link) => (
-        <a href={link.link} key={link.label} className="block px-6 py-1 text-sm text-gray-700 hover:bg-gray-100">
+        <a href={link.link} key={link.label} className={classes.submenuItem}>
             {link.label}
         </a>
     ));
@@ -27,7 +27,10 @@ export function LinksGroup({ label, icon: Icon, initiallyOpened, links }) {
             {links ? <IconChevronRight size={14} style={{ transform: opened ? 'rotate(90deg)' : 'none' }} /> : null}
         </Group>
         </UnstyledButton>
-        {links && <Collapse in={opened}>{items}</Collapse>}
+        {links && 
+        <Collapse in={opened}>
+            {opened && <div className={classes.submenu}>{items}</div>}
+        </Collapse>}
         </>
     );
 }

@@ -1,12 +1,14 @@
 .navbar {
-    background-color: light-dark(var(--mantine-color-white), var(--mantine-color-dark-6));
-    height: 800px;
+    background-color: #1C1259;
+    min-height: 100vh;
+    height: auto;
     width: 300px;
     padding: var(--mantine-spacing-md);
     padding-bottom: 0;
     display: flex;
     flex-direction: column;
     border-right: 1px solid light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
+    transition: width 0.3s ease;
 }
 
 .header {
@@ -20,6 +22,7 @@
 
 .links {
     flex: 1;
+    overflow-y: auto;
     margin-left: calc(var(--mantine-spacing-md) * -1);
     margin-right: calc(var(--mantine-spacing-md) * -1);
 }
@@ -27,7 +30,33 @@
 .linksInner {
     padding-top: var(--mantine-spacing-xl);
     padding-bottom: var(--mantine-spacing-xl);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
 }
+
+.submenu {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-left: 24px;
+    margin-top: 0;
+}
+
+.submenuItem {
+    display: block;
+    font-size: 14px;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    text-decoration: none;
+    transition: background-color 0.2s ease;
+}
+
+.submenuItem:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
 
 .footer {
     margin-left: calc(var(--mantine-spacing-md) * -1);

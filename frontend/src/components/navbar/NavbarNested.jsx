@@ -1,13 +1,9 @@
 'use client';
 
 import {
-    IconAdjustments,
-    IconCalendarStats,
-    IconFileAnalytics,
     IconGauge,
-    IconLock,
     IconNotes,
-    IconPresentationAnalytics,
+    IconTool
 } from '@tabler/icons-react';
 
 import { Code, Group, ScrollArea } from '@mantine/core';
@@ -19,35 +15,39 @@ import classes from './NavbarNested.module.css';
 const mockdata = [
     { label: 'Dashboard', icon: IconGauge },
     {
-        label: 'Market news',
+        label: 'Arrival Check',
         icon: IconNotes,
-        initiallyOpened: true,
         links: [
-            { label: 'Overview', link: '/' },
-            { label: 'Forecasts', link: '/' },
-            { label: 'Outlook', link: '/' },
-            { label: 'Real Time', link: '/' },
+            { label: 'Manitou', link: '/' },
+            { label: 'Renault Trucks', link: '/' },
+            { label: 'SDLG', link: '/' },
         ],
     },
     {
-        label: 'Releases',
-        icon: IconCalendarStats,
+        label: 'Storage Maintenance List',
+        icon: IconNotes,
         links: [
-            { label: 'Upcomming releases', link: '/' },
-            { label: 'Previous releases', link: '/' },
-            { label: 'Releases schedule', link: '/' },
+            { label: 'Manitou', link: '/' },
+            { label: 'Renault Trucks', link: '/' },
+            { label: 'SDLG', link: '/' },
         ],
     },
-    { label: 'Analytics', icon: IconPresentationAnalytics },
-    { label: 'Contracts', icon: IconFileAnalytics },
-    { label: 'Settings', icon: IconAdjustments },
-    {
-        label: 'Security',
-        icon: IconLock,
+    { 
+        label: 'IBC Form', 
+        icon: IconNotes,
         links: [
-            { label: 'Enable 2FA', link: '/' },
-            { label: 'Change password', link: '/' },
-            { label: 'Recovery codes', link: '/' },
+            { label: 'Manitou', link: '/' },
+            { label: 'Renault Trucks', link: '/' },
+            { label: 'SDLG', link: '/' },
+        ], 
+    },
+    { 
+        label: 'Pre-Delivery Inspection', 
+        icon: IconTool,
+        links: [
+            { label: 'Manitou', link: '/' },
+            { label: 'Renault Trucks', link: '/' },
+            { label: 'SDLG', link: '/' },
         ],
     },
 ];
