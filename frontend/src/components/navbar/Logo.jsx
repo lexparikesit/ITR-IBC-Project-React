@@ -1,3 +1,11 @@
 export function Logo({ style }) {
-    return <div style={{ ...style, fontWeight: 'bold' }}>MyApp</div>;
+    return (
+        <div style={{ 
+            color: 'white',
+            fontWeight: 'bold',
+            fontSize: '1rem', 
+        }}>
+            Menu
+        </div>
+    )
 }

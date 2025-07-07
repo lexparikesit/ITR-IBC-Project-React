@@ -33,15 +33,6 @@ const mockdata = [
         ],
     },
     { 
-        label: 'IBC Form', 
-        icon: IconNotes,
-        links: [
-            { label: 'Manitou', link: '/' },
-            { label: 'Renault Trucks', link: '/' },
-            { label: 'SDLG', link: '/' },
-        ], 
-    },
-    { 
         label: 'Pre-Delivery Inspection', 
         icon: IconTool,
         links: [
@@ -49,6 +40,18 @@ const mockdata = [
             { label: 'Renault Trucks', link: '/' },
             { label: 'SDLG', link: '/' },
         ],
+    },
+    { 
+        label: 'IBC Form', 
+        icon: IconTool,
+    },
+    {
+        label: 'Settings',
+        icon: IconTool,
+    },
+    {
+        label: 'Log Out',
+        icon: IconTool,
     },
 ];
 
@@ -60,9 +63,9 @@ export function NavbarNested() {
     return (
         <nav className={classes.navbar}>
             <div className={classes.header}>
-                <Group justify='space-between'>
+                <Group justify='space-between' style={{ width: '100%' }}>
                     <Logo style={{ width:120 }} />
-                    <Code fw={700}> IBC Web App v1.0.0 </Code>
+                    <Code fw={700}> V1.0.0 </Code>
                 </Group>
             </div>
         

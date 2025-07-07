@@ -1,13 +1,14 @@
 'use client';
 
-import { Group, Box, Collapse, ThemeIcon, UnstyledButton } from '@mantine/core';
+import { Group, Box, Collapse, ThemeIcon, UnstyledButton, Text} from '@mantine/core';
 import { IconChevronRight } from '@tabler/icons-react';
 import { useDisclosure } from '@mantine/hooks';
 import classes from './NavbarNested.module.css';
 
 export function LinksGroup({ label, icon: Icon, initiallyOpened, links }) {
+    
     const [opened, { toggle }] = useDisclosure(initiallyOpened || false);
-
+    const hasLinks = Array.isArray(links) && links.length > 0;
     const items = (links || []).map((link) => (
         <a href={link.link} key={link.label} className={classes.submenuItem}>
             {link.label}
@@ -16,20 +17,33 @@ export function LinksGroup({ label, icon: Icon, initiallyOpened, links }) {
 
     return (
         <>
-        <UnstyledButton onClick={toggle} className="w-full px-4 py-2 text-left hover:bg-gray-100">
-        <Group justify="space-between">
-            <Group>
-                <ThemeIcon variant="light" size={24}>
+        <UnstyledButton 
+            onClick={toggle} 
+            className={classes.linksGroupItem}>
+        <Group justify="space-between" style={{ width: '100%' }}>
+            <Group gap="md">
+                <ThemeIcon variant="light" size={24} className={classes.linksGroupIcon}>
                     <Icon size={18} />
                 </ThemeIcon>
-                <Box>{label}</Box>
+                <Text size="sm" className={classes.linksGroupItemLabel}>
+                            {label}
+                </Text> 
             </Group>
-            {links ? <IconChevronRight size={14} style={{ transform: opened ? 'rotate(90deg)' : 'none' }} /> : null}
+            {hasLinks && (
+                <IconChevronRight
+                    size={14}
+                    className={classes.linksGroupItemChevron} // <-- Terapkan kelas di sini
+                    style={{
+                        transform: opened ? 'rotate(90deg)' : 'none', // Rotasi 90 derajat untuk membuka
+                        transition: 'transform 200ms ease',
+                    }}
+                />
+            )}
         </Group>
         </UnstyledButton>
-        {links && 
+        {hasLinks && 
         <Collapse in={opened}>
-            {opened && <div className={classes.submenu}>{items}</div>}
+            <div className={classes.submenu}>{items}</div>
         </Collapse>}
         </>
     );

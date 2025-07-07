@@ -1,3 +1,22 @@
+/* src/components/navbar/NavbarNested.module.css */
+/* --- Container for Navbar in DashboardLayout.js --- */
+.navbarContainer {
+    background-color: #1C1259;
+    min-width: 0;
+    width: 0;
+    overflow: hidden;
+    transition: width 0.3s ease-in-out;
+    height: 100vh;
+    flex-shrink: 0; 
+    border-right: 1px solid light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
+}
+
+.navbarContainer[data-opened='true'] {
+    width: 300px;
+}
+
+/* --- Styling untuk NavbarInternal (Komponen NavbarNested) --- */
+/* this is the .navbar class within NavbarNested.jsx */
 .navbar {
     background-color: #1C1259;
     min-height: 100vh;
@@ -32,7 +51,45 @@
     padding-bottom: var(--mantine-spacing-xl);
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: 0;
+}
+
+.linksGroupItem {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    padding: 10px var(--mantine-spacing-md);
+    color: var(--mantine-color-white);
+    text-decoration: none;
+    border-radius: var(--mantine-radius-sm);
+    transition: background-color 0.2s ease;
+    margin-bottom: 10px;
+}
+
+.linksGroupItem:last-of-type {
+    margin-bottom: 0;
+}
+
+.linksGroupItem:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* for active state */
+.linksGroupItem[data-active="true"] {
+    background-color: rgba(255, 255, 255, 0.15);
+}
+
+.linksGroupItemLabel {
+    flex-grow: 1;
+    color: var(--mantine-color-white);
+}
+
+/* Chevron icon */
+.linksGroupItemChebvron {
+    margin-left: 10px;
+    color: var(--mantine-color-white);
+    display: flex;
+    align-items: center;
 }
 
 .submenu {
@@ -57,9 +114,29 @@
     background-color: rgba(255, 255, 255, 0.1);
 }
 
-
 .footer {
+    padding: 7px;
     margin-left: calc(var(--mantine-spacing-md) * -1);
     margin-right: calc(var(--mantine-spacing-md) * -1);
     border-top: 1px solid light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
+}
+
+/* src/components/navbar/NavbarNested.module.css */
+/* --- Styling for header and main content --- */
+.mainContentHeader {
+    height: 60px; /* Height of the main content header */
+    display: flex;
+    align-items: center;
+    padding: 0 var(--mantine-spacing-md);
+    border-bottom: 1px solid light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
+    background-color: white; /* White background for main content header */
+    color: black; /* Text color in main content header */
+}
+
+/* --- Styling for Main Content Area --- */
+.mainContentArea {
+    flex: 1; /* Take up remaining vertical space */
+    background-color: white; /* White background for main content area */
+    padding: var(--mantine-spacing-md);
+    overflow-y: auto; /* For scrolling if content is long */
 }
