@@ -72,11 +72,6 @@ export function NavbarNested() {
             <ScrollArea className={classes.links}>
                 <div className={classes.linksInner}>{links}</div>
             </ScrollArea>
-        
-            <div className={classes.footer}>
-                <UserButton />
-            </div>
-
         </nav>
     )
 }
