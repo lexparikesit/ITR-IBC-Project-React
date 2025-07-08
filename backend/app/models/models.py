@@ -4,7 +4,7 @@ import uuid
 
 class User(db.Model):
 
-    __tablename__ = 'IBC_User'
+    __tablename__ = 'users'
     
     userid = db.Column(UNIQUEIDENTIFIER, primary_key=True, default=uuid.uuid4)
     username = db.Column(db.String(150), unique=True, nullable=False)
