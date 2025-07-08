@@ -1,33 +1,41 @@
 /* src/components/navbar/NavbarNested.module.css */
 /* --- Container for Navbar in DashboardLayout.js --- */
+
 .navbarContainer {
-    background-color: #1C1259;
-    min-width: 0;
-    width: 0;
-    overflow: hidden;
-    transition: width 0.3s ease-in-out;
+    background-color: #A91D3A;
     height: 100vh;
-    flex-shrink: 0; 
-    border-right: 1px solid light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
+    /* border-right: 1px solid light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4)); */
+    z-index: 100;
+
+    /* Fixed Position */
+    position: fixed;
+    top: 0;
+    left: 0;
+
+    /* Width of Navbar when it opened */
+    width: 300px;
+    
+    /* animation of Navbar Slicer */
+    transform: translateX(-300px);
+    transition: transform 0.3s ease-in-out;
+    overflow-y: auto;
 }
 
+/* when Burger Icon Click (data-opened='true') */
 .navbarContainer[data-opened='true'] {
-    width: 300px;
+    transform: translateX(0);
 }
 
 /* --- Styling untuk NavbarInternal (Komponen NavbarNested) --- */
 /* this is the .navbar class within NavbarNested.jsx */
 .navbar {
-    background-color: #1C1259;
-    min-height: 100vh;
     height: auto;
-    width: 300px;
+    min-height: 100%;
+    width: 100%;
     padding: var(--mantine-spacing-md);
     padding-bottom: 0;
     display: flex;
     flex-direction: column;
-    border-right: 1px solid light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
-    transition: width 0.3s ease;
 }
 
 .header {
@@ -131,6 +139,11 @@
     border-bottom: 1px solid light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
     background-color: white; /* White background for main content header */
     color: black; /* Text color in main content header */
+
+    position: sticky;
+    top: 0;
+    z-index: 99;
+    width: 100%;
 }
 
 /* --- Styling for Main Content Area --- */

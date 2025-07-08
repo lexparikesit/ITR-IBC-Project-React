@@ -1,21 +1,23 @@
 'use client';
 
 import { useState } from 'react';
-import { Burger, Group, Code, ActionIcon, Menu, Text, Anchor, useRandomClassName } from '@mantine/core';
+import { Burger, Group, Code, ActionIcon, Menu, Text } from '@mantine/core';
 import { IconBell, IconSettings, IconLogout } from '@tabler/icons-react';
 import { NavbarNested } from "@/components/navbar/NavbarNested";
 import { UserButton } from '@/components/navbar/UserButton';
+import { usePathname } from 'next/navigation';
 import classes from '@/components/navbar/NavbarNested.module.css';
 
 export default function DashboardLayout({ children }) {
     
-    const [opened, setOpened] = useState(false);
+    const [opened, setOpened] = useState(true);
+    const pathname = usePathname(); 
 
     // example user data
     const currentUser = {
         username: 'John Doe',
         email: 'john.doe@example.com',
-        avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fbc?ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&ixlib=rb-1.2.1&auto=format&fit=crop&w=250&q=80'
+        avatar: 'https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&s=200'
     }
 
     // handling user logout
@@ -27,11 +29,32 @@ export default function DashboardLayout({ children }) {
     // handling user settings
     const handleSettings = () => {
         console.log("User Settings Clicked!");
+    
     }
 
     const handleNotificationsClick = () => {
         console.log("Notifications Clicked!");
+    
     }
+
+    // function to handle dynamics path
+    const getDynamicHeaderTitle = (path) => {
+        if (path === '/dashboard'){
+            return 'Dashboard Overview'
+        } else if (path.startsWith('/dashboard/arrival-check/')) {
+            const segment = path.split('/').pop() // get last segment
+            const capitalizedSegment = segment.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+            return `Arrival Check - ${capitalizedSegment}`
+        }
+        // to input another logic below this section
+
+        return 'Dashboard Overview';
+    };
+
+    const headerTitle = getDynamicHeaderTitle(pathname);
+    const NAVBAR_FULL_WIDTH = 300;
+    const dynamicPaddingLeft = opened ? NAVBAR_FULL_WIDTH + 16 : 16;
+    const HEADER_HEIGHT = 60;
 
     return (
     <div className="flex min-h-screen">
@@ -41,9 +64,23 @@ export default function DashboardLayout({ children }) {
         </div>
         
         {/* Main Content Area */}
-        <div className='flex-1 flex flex-col'>
+        <div 
+            className='flex-1 flex flex-col'
+            style={{
+                paddingLeft: `${dynamicPaddingLeft}px`,
+                transition: 'padding-left 0.3s ease-in-out',
+                paddingTOP: `${HEADER_HEIGHT}px`
+            }}
+        >
+            
             {/* Header */}
-            <div className={classes.mainContentHeader}>
+            <div 
+                className={classes.mainContentHeader}
+                /* style={{
+                    paddingLeft: `${dynamicPaddingLeft}px`,
+                    transition: 'padding-left 0.3s ease-in-out'
+                }} */
+            >
                 <Group justify='space-between' style={{ width: '100%' }}>
                     { /* Left Burger and Title */}
                     <Group gap="md">
@@ -53,7 +90,7 @@ export default function DashboardLayout({ children }) {
                             size="sm"
                             aria-label="Toggle navbar"
                         />
-                        <Text size='lg' weight={500} style={{ color: 'black' }}> Dashboard Overview </Text>
+                        <Text size='lg' weight={500} style={{ color: 'black' }}> {headerTitle} </Text>
                     </Group>
                     {/* Right User Menu */}
                     <Group gap="md">
@@ -95,7 +132,13 @@ export default function DashboardLayout({ children }) {
             </div>
 
             {/* Main Content */}
-            <main className={classes.mainContentArea}>
+            <main 
+                className={classes.mainContentArea}
+                /* style={{
+                    paddingLeft: `${dynamicPaddingLeft}px`,
+                    transition: 'padding-left 0.3s ease-in-out'
+                }} */
+            >
                 {children}
             </main>
         </div>
