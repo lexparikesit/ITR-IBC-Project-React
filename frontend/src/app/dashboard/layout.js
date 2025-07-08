@@ -53,7 +53,7 @@ export default function DashboardLayout({ children }) {
 
     const headerTitle = getDynamicHeaderTitle(pathname);
     const NAVBAR_FULL_WIDTH = 300;
-    const dynamicPaddingLeft = opened ? NAVBAR_FULL_WIDTH + 16 : 16;
+    const dynamicPaddingLeft = opened ? NAVBAR_FULL_WIDTH : 0;
     const HEADER_HEIGHT = 60;
 
     return (
