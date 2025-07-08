@@ -34,7 +34,7 @@ class AuthController:
         return user_otp.otp_code
     
     def verify_otp(self, user_id, otp_code):
-        user_otp = UserOtp.query.filter_by(user_id=user_id, otp_code=otp_code).order_by(UserOtp.created_at.desc()).first()
+        user_otp = UserOtp.query.filter_by(user_id=user_id, otp_code=otp_code).first()
 
         if not user_otp:
             return False
