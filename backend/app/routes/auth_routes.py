@@ -22,12 +22,7 @@ def login():
     if not user:
         return jsonify({"error": "Invalid Credentials!"}), 401
 
-    otp = auth_controller.generate_otp()
-    session['otp'] = otp
-    session['otp_time'] = datetime.now().timestamp()
-    session['email'] = user.email
-
-    print("✅ SESSION SET:", dict(session))
+    otp = auth_controller.generate_otp(user.userid)
 
     # Send OTP email in background thread to avoid blocking the response
     email_thread = threading.Thread(
@@ -39,31 +34,22 @@ def login():
     
     return jsonify({"message": "OTP Sent to Your Email!"}), 200
     
-
 # Post /api/verify-otp
 @auth_bp.route('/verify-otp', methods=['POST'])
 def verify_otp():
 
-    print("DEBUG SESSION: ", dict(session))
+    # print("DEBUG SESSION: ", dict(session))
     
     data = request.json
+    user_id = data.get('user_id')
     entered_otp = data.get('otp')
-    saved_otp = session.get('otp')
-    otp_time = session.get('otp_time')
 
-    if not saved_otp or not otp_time:
-        return jsonify({"error": "OTP Not Found!"}), 400
+    verified = auth_controller.verify_otp(user_id, entered_otp)
+
+    if not verified:
+        return jsonify({"error": "Invalid or Expired OTP!"}), 401
     
-    if datetime.now().timestamp() - otp_time > 120:
-        return jsonify({"error": "OTP Expired!"}), 400
-    
-    if entered_otp == saved_otp:
-        session["authenticated"] = True
-        session.pop('otp', None)
-        session.pop('otp_time', None)
-        return jsonify({"message": "OTP Verified Successfully!"}), 200
-    
-    return jsonify({"error": "Invalid OTP"}), 400
+    return jsonify({"message": "OTP Verified Successfully!"}), 200
 
 # Post /api/resend-otp
 @auth_bp.route('/resend-otp', methods=['POST'])

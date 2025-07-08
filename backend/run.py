@@ -1,5 +1,5 @@
 from app import create_app, db
-from app.models.models import User
+from app.models.models import User, UserOtp
 
 app = create_app()
 

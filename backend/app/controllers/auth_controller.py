@@ -1,5 +1,6 @@
+import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
-from app.models.models import db, User
+from app.models.models import db, User, UserOtp
 from app.service.email_service import EmailService
 import random
 import string
@@ -18,9 +19,33 @@ class AuthController:
             return user
         return None
 
-    def generate_otp(self, length=6):
+    def generate_otp(self, user_id, length=6):
+      
+        user_otp = UserOtp(
+            user_id=user_id,
+            otp_code="".join(random.choices(string.digits, k=length)),
+            expired_at=datetime.datetime.now() + datetime.timedelta(minutes=5),
+            created_at=datetime.datetime.now(),
+        )
 
-        return "".join(random.choices(string.digits, k=length))
+        db.session.add(user_otp)
+        db.session.commit()
+
+        return user_otp.otp_code
+    
+    def verify_otp(self, user_id, otp_code):
+        user_otp = UserOtp.query.filter_by(user_id=user_id, otp_code=otp_code).order_by(UserOtp.created_at.desc()).first()
+
+        if not user_otp:
+            return False
+
+        if user_otp.used_at or user_otp.expired_at < datetime.datetime.now():
+            return False
+
+        user_otp.used_at = datetime.datetime.now()
+        db.session.commit()
+
+        return True
 
     def send_otp_email(self, email, otp):
 
