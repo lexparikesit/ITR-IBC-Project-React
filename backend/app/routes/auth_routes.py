@@ -1,10 +1,16 @@
-from flask import Blueprint, request, jsonify, session
+from flask import Blueprint, request, jsonify, session, current_app
 from datetime import datetime
+import threading
 from app.controllers.auth_controller import AuthController
 from app.models.models import User
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/api')
 auth_controller = AuthController()
+
+def send_email_with_context(app, email, otp):
+    """Helper function to send OTP email within Flask application context"""
+    with app.app_context():
+        auth_controller.send_otp_email(email, otp)
 
 # Post /api/login
 @auth_bp.route('/login', methods=['POST'])
@@ -13,18 +19,26 @@ def login():
     data = request.json
     user = auth_controller.verify_credentials(data['username'], data['password'])
 
-    if user:
-        otp = auth_controller.generate_otp()
-        session['otp'] = otp
-        session['otp_time'] = datetime.now().timestamp()
-        session['email'] = user.email
+    if not user:
+        return jsonify({"error": "Invalid Credentials!"}), 401
 
-        print("✅ SESSION SET:", dict(session))
+    otp = auth_controller.generate_otp()
+    session['otp'] = otp
+    session['otp_time'] = datetime.now().timestamp()
+    session['email'] = user.email
 
-        auth_controller.send_otp_email(user.email, otp)
-        return jsonify({"message": "OTP Sent to Your Email!"}), 200
+    print("✅ SESSION SET:", dict(session))
+
+    # Send OTP email in background thread to avoid blocking the response
+    email_thread = threading.Thread(
+        target=send_email_with_context, 
+        args=(current_app._get_current_object(), user.email, otp)
+    )
+    email_thread.daemon = True  # Thread will terminate when main program exits
+    email_thread.start()
     
-    return jsonify({"error": "Invalid Credentials!"}), 401
+    return jsonify({"message": "OTP Sent to Your Email!"}), 200
+    
 
 # Post /api/verify-otp
 @auth_bp.route('/verify-otp', methods=['POST'])
