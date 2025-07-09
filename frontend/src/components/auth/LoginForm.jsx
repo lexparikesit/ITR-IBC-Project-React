@@ -2,6 +2,7 @@ import {
 	Anchor,
 	Button,
 	Checkbox,
+	Flex,
 	Group,
 	PasswordInput,
 	Stack,
@@ -67,11 +68,10 @@ const LoginForm = () => {
 				value={password}
 				onChange={(e) => setPassword(e.currentTarget.value)}
 				required
-				mt="md"
 				styles={inputStyles}
 			/>
 
-			<Group position="apart" mt="xs">
+			<Flex justify="space-between" w="100%" mt="xs">
 				<Checkbox
 					label="Remember Me"
 					checked={remember}
@@ -79,10 +79,9 @@ const LoginForm = () => {
 					styles={inputStyles}
 				/>
 				<Anchor href="#" size="sm">
-					{" "}
-					Forget Password{" "}
+					Forget Password
 				</Anchor>
-			</Group>
+			</Flex>
 
 			<Button fullWidth mt="xl" onClick={handleLogin} color="#A91D3A">
 				Login

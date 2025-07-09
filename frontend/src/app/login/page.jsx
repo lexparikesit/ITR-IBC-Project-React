@@ -14,16 +14,16 @@ import Link from "next/link";
 export default function LoginPage() {
 	return (
 		<div className="min-h-screen bg-gradient-to-r from-[#A91D3A] to-[#EE4266] px-4 flex items-center justify-center">
-			<Container size={600} my={40}>
+			<Container size="md">
 				<Paper
 					withBorder
 					shadow="md"
 					p={30}
-					mt={30}
 					radius="md"
+					w={{ base: "100%", sm: 360 }}
 					className="w-full max-w-md bg-white"
 				>
-					<h1 align="center" mb="md" className="text-xl md:text-2xl text-[#A91D3A]">
+					<h1 className="mb-4 text-center text-xl md:text-2xl text-[#A91D3A]">
 						Login User
 					</h1>
 
