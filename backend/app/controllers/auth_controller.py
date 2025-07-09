@@ -20,7 +20,7 @@ class AuthController:
         return None
 
     def generate_otp(self, user_id, length=6):
-      
+    
         user_otp = UserOtp(
             user_id=user_id,
             otp_code="".join(random.choices(string.digits, k=length)),
@@ -34,6 +34,7 @@ class AuthController:
         return user_otp.otp_code
     
     def verify_otp(self, user_id, otp_code):
+        
         user_otp = UserOtp.query.filter_by(user_id=user_id, otp_code=otp_code).first()
 
         if not user_otp:

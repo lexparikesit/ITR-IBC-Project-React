@@ -11,6 +11,7 @@ mail = Mail()
 session = Session()
 
 def create_app():
+    
     app = Flask(__name__)
     load_dotenv() # Load environment variables from .env file
 
@@ -33,8 +34,12 @@ def create_app():
     DB_PASS = os.getenv('DB_PASS', 'mypassword')
     DB_DRIVER = os.getenv('DB_DRIVER', 'ODBC Driver 17 for SQL Server')
 
+    # app.config["SQLALCHEMY_DATABASE_URI"] = (
+    #     f"mssql+pyodbc://{DB_USER}:{DB_PASS}@{DB_SERVER}/{DB_NAME}"
+    # )
+
     app.config["SQLALCHEMY_DATABASE_URI"] = (
-        f"mssql+pymssql://{DB_USER}:{DB_PASS}@{DB_SERVER}/{DB_NAME}"
+        f"mssql+pyodbc://{DB_USER}:{DB_PASS}@{DB_SERVER}/{DB_NAME}?driver={DB_DRIVER.replace(' ', '+')}"
     )
 
     # Email config
