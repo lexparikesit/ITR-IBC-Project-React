@@ -34,8 +34,8 @@ def login():
     email_thread.start()
     
     return jsonify({
-            "message": "OTP Sent to Your Email!",
-            "user_id": user.userid 
+        "message": "OTP Sent to Your Email!",
+        "user_id": str(user.userid) 
     }), 200
     
 # Post /api/verify-otp

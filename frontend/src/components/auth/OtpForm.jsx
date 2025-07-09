@@ -20,10 +20,15 @@ export default function OtpForm() {
     useEffect(() => {
         const storedUserID = localStorage.getItem("user_id");
         
+        console.log("OtpForm - User ID from localStorage:", storedUserID); //--> debuging
+
         if (storedUserID) {
             setUserID(storedUserID);
         } else {
-            router.push("/otp")
+            console.log("OtpForm - No User ID found in localStorage. Redirecting to login."); // --> debugging
+            alert("User ID not found. Please log in again."); 
+            router.push("/login"); 
+            return;
         }
         
         const otpSent = localStorage.getItem("otp_sent") === "true";
