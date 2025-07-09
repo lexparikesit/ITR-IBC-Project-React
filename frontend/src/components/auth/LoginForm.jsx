@@ -41,14 +41,14 @@ const LoginForm = () => {
 	};
 
 	const inputStyles = {
-            label: { color: '#A91D3A' },
-            input: {
-                borderColor: '#151515',
-                color: '#333',
-                backgroundColor: '#fff',
-                },
-            placeholder: { color: '#aaa' }
-        }
+		label: { color: "#A91D3A" },
+		input: {
+			borderColor: "#151515",
+			color: "#333",
+			backgroundColor: "#fff",
+		},
+		placeholder: { color: "#aaa" },
+	};
 
 	return (
 		<Stack>

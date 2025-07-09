@@ -9,6 +9,7 @@ import {
 	Text,
 } from "@mantine/core";
 import LoginForm from "@/components/auth/LoginForm";
+import Link from "next/link";
 
 export default function LoginPage() {
 	return (
@@ -30,7 +31,7 @@ export default function LoginPage() {
 
 					<Center mt="xl" style={{ flexDirection: "column" }}>
 						<Text style={{ color: "#A91D3A" }}>Don't have an account?</Text>
-						<Anchor href="/register" size="sm">
+						<Anchor href="/register" size="sm" component={Link}>
 							Sign up Here!
 						</Anchor>
 					</Center>
