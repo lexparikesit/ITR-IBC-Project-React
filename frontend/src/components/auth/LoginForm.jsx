@@ -17,7 +17,10 @@ const LoginForm = () => {
 	const [remember, setRemember] = useState(false);
 	const router = useRouter();
 
-	const handleLogin = async () => {
+	const handleLogin = async (e) => {
+		
+		e.preventDefault(); 
+		
 		try {
 			const response = await fetch("http://localhost:5000/api/login", {
 				method: "POST",
@@ -27,17 +30,26 @@ const LoginForm = () => {
 			});
 
 			const data = await response.json();
-			console.log(data);
+			console.log("Login API Response:", data);
 
 			if (response.ok) {
-				alert("Login Successfully!");
-				localStorage.setItem("otp_sent", "true"); // Set flag for OTP sent
-				router.push("/otp"); // Redirect to OTP page
+				if (data.user_id) {
+					localStorage.setItem("user_id", data.user_id);
+					console.log("User ID stored in localStorage:", data.user_id);
+					localStorage.setItem("otp_sent", "true");
+					alert("OTP Sent to Your Email!");
+					router.push('/otp');
+				} else {
+					console.error("Login successful but user_id missing in response:", data);
+                    alert("Login successful, but User ID was not provided. Please contact support.");
+				}
 			} else {
-				alert(data.message || "Login Failed!");
+				console.error("Login failed:", data.error);
+                alert(data.error || "Login Failed. Please check your credentials.");	
 			}
 		} catch (error) {
-			console.error("Login error:", error);
+			console.error("Network error during login:", error); // <-- LOG INI
+            alert("Network error. Please try again.");
 		}
 	};
 
