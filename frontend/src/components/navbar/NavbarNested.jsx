@@ -18,7 +18,7 @@ const mockdata = [
         label: 'Arrival Check',
         icon: IconNotes,
         links: [
-            { label: 'Manitou', link: '/' },
+            { label: 'Manitou', link: '/dashboard/arrival-check/manitou' },
             { label: 'Renault Trucks', link: '/dashboard/arrival-check/renault-trucks' },
             { label: 'SDLG', link: '/' },
         ],
