@@ -1,10 +1,9 @@
-import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
 from app.models.models import db, User, UserOtp
 from app.service.email_service import EmailService
 import random
 import string
-
+import datetime
 
 class AuthController:
     def __init__(self):
