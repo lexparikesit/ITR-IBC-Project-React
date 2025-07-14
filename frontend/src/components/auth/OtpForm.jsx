@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { Button, Stack, PinInput, Text } from "@mantine/core";
 import { redirect, useRouter } from "next/navigation";
+import { notifications } from "@mantine/notifications";
+import apiClient from "@/libs/api";
 
 export default function OtpForm() {
 	const [otp, setOtp] = useState("");
@@ -23,7 +25,12 @@ export default function OtpForm() {
 			console.log(
 				"OtpForm - No User ID found in localStorage. Redirecting to login."
 			); // --> debugging
-			alert("User ID not found. Please log in again.");
+			notifications.show({
+				title: "User ID not found",
+				message: "Please log in again to receive a new OTP.",
+				color: "red",
+				autoClose: 5000,
+			});
 			router.push("/login");
 			return;
 		}
@@ -61,29 +68,27 @@ export default function OtpForm() {
 		}
 
 		try {
-			const response = await fetch("http://localhost:5000/api/verify-otp", {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				credentials: "include", // Include cookies for session management
-				body: JSON.stringify({
-					user_id: userID,
-					otp: otp,
-				}),
+			const data = await apiClient.post("/verify-otp", {
+				user_id: userID,
+				otp: otp,
 			});
 
-			const data = await response.json();
-			console.log(data);
-
-			if (response.ok) {
-				alert("OTP Verified Successfully!");
-				localStorage.removeItem("user_id");
-				router.push("/dashboard"); // Redirect to dashboard or home page
-			} else {
-				alert(data.message || "OTP Verification Failed!");
-			}
+			notifications.show({
+				title: "OTP Verified Successfully",
+				message: "You can now access your account.",
+				color: "green",
+				autoClose: 5000,
+			});
+			localStorage.removeItem("user_id");
+			router.push("/dashboard"); // Redirect to dashboard or home page
 		} catch (error) {
 			console.error("OTP verification error:", error);
-			alert("An error occurred during verification.");
+			notifications.show({
+				title: "Error",
+				message: "An error occurred during verification.",
+				color: "red",
+				autoClose: 5000,
+			});
 		}
 	};
 
@@ -95,7 +100,7 @@ export default function OtpForm() {
 		}
 
 		try {
-			const response = await fetch("http://localhost:5000/api/resend-otp", {
+			const response = await fetch("/resend-otp", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				credentials: "include", // Include cookies for session management
@@ -119,36 +124,29 @@ export default function OtpForm() {
 	};
 
 	return (
-		<Stack>
-			<div className="flex justify-center">
-				<PinInput
-					length={6}
-					oneTimeCode
-					value={otp}
-					onChange={setOtp}
-					type="number"
-				/>
-			</div>
-			<div className="flex justify-center mt-10" mx="auto">
-				<Button color="#A91D3A" onClick={handleVerify}>
-					Verify OTP
-				</Button>
-			</div>
-			<div className="flex justify-center mt-2">
-				<Text size="sm" c="#7E99A3">
-					{canResend ? "Didn’t receive OTP?" : `Resend available in ${timer}s`}
-				</Text>
-			</div>
-			<div className="flex justify-center mt-0.5">
-				<Button
-					className="-mt-2"
-					color="#A91D3A"
-					onClick={handleResend}
-					disabled={!canResend}
-				>
-					Resend OTP
-				</Button>
-			</div>
-		</Stack>
+		<div className="flex flex-col items-center gap-2">
+			<PinInput
+				length={6}
+				oneTimeCode
+				value={otp}
+				onChange={setOtp}
+				type="number"
+				my={12}
+			/>
+			<Button color="#A91D3A" onClick={handleVerify}>
+				Verify OTP
+			</Button>
+			<p className="text-sm mt-2" style={{ color: "#7E99A3" }}>
+				{canResend ? "Didn’t receive OTP?" : `Resend available in ${timer}s`}{" "}
+				{canResend && (
+					<span
+						onClick={handleResend}
+						className="cursor-pointer underline font-semibold hover:text-rose-700 text-rose-800"
+					>
+						Resend OTP
+					</span>
+				)}
+			</p>
+		</div>
 	);
 }

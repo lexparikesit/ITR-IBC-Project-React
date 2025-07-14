@@ -3,26 +3,21 @@
 import { useState } from "react";
 import { TextInput, PasswordInput, Button, Stack } from "@mantine/core";
 import { useRouter } from "next/navigation";
+import apiClient from "@/libs/api";
 
 export default function RegisterForm() {
 	const router = useRouter();
-	const [form, setForm] = useState({
-		username: "",
-		firstName: "",
-		lastName: "",
-		email: "",
-		password: "",
-		confirmPassword: "",
-	});
+	const [username, setUsername] = useState("");
+	const [firstName, setFirstName] = useState("");
+	const [lastName, setLastName] = useState("");
+	const [email, setEmail] = useState("");
+	const [password, setPassword] = useState("");
+	const [confirmPassword, setConfirmPassword] = useState("");
 
 	const [isLoading, setIsLoading] = useState(false);
 
-	const handleChange = (field, value) => {
-		setForm({ ...form, [field]: value });
-	};
-
 	const handleRegister = async () => {
-		if (form.password !== form.confirmPassword) {
+		if (password !== confirmPassword) {
 			alert("Passwords do not match!");
 			return;
 		}
@@ -30,20 +25,17 @@ export default function RegisterForm() {
 		try {
 			setIsLoading(true);
 
-			const response = await fetch("http://localhost:5000/api/register", {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify(form),
+			const data = await apiClient.post("/register", {
+				username,
+				firstName,
+				lastName,
+				email,
+				password,
+				confirmPassword,
 			});
 
-			const data = await response.json();
-
-			if (response.ok) {
-				alert("Registration Successful!");
-				router.push("/login"); // Redirect to login page after successful registration
-			} else {
-				alert(data.message || "Registration Failed!");
-			}
+			alert("Registration Successful!");
+			router.push("/login"); // Redirect to login page after successful registration
 		} catch (error) {
 			console.error("Registration Error!", error);
 		} finally {
@@ -51,74 +43,63 @@ export default function RegisterForm() {
 		}
 	};
 
-	const inputStyles = {
-		label: { color: "#A91D3A" },
-		input: {
-			borderColor: "#151515",
-			color: "#333",
-			backgroundColor: "#fff",
-		},
-		placeholder: { color: "#aaa" },
-	};
-
 	return (
-		<Stack spacing="sm">
+		<div>
 			<TextInput
 				label="Username"
-				placeholder="username"
-				value={form.username}
-				onChange={(e) => handleChange("username", e.currentTarget.value)}
+				placeholder="Username"
+				value={username}
+				onChange={(e) => setUsername(e.currentTarget.value)}
 				required
-				styles={inputStyles}
 			/>
 
 			<TextInput
 				label="First Name"
 				placeholder="First Name"
-				value={form.firstName}
-				onChange={(e) => handleChange("firstName", e.currentTarget.value)}
+				value={firstName}
+				onChange={(e) => setFirstName(e.currentTarget.value)}
 				required
-				styles={inputStyles}
+				mt={"sm"}
 			/>
 
 			<TextInput
 				label="Last Name"
 				placeholder="Last Name"
-				value={form.lastName}
-				onChange={(e) => handleChange("lastName", e.currentTarget.value)}
-				styles={inputStyles}
+				value={lastName}
+				onChange={(e) => setLastName(e.currentTarget.value)}
+				mt={"sm"}
 			/>
 
 			<TextInput
 				label="Email"
 				placeholder="you@example.com"
-				value={form.email}
-				onChange={(e) => handleChange("email", e.currentTarget.value)}
+				value={email}
+				onChange={(e) => setEmail(e.currentTarget.value)}
 				required
-				styles={inputStyles}
+				mt={"sm"}
 			/>
 
 			<PasswordInput
 				label="Password"
 				placeholder="••••••••"
-				value={form.password}
-				onChange={(e) => handleChange("password", e.currentTarget.value)}
+				value={password}
+				onChange={(e) => setPassword(e.currentTarget.value)}
 				required
-				styles={inputStyles}
+				mt={"sm"}
 			/>
 
 			<PasswordInput
 				label="Confirm Password"
 				placeholder="••••••••"
-				value={form.confirmPassword}
-				onChange={(e) => handleChange("confirmPassword", e.currentTarget.value)}
+				value={confirmPassword}
+				onChange={(e) => setConfirmPassword(e.currentTarget.value)}
 				required
-				styles={inputStyles}
+				mt={"sm"}
 			/>
 
 			<Button fullWidth mt="md" onClick={handleRegister} color="#A91D3A">
 				Register
 			</Button>
-		</Stack>
+		</div>
 	);
 }
