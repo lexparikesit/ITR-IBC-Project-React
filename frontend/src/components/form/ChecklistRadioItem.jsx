@@ -1,9 +1,7 @@
-// src/components/ChecklistRadioItem.jsx (atau sesuaikan path-nya)
-
 "use client";
 
 import React from 'react';
-import { Grid, Radio, Stack, Text, Textarea } from '@mantine/core'; // Impor komponen Mantine yang dibutuhkan
+import { Grid, Radio, Stack, Text, Textarea, Group } from '@mantine/core'; // Impor komponen Mantine yang dibutuhkan
 
 const ChecklistRadioItem = ({ label, section, itemKey, currentValue, onChange, remarksValue, onRemarksChange }) => {
     const isBad = currentValue === 'Bad';
@@ -15,10 +13,13 @@ const ChecklistRadioItem = ({ label, section, itemKey, currentValue, onChange, r
                 <Radio.Group
                     value={currentValue}
                     onChange={(value) => onChange(section, itemKey, value)}
+                    orientation="horizontal"
                 >
+                <Group mt="xs" spacing="md">
                     <Radio value="Good" label="Good" />
                     <Radio value="Missing" label="Missing" />
                     <Radio value="Bad" label="Bad" />
+                </Group>
                 </Radio.Group>
                 {isBad && (
                     <Textarea

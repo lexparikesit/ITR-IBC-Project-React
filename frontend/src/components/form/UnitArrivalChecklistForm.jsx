@@ -149,12 +149,16 @@ export function UnitArrivalChecklistForm() {
                 <Grid gutter="xl">
                     <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
                         <Select
-                            label="TYPE/MODEL"
+                            label="Type/ Model"
                             placeholder="Select a Model"
                             data={dummyModels}
                             searchable
                             clearable
                             {...form.getInputProps('typeModel')}
+                            //custome render option
+                            renderOption={({ option, checked }) => (
+                                <Text c="black">{option.label}</Text>
+                            )}
                         />
                     </Grid.Col>
                     <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
