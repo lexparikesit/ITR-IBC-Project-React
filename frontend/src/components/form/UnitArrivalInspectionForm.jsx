@@ -3,40 +3,54 @@
 import React, { useState, useEffect } from "react";
 import {
     TextInput,
-    Textarea, // Tetap diimpor jika Anda memiliki textarea catatan umum di bagian bawah form
+    Textarea, 
     Button,
-    Stack,
     Text,
     Grid,
     Group,
-    Radio,
-    Card, // Menggunakan Card untuk konsistensi desain
+    Card,
     Title,
     Divider,
-    Box, // Menambahkan Box sebagai pembungkus terluar
+    Box,
+    Select,
+    Popover,
 } from "@mantine/core";
-import { DateInput } from "@mantine/dates";
+import { DateInput, DatePicker } from "@mantine/dates";
 import { TimeInput } from "@mantine/dates";
-import { IconClock } from "@tabler/icons-react";
-
-// Pastikan file ini ada di direktori yang sama atau sesuaikan path-nya
+import { IconClock, IconCalendar } from "@tabler/icons-react";
 import ChecklistRadioItem from "./ChecklistRadioItem";
 
 const UnitArrivalInspectionForm = () => {
+
+    // dummy data for model/ type and technician (will be replaced then by API)
+    const dummyModels = [
+        { value: 'M20-4', label: 'M20-4' },
+        { value: 'MLT 737-130 PS+', label: 'MLT 737-130 PS+' },
+        { value: 'MT 625 H', label: 'MT 625 H' },
+        { value: 'MRT 2550 Privilege Plus', label: 'MRT 2550 Privilege Plus' },
+    ]
+
+    const dummyTechnician = [
+        { value: 'john_doe', label: 'John Doe' },
+        { value: 'jane_smith', label: 'Jane Smith' },
+        { value: 'peter_jones', label: 'Peter Jones' },
+    ]
+
     const [unitInfo, setUnitInfo] = useState({
-        model: "",
+        model: null,
         serialNo: "",
         hourMeter: "",
         dateOfCheck: null,
         timeOfCheck: "",
-        technician: "John Doe", // Data dummy, akan diperbarui nanti menggunakan First/LastName
-        signature: "",
+        technician: "null",
     });
 
-    // Mengubah struktur checklistItems: HANYA status, tanpa remarks
+    // state for controlling DatePickerOpened
+    const [datePickerOpened, setDatePickerOpened] = useState(false);
+
     const [checklistItems, setChecklistItems] = useState({
         engine: {
-            airFilter: "", // Hanya status
+            airFilter: "",
             fuelFilter: "",
             fuelPipeFilters: "",
             injectionCarburationSystem: "",
@@ -44,12 +58,14 @@ const UnitArrivalInspectionForm = () => {
             belts: "",
             hosesEngine: "",
         },
+
         transmission: {
             reversingSystem: "",
             gearOilLeaks: "",
             directionDisconnectPedal: "",
             clutch: "",
         },
+
         hydraulicHydrostaticCircuits: {
             oilTank: "",
             pumpsCoupling: "",
@@ -62,30 +78,36 @@ const UnitArrivalInspectionForm = () => {
             steeringControlValves: "",
             controlValves: "",
         },
+
         brakingCircuits: {
             serviceBrakeParkingBrakeOperation: "",
             brakeFluidLevel: "",
         },
+
         lubrication: {
             lubrication: "",
         },
+
         boomMastManiscopicManicess: {
             boomTelescopes: "",
             wearPads: "",
             linkage: "",
             forks: "",
         },
+
         mastUnitCheckboxes: {
             fixedMovableMast: "",
             carriage: "",
-            sideShifter: "",
+            chains: "",
             rollers: "",
             forksMastUnit: "",
         },
+
         accessoriesCheckboxes: {
             adaptationToMachine: "",
             hydraulicConnections: "",
         },
+
         cabProtectiveDeviceElectricCircuit: {
             seat: "",
             controlPanelRadio: "",
@@ -93,25 +115,27 @@ const UnitArrivalInspectionForm = () => {
             heatingAirConditioning: "",
             windscreenWiperWasher: "",
             horns: "",
-            blockingAlarm: "",
+            backupAlarm: "",
             lighting: "",
             additionalLighting: "",
             rotatingBeacon: "",
             battery: "",
         },
+
         wheels: {
             rims: "",
             tiresPressure: "",
         },
-        // Item tunggal di luar objek, hanya status
+        
+        // single Item checklist that are not nested in an object
         screwsNuts: "",
         frameBody: "",
-        namePlate: "",
+        paint: "",
         operatorsManual: "",
         instructionsForCustomer: "",
     });
 
-    const [generalRemarks, setGeneralRemarks] = useState(""); // Catatan umum tetap ada jika diperlukan
+    const [generalRemarks, setGeneralRemarks] = useState("");
 
     const handleUnitInfoChange = (e) => {
         const { name, value } = e.target;
@@ -120,38 +144,36 @@ const UnitArrivalInspectionForm = () => {
 
     const handleDateChange = (value) => {
         setUnitInfo((prev) => ({ ...prev, dateOfCheck: value }));
+        setDatePickerOpened(false);
     };
 
     const handleTimeChange = (value) => {
         setUnitInfo((prev) => ({ ...prev, timeOfCheck: value }));
     };
 
-    // Handler untuk status radio (Good/Missing/Bad) - disederhanakan
+    // Handler of radio status (Good/Missing/Bad)
     const handleChecklistItemStatusChange = (section, itemKey, value) => {
         setChecklistItems((prev) => {
-            // Cek apakah section adalah objek bersarang atau item tunggal
+            // check if the section is nested object or single item
             if (typeof prev[section] === 'object' && prev[section] !== null && prev[section].hasOwnProperty(itemKey)) {
                 return {
                     ...prev,
                     [section]: {
                         ...prev[section],
-                        [itemKey]: value, // Langsung update status
+                        [itemKey]: value, // directly update status
                     },
                 };
             } else {
-                // Untuk item tunggal yang langsung di root checklistItems
+                // for single item which directly in root checklistItems
                 return {
                     ...prev,
-                    [itemKey]: value, // Langsung update status
+                    [itemKey]: value, // directly update status
                 };
             }
         });
     };
 
-    // Handler untuk remarks (DIHAPUS KARENA TIDAK DIGUNAKAN)
-    // const handleChecklistItemRemarksChange = (section, itemKey, value) => { ... };
-
-    // Efek dummy untuk mendapatkan teknisi (nanti dari API)
+    // Dummy data to get a technician name (later will using API)
     useEffect(() => {
         // const fetchTechnician = async () => {
         //     const response = await fetch('/api/get-current-user-lastname');
@@ -166,27 +188,26 @@ const UnitArrivalInspectionForm = () => {
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        console.log("Informasi Unit: ", unitInfo);
+        console.log("Unit Information: ", unitInfo);
         console.log("Item Checklist: ", checklistItems);
-        console.log("Catatan Umum: ", generalRemarks);
+        console.log("Remarks: ", generalRemarks);
         
-        alert("Form Terkirim! Periksa Konsol untuk Data");
-        // Di sini Anda akan mengirim data ini ke backend Anda
+        alert("Form Submitted!");
+        // here we send the data to the server or handle it as needed
     };
 
-    // Helper untuk render bagian checklist - disederhanakan
     const renderChecklistSection = (sectionTitle, sectionKey, items) => {
         return (
             <Card shadow="sm" p="xl" withBorder mb="lg">
-                <Title order={3} mb="md" style={{ color: '#000000 !important' }}>{sectionTitle}</Title>
+                <Title order={3} mb="md" style={{ color: '#000000 !important' }}> {sectionTitle} </Title>
                 <Grid gutter="xl">
                     {items.map((item, index) => (
                         <ChecklistRadioItem
-                            key={index} // Gunakan index sebagai key jika tidak ada id unik yang stabil
+                            key={index} // use index as key if there is no stable unique id
                             label={<Text style={{ color: '#000000 !important' }}>{`${item.id}. ${item.label}`}</Text>}
                             section={sectionKey}
-                            itemKey={item.itemKey} // Menggunakan itemKey yang sudah ada di struktur state
-                            currentStatus={checklistItems[sectionKey][item.itemKey] || ""} // Hanya status
+                            itemKey={item.itemKey} // Using existing itemKey in state structure
+                            currentStatus={checklistItems[sectionKey][item.itemKey] || ""} // Only status
                             onStatusChange={handleChecklistItemStatusChange}
                             span={{ base: 12, sm: 6 }}
                         />
@@ -196,215 +217,260 @@ const UnitArrivalInspectionForm = () => {
         );
     };
 
-    // Data item untuk setiap bagian, disesuaikan dengan kebutuhan
     const engineItems = [
-        { id: '01', label: 'Filter Udara', itemKey: 'airFilter' },
-        { id: '02', label: 'Filter Bahan Bakar', itemKey: 'fuelFilter' },
-        { id: '03', label: 'Pipa Bahan Bakar/Filter Bahan Bakar', itemKey: 'fuelPipeFilters' },
-        { id: '04', label: 'Sistem Injeksi/Karburasi', itemKey: 'injectionCarburationSystem' },
-        { id: '05', label: 'Radiator dan Sistem Pendingin', itemKey: 'radiatorCoolingSystems' },
-        { id: '06', label: 'Sabuk', itemKey: 'belts' },
-        { id: '07', label: 'Selang', itemKey: 'hosesEngine' },
+        { id: '01', label: 'Air Filter', itemKey: 'airFilter' },
+        { id: '02', label: 'Fuel Filter', itemKey: 'fuelFilter' },
+        { id: '03', label: 'Fuel Pipe Filters', itemKey: 'fuelPipeFilters' },
+        { id: '04', label: 'Injection Carburation System', itemKey: 'injectionCarburationSystem' },
+        { id: '05', label: 'Radiator Cooling Systems', itemKey: 'radiatorCoolingSystems' },
+        { id: '06', label: 'Belts', itemKey: 'belts' },
+        { id: '07', label: 'Hoses Engine', itemKey: 'hosesEngine' },
     ];
 
     const transmissionItems = [
-        { id: '01', label: 'Sistem Pembalik', itemKey: 'reversingSystem' },
-        { id: '02', label: 'Kebocoran Oli Gear', itemKey: 'gearOilLeaks' },
-        { id: '03', label: 'Pedal Arah dan Pemutus', itemKey: 'directionDisconnectPedal' },
-        { id: '04', label: 'Kopling', itemKey: 'clutch' },
+        { id: '01', label: 'Reversing System', itemKey: 'reversingSystem' },
+        { id: '02', label: 'Gear Oil Leaks', itemKey: 'gearOilLeaks' },
+        { id: '03', label: 'Direction Disconnect Pedal', itemKey: 'directionDisconnectPedal' },
+        { id: '04', label: 'Clutch', itemKey: 'clutch' },
     ];
 
     const hydraulicHydrostaticCircuitsItems = [
-        { id: '01', label: 'Tangki Oli', itemKey: 'oilTank' },
-        { id: '02', label: 'Pompa dan Kopling', itemKey: 'pumpsCoupling' },
-        { id: '03', label: 'Kekencangan Sambungan', itemKey: 'tightnessOfUnions' },
-        { id: '04', label: 'Tingkat Pengisian', itemKey: 'fillingLevel' },
-        { id: '05', label: 'Selang (misalnya)', itemKey: 'hosesHydraulic' },
-        { id: '06', label: 'Bagian Aksesori', itemKey: 'accessoryParts' },
-        { id: '07', label: 'Ram Teleskop', itemKey: 'telescopeRams' },
-        { id: '08', label: 'Ram Miring/Angkat', itemKey: 'tiltLiftRams' },
-        { id: '09', label: 'Katup Kontrol Kemudi', itemKey: 'steeringControlValves' },
-        { id: '10', label: 'Katup Kontrol', itemKey: 'controlValves' },
+        { id: '01', label: 'Oil Tank', itemKey: 'oilTank' },
+        { id: '02', label: 'Pump and Coupling', itemKey: 'pumpsCoupling' },
+        { id: '03', label: 'Tightness of Unions', itemKey: 'tightnessOfUnions' },
+        { id: '04', label: 'Filling Level', itemKey: 'fillingLevel' },
+        { id: '05', label: 'Hoses (e.g.)', itemKey: 'hosesHydraulic' },
+        { id: '06', label: 'Accessory Parts', itemKey: 'accessoryParts' },
+        { id: '07', label: 'Telescope Rams', itemKey: 'telescopeRams' },
+        { id: '08', label: 'Tilt Lift Rams', itemKey: 'tiltLiftRams' },
+        { id: '09', label: 'Steering Control Valves', itemKey: 'steeringControlValves' },
+        { id: '10', label: 'Control Valves', itemKey: 'controlValves' },
     ];
 
     const brakingCircuitsItems = [
-        { id: '01', label: 'Pengecekan Operasi Rem Servis dan Rem Parkir', itemKey: 'serviceBrakeParkingBrakeOperation' },
-        { id: '02', label: 'Pengecekan Level Minyak Rem (sesuai perakitan)', itemKey: 'brakeFluidLevel' },
+        { id: '01', label: 'Checking of Service Brake and Parking Brake Operation', itemKey: 'serviceBrakeParkingBrakeOperation' },
+        { id: '02', label: 'Checking of Brake Fluid Level (as Per Assembly)', itemKey: 'brakeFluidLevel' },
     ];
 
     const lubricationItems = [
-        { id: '01', label: 'Pelumasan', itemKey: 'lubrication' },
+        { id: '01', label: 'Lubrication', itemKey: 'lubrication' },
     ];
 
     const boomMastManiscopicManicessItems = [
-        { id: '01', label: 'Boom dan Teleskop', itemKey: 'boomTelescopes' },
-        { id: '02', label: 'Bantalan Aus', itemKey: 'wearPads' },
-        { id: '03', label: 'Sambungan', itemKey: 'linkage' },
-        { id: '04', label: 'Garpu', itemKey: 'forks' },
+        { id: '01', label: 'Boom and Telescopes', itemKey: 'boomTelescopes' },
+        { id: '02', label: 'Wear Pads', itemKey: 'wearPads' },
+        { id: '03', label: 'Linkage', itemKey: 'linkage' },
+        { id: '04', label: 'Forks', itemKey: 'forks' },
     ];
 
     const mastUnitItems = [
-        { id: '01', label: 'Mast Tetap dan Bergerak', itemKey: 'fixedMovableMast' },
-        { id: '02', label: 'Kereta', itemKey: 'carriage' },
-        { id: '03', label: 'Penggeser Samping', itemKey: 'sideShifter' },
-        { id: '04', label: 'Roller', itemKey: 'rollers' },
-        { id: '05', label: 'Garpu', itemKey: 'forksMastUnit' },
+        { id: '01', label: 'Fixed and Movable Mast', itemKey: 'fixedMovableMast' },
+        { id: '02', label: 'Carriage', itemKey: 'carriage' },
+        { id: '03', label: 'Chains', itemKey: 'chains' },
+        { id: '04', label: 'Rollers', itemKey: 'rollers' },
+        { id: '05', label: 'Forks', itemKey: 'forksMastUnit' },
     ];
 
     const accessoriesItems = [
-        { id: '01', label: 'Adaptasi ke Mesin', itemKey: 'adaptationToMachine' },
-        { id: '02', label: 'Koneksi Hidrolik', itemKey: 'hydraulicConnections' },
+        { id: '01', label: 'Adaptation to Machine', itemKey: 'adaptationToMachine' },
+        { id: '02', label: 'Hydraulic Connections', itemKey: 'hydraulicConnections' },
     ];
 
     const cabProtectiveDeviceElectricCircuitItems = [
-        { id: '01', label: 'Kursi', itemKey: 'seat' },
-        { id: '02', label: 'Panel Kontrol dan Radio', itemKey: 'controlPanelRadio' },
-        { id: '03', label: 'Klakson dan Lampu Peringatan, Perangkat Keselamatan', itemKey: 'hornWarningLightSafetyDevice' },
-        { id: '04', label: 'Pemanas, Pendingin Udara', itemKey: 'heatingAirConditioning' },
-        { id: '05', label: 'Wiper Kaca Depan / Pencuci Kaca Depan', itemKey: 'windscreenWiperWasher' },
-        { id: '06', label: 'Klakson', itemKey: 'horns' },
-        { id: '07', label: 'Alarm Pemblokiran', itemKey: 'blockingAlarm' },
-        { id: '08', label: 'Pencahayaan', itemKey: 'lighting' },
-        { id: '09', label: 'Pencahayaan Tambahan', itemKey: 'additionalLighting' },
-        { id: '10', label: 'Lampu Berputar', itemKey: 'rotatingBeacon' },
-        { id: '11', label: 'Baterai', itemKey: 'battery' },
+        { id: '01', label: 'Seat', itemKey: 'seat' },
+        { id: '02', label: 'Control Panel and Radio', itemKey: 'controlPanelRadio' },
+        { id: '03', label: 'Horn and Warning Lights, Safety Devices', itemKey: 'hornWarningLightSafetyDevice' },
+        { id: '04', label: 'Heater/ Air Conditioning', itemKey: 'heatingAirConditioning' },
+        { id: '05', label: 'Windscreen Wiper/ Washer', itemKey: 'windscreenWiperWasher' },
+        { id: '06', label: 'Horns', itemKey: 'horns' },
+        { id: '07', label: 'Backup Alarm', itemKey: 'backupAlarm' },
+        { id: '08', label: 'Head Lighting', itemKey: 'lighting' },
+        { id: '09', label: 'Additional Lighting', itemKey: 'additionalLighting' },
+        { id: '10', label: 'Rotating Beacon', itemKey: 'rotatingBeacon' },
+        { id: '11', label: 'Battery', itemKey: 'battery' },
     ];
 
     const wheelsItems = [
-        { id: '01', label: 'Pelek', itemKey: 'rims' },
-        { id: '02', label: 'Ban / Tekanan', itemKey: 'tiresPressure' },
+        { id: '01', label: 'Rims', itemKey: 'rims' },
+        { id: '02', label: 'Tires / Pressure', itemKey: 'tiresPressure' },
     ];
 
-    // Item Lainnya (yang tidak bersarang dalam objek di state checklistItems)
+    // single item 
     const otherItems = [
-        { id: '015', label: 'Sekrup dan Mur', itemKey: 'screwsNuts', section: 'screwsNuts' },
-        { id: '016', label: 'Rangka dan Bodi', itemKey: 'frameBody', section: 'frameBody' },
-        { id: '017', label: 'Plat Nama', itemKey: 'namePlate', section: 'namePlate' },
-        { id: '018', label: 'Manual Operator', itemKey: 'operatorsManual', section: 'operatorsManual' },
-        { id: '019', label: 'INSTRUKSI UNTUK PELANGGAN', itemKey: 'instructionsForCustomer', section: 'instructionsForCustomer' },
+        { id: '015', label: 'Secrews and Nuts', itemKey: 'screwsNuts', section: 'screwsNuts' },
+        { id: '016', label: 'Frame and Body', itemKey: 'frameBody', section: 'frameBody' },
+        { id: '017', label: 'Paint', itemKey: 'paint', section: 'paint' },
+        { id: '018', label: 'Operators Manual', itemKey: 'operatorsManual', section: 'operatorsManual' },
+        { id: '019', label: 'Instructions for Customer', itemKey: 'instructionsForCustomer', section: 'instructionsForCustomer' },
     ];
 
 
     return (
-        // Box sebagai pembungkus terluar untuk mengatur lebar dan penempatan
+        // Box as outer wrapper to adjust width and placement
         <Box maw="100%" mx="auto" px="md">
-            {/* Judul utama di luar Card, sejajar kiri */}
-            <Title
-                order={1}
-                mt="md"
-                mb="lg"
-                style={{ color: '#000000 !important' }}
-            >
-                Unit Arrival Check Inspection
-            </Title>
-
+            {/* Main Title, left align */}
+            <Title order={1} mt="md" mb="lg" c="black"> Unit Arrival Check Inspection </Title>
             <form onSubmit={handleSubmit}>
                 {/* Informasi Unit dalam Card */}
                 <Card shadow="sm" p="xl" withBorder mb="lg">
-                    <Title order={3} mb="md" style={{ color: '#000000 !important' }}> Informasi Unit </Title>
+                    <Title order={3} mb="lg" c="black"> Unit Information </Title>
                     <Grid gutter="xl">
                         <Grid.Col span={{ base: 12, md: 6, lg: 4 }}>
-                            <TextInput
-                                label={<Text style={{ color: '#000000 !important' }}>Model</Text>}
+                            <Select
+                                label={<Text style={{ color: '#000000 !important' }}> Type/ Model </Text>}
                                 name="model"
-                                placeholder="Masukkan model"
+                                placeholder="Select Model"
+                                data={dummyModels}
                                 value={unitInfo.model}
-                                onChange={handleUnitInfoChange}
-                                // style={{ color: '#000000 !important' }} // Ini tidak bekerja untuk placeholder atau input value
+                                onChange={(value) => handleSelectChange('model', value)}
+                                searchable
+                                clearable
+                                //custome render option
+                                renderOption={({ option, checked }) => (
+                                    <Text c="black">{option.label}</Text>
+                                )}
                             />
                         </Grid.Col>
                         <Grid.Col span={{ base: 12, md: 6, lg: 4 }}>
                             <TextInput
-                                label={<Text style={{ color: '#000000 !important' }}>Nomor Seri</Text>}
+                                label={<Text style={{ color: '#000000 !important' }}> VIN Number </Text>}
                                 name="serialNo"
-                                placeholder="Masukkan nomor seri"
+                                placeholder="Input VIN Number"
                                 value={unitInfo.serialNo}
                                 onChange={handleUnitInfoChange}
-                                // style={{ color: '#000000 !important' }}
                             />
                         </Grid.Col>
                         <Grid.Col span={{ base: 12, md: 6, lg: 4 }}>
                             <TextInput
-                                label={<Text style={{ color: '#000000 !important' }}>Hour Meter</Text>}
+                                label={<Text style={{ color: '#000000 !important' }}> Hour Meter </Text>}
                                 name="hourMeter"
-                                placeholder="Masukkan hour meter"
+                                placeholder="Input Hour Meter"
                                 value={unitInfo.hourMeter}
                                 onChange={handleUnitInfoChange}
-                                // style={{ color: '#000000 !important' }}
                             />
                         </Grid.Col>
                         <Grid.Col span={{ base: 12, md: 6, lg: 4 }}>
-                            <DateInput
-                                label={<Text style={{ color: '#000000 !important' }}>Tanggal Pengecekan</Text>}
-                                placeholder="Pilih tanggal"
-                                value={unitInfo.dateOfCheck}
-                                onChange={handleDateChange}
-                                valueFormat="YYYY-MM-DD"
-                                // style={{ color: '#000000 !important' }}
-                            />
+                            <Popover
+                                opened={datePickerOpened}
+                                onChange={setDatePickerOpened}
+                                position="bottom-start"
+                                shadow="md"
+                                trapFocus
+                                withArrow
+                                zIndex={1000}
+                            >
+                                <Popover.Target>
+                                    <TextInput
+                                        label={<Text style={{ color: '#000000 !important' }}> Date of Check </Text>}
+                                        placeholder="Select date"
+                                        value={unitInfo.dateOfCheck ? unitInfo.dateOfCheck.toLocaleDateString('id-ID', { year: 'numeric', month: '2-digit', day: '2-digit' }) : ''}
+                                        readOnly
+                                        onClick={() => setDatePickerOpened(true)}
+                                        rightSection={<IconCalendar size={16} style={{ cursor: 'pointer' }} onClick={() => setDatePickerOpened(true)} />}
+                                        styles={{ input: { color: '#000000 !important' } }}
+                                    />
+                                </Popover.Target>
+                                <Popover.Dropdown>
+                                    <DatePicker
+                                        value={unitInfo.dateOfCheck}
+                                        onChange={handleDateChange}
+                                        styles={{
+                                            calendarHeaderControl: {
+                                                color: '#000000 !important',
+                                            },
+                                            calendarHeader: {
+                                                color: '#000000 !important',
+                                            },
+                                            weekday: {
+                                                color: '#000000 !important',
+                                            },
+                                            day: {
+                                                color: '#000000 !important',
+                                                fontSize: 'var(--mantine-font-size-sm)',
+                                                padding: 'var(--mantine-spacing-xs)',
+                                            },
+                                            month: {
+                                                color: '#000000 !important',
+                                                fontSize: 'var(--mantine-font-size-sm)',
+                                            },
+                                            year: {
+                                                color: '#000000 !important',
+                                                fontSize: 'var(--mantine-font-size-sm)',
+                                            },
+                                            pickerControl: {
+                                                color: '#000000 !important',
+                                            },
+                                            pickerControlActive: {
+                                                color: '#000000 !important',
+                                            },
+                                            monthPicker: {
+                                                color: '#000000 !important',
+                                            },
+                                            yearPicker: {
+                                                color: '#000000 !important',
+                                            },
+                                        }}
+                                    />
+                                </Popover.Dropdown>
+                            </Popover>
                         </Grid.Col>
                         <Grid.Col span={{ base: 12, md: 6, lg: 4 }}>
                             <TimeInput
-                                label={<Text style={{ color: '#000000 !important' }}>Waktu Pengecekan</Text>}
-                                placeholder="Pilih waktu"
+                                label={<Text style={{ color: '#000000 !important' }}> Time of Check </Text>}
+                                placeholder="Select Time"
                                 value={unitInfo.timeOfCheck}
                                 onChange={handleTimeChange}
                                 rightSection={<IconClock size={16} />}
-                                // style={{ color: '#000000 !important' }}
                             />
                         </Grid.Col>
                         <Grid.Col span={{ base: 12, md: 6, lg: 4 }}>
-                            <TextInput
-                                label={<Text style={{ color: '#000000 !important' }}>Teknisi</Text>}
+                            <Select
+                                label={<Text style={{ color: '#000000 !important' }}> Technician </Text>}
                                 name="technician"
+                                placeholder="Select Technician"
+                                data={dummyTechnician}
                                 value={unitInfo.technician}
-                                readOnly
-                                // style={{ color: '#000000 !important' }}
-                            />
-                        </Grid.Col>
-                        <Grid.Col span={{ base: 12, md: 6, lg: 4 }}>
-                            <TextInput
-                                label={<Text style={{ color: '#000000 !important' }}>Tanda Tangan</Text>}
-                                name="signature"
-                                placeholder="Masukkan tanda tangan"
-                                value={unitInfo.signature}
-                                onChange={handleUnitInfoChange}
-                                // style={{ color: '#000000 !important' }}
+                                onChange={(value) => handleSelectChange('technician', value)}
+                                searchable
+                                clearable
+                                //custome render option
+                                renderOption={({ option, checked }) => (
+                                    <Text c="black">{option.label}</Text>
+                                )}
                             />
                         </Grid.Col>
                     </Grid>
                 </Card>
 
-                {/* Bagian Checklist */}
-                <Title order={3} mb="md" style={{ color: '#000000 !important' }}> Item Checklist </Title>
+                {/* Checklist */}
+                <Title order={3} mb="md" c="black"> Item Checklist </Title>
 
-                {renderChecklistSection("001 - Mesin", "engine", engineItems)}
-                {renderChecklistSection("002 - Transmisi", "transmission", transmissionItems)}
-                {renderChecklistSection("003 - Sirkuit Hidrolik/Hidrostatik", "hydraulicHydrostaticCircuits", hydraulicHydrostaticCircuitsItems)}
-                {renderChecklistSection("004 - Sirkuit Pengereman", "brakingCircuits", brakingCircuitsItems)}
-                {renderChecklistSection("005 - Pelumasan", "lubrication", lubricationItems)}
-                {renderChecklistSection("006 - Boom/Mast Maniscopic/Manicess", "boomMastManiscopicManicess", boomMastManiscopicManicessItems)}
+                {renderChecklistSection("001 - Engine", "engine", engineItems)}
+                {renderChecklistSection("002 - Transmission", "transmission", transmissionItems)}
+                {renderChecklistSection("003 - Hydraulic/ Hydrostatic Circuits", "hydraulicHydrostaticCircuits", hydraulicHydrostaticCircuitsItems)}
+                {renderChecklistSection("004 - Braking Circuits", "brakingCircuits", brakingCircuitsItems)}
+                {renderChecklistSection("005 - Lubrication", "lubrication", lubricationItems)}
+                {renderChecklistSection("006 - Boom/ Mast Maniscopic/ Manicess", "boomMastManiscopicManicess", boomMastManiscopicManicessItems)}
                 {renderChecklistSection("007 - Unit Mast", "mastUnitCheckboxes", mastUnitItems)}
-                {renderChecklistSection("008 - Aksesori", "accessoriesCheckboxes", accessoriesItems)}
-                {renderChecklistSection("009 - Kabin, Perangkat Pelindung / Sirkuit Listrik", "cabProtectiveDeviceElectricCircuit", cabProtectiveDeviceElectricCircuitItems)}
-                {renderChecklistSection("010 - Roda", "wheels", wheelsItems)}
+                {renderChecklistSection("008 - Accessories", "accessoriesCheckboxes", accessoriesItems)}
+                {renderChecklistSection("009 - Cabin, Protective Devices/ Electrical Circuits", "cabProtectiveDeviceElectricCircuit", cabProtectiveDeviceElectricCircuitItems)}
+                {renderChecklistSection("010 - Wheels", "wheels", wheelsItems)}
 
-                {/* Item Lainnya (di luar kategori bernomor) */}
+                {/* Other Items (outside numbered categories) */}
                 <Card shadow="sm" p="xl" withBorder mb="lg">
-                    <Title order={3} mb="md" style={{ color: '#000000 !important' }}> Item Lainnya </Title>
+                    <Title order={3} mb="md" style={{ color: '#000000 !important' }}> Other Items </Title>
                     <Grid gutter="xl">
                         {otherItems.map((item, index) => (
                             <ChecklistRadioItem
                                 key={index}
                                 label={<Text style={{ color: '#000000 !important' }}>{`${item.id} ${item.label}`}</Text>}
-                                section={item.section} // Menggunakan section langsung dari item untuk item tunggal
-                                itemKey={item.itemKey} // Menggunakan itemKey yang sudah ada di struktur state
-                                currentStatus={checklistItems[item.itemKey] || ""} // Hanya status
+                                section={item.section} 
+                                itemKey={item.itemKey} 
+                                currentStatus={checklistItems[item.itemKey] || ""}
                                 onStatusChange={(section, itemKey, value) => {
-                                    // Handle perubahan untuk item tunggal
                                     setChecklistItems(prev => ({
                                         ...prev,
-                                        [item.itemKey]: value // Langsung update status
+                                        [item.itemKey]: value
                                     }));
                                 }}
                                 span={{ base: 12, sm: 6 }}
@@ -415,10 +481,10 @@ const UnitArrivalInspectionForm = () => {
 
 
                 <Divider my="xl" />
-                {/* Catatan Umum */}
-                <Title order={3} mb="md" style={{ color: '#000000 !important' }}> Catatan </Title>
+                {/* Remarks */}
+                <Title order={3} mb="md" c="black"> Remarks </Title>
                 <Textarea
-                    placeholder="Tambahkan catatan tambahan di sini..."
+                    placeholder="Remarks"
                     value={generalRemarks}
                     onChange={(e) => setGeneralRemarks(e.currentTarget.value)}
                     minRows={4}
@@ -426,14 +492,7 @@ const UnitArrivalInspectionForm = () => {
                 />
 
                 <Group justify="flex-end" mt="md">
-                    <Button type="submit" color="#A91D3A">Kirim Checklist</Button>
-                </Group>
-
-                <Divider my="xl" label={<Text style={{ color: '#000000 !important' }}>Legenda</Text>} labelPosition="center" />
-                <Group justify="center" gap="xl">
-                    <Text style={{ color: '#000000 !important' }}>1: Baik</Text>
-                    <Text style={{ color: '#000000 !important' }}>2: Hilang</Text>
-                    <Text style={{ color: '#000000 !important' }}>3: Buruk</Text>
+                    <Button type="submit"> Submit Checklist </Button>
                 </Group>
             </form>
         </Box>

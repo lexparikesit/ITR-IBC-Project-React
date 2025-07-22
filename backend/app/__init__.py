@@ -1,4 +1,4 @@
-from flask import Flask, app
+from flask import Flask
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from flask_mail import Mail
@@ -57,7 +57,16 @@ def create_app():
     db.init_app(app)
     mail.init_app(app)
 
+    from app.models.renault_checklist_model import RenaultChecklistModel 
+    from app.models.mst_unit_type_model import MstUnitType
+
     from app.routes.auth_routes import auth_bp
     app.register_blueprint(auth_bp)
+    
+    from app.routes.checklist_routes import checklist_bp
+    app.register_blueprint(checklist_bp, url_prefix='/api/checklist')
+
+    from app.routes.unit_type_routes import unit_type_bp
+    app.register_blueprint(unit_type_bp, url_prefix='/api/unit-types')
     
     return app
