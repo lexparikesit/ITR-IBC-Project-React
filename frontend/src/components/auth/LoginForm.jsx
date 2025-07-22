@@ -3,13 +3,13 @@ import {
 	Button,
 	Checkbox,
 	Flex,
-	Group,
 	PasswordInput,
-	Stack,
 	TextInput,
 } from "@mantine/core";
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
+import { notifications } from "@mantine/notifications";
+import apiClient from "@/libs/api";
 
 const LoginForm = () => {
 	const [username, setUsername] = useState("");
@@ -18,60 +18,55 @@ const LoginForm = () => {
 	const router = useRouter();
 
 	const handleLogin = async (e) => {
-		
-		e.preventDefault(); 
-		
+		e.preventDefault();
+
 		try {
-			const response = await fetch("http://localhost:5000/api/login", {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				credentials: "include", // Include cookies for session management
-				body: JSON.stringify({ username, password, remember }),
+			const response = await apiClient.post("/login", {
+				username,
+				password,
+				remember,
 			});
 
-			const data = await response.json();
+			const data = response.data;
+
 			console.log("Login API Response:", data);
 
-			if (response.ok) {
-				if (data.user_id) {
-					localStorage.setItem("user_id", data.user_id);
-					console.log("User ID stored in localStorage:", data.user_id);
-					localStorage.setItem("otp_sent", "true");
-					alert("OTP Sent to Your Email!");
-					router.push('/otp');
-				} else {
-					console.error("Login successful but user_id missing in response:", data);
-                    alert("Login successful, but User ID was not provided. Please contact support.");
-				}
+			if (data.user_id) {
+				localStorage.setItem("user_id", data.user_id);
+				console.log("User ID stored in localStorage:", data.user_id);
+				localStorage.setItem("otp_sent", "true");
+				notifications.show({
+					title: "OTP is sent!",
+					message: "Check your email for the OTP.",
+					autoClose: 5000,
+					position: "top-center",
+					color: "orange",
+				});
+				router.push("/otp");
 			} else {
-				console.error("Login failed:", data.error);
-                alert(data.error || "Login Failed. Please check your credentials.");	
+				console.error(
+					"Login successful but user_id missing in response:",
+					data
+				);
+				alert(
+					"Login successful, but User ID was not provided. Please contact support."
+				);
 			}
 		} catch (error) {
 			console.error("Network error during login:", error); // <-- LOG INI
-            alert("Network error. Please try again.");
+			alert("Network error. Please try again.");
 		}
 	};
 
-	const inputStyles = {
-		label: { color: "#A91D3A" },
-		input: {
-			borderColor: "#151515",
-			color: "#333",
-			backgroundColor: "#fff",
-		},
-		placeholder: { color: "#aaa" },
-	};
-
 	return (
-		<Stack>
+		<div>
 			<TextInput
 				label="Username"
-				placeholder="username"
+				placeholder="Username"
 				value={username}
 				onChange={(e) => setUsername(e.currentTarget.value)}
 				required
-				styles={inputStyles}
+				mt="sm"
 			/>
 
 			<PasswordInput
@@ -80,25 +75,25 @@ const LoginForm = () => {
 				value={password}
 				onChange={(e) => setPassword(e.currentTarget.value)}
 				required
-				styles={inputStyles}
+				mt="sm"
 			/>
 
-			<Flex justify="space-between" w="100%" mt="xs">
+			<Flex justify="space-between" w="100%" mt="lg">
 				<Checkbox
 					label="Remember Me"
 					checked={remember}
 					onChange={(e) => setRemember(e.currentTarget.checked)}
-					styles={inputStyles}
+					// styles={inputStyles}
 				/>
 				<Anchor href="#" size="sm">
 					Forget Password
 				</Anchor>
 			</Flex>
 
-			<Button fullWidth mt="xl" onClick={handleLogin} color="#A91D3A">
+			<Button fullWidth mt="lg" onClick={handleLogin} color="#A91D3A">
 				Login
 			</Button>
-		</Stack>
+		</div>
 	);
 };
 
