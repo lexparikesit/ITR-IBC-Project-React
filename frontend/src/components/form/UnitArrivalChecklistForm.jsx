@@ -14,9 +14,10 @@ import {
     Stack,
     Radio,
     Select,
-    filterProps,
 } from '@mantine/core';
+import { DateInput } from "@mantine/dates";
 import { useForm } from '@mantine/form';
+import { IconCalendar } from '@tabler/icons-react';
 
 const ChecklistRadioItem = ({
     label,
@@ -102,7 +103,7 @@ export function UnitArrivalChecklistForm() {
         ],
     };
 
-    const selectedBrand = 'renault';
+    //const selectedBrand = 'renault';
     const currentChecklistData = checklistDataRenault;
         
     const form  = useForm({
@@ -113,6 +114,7 @@ export function UnitArrivalChecklistForm() {
                 vin: '',
                 noChassis: '',
                 noEngine: '',
+                dateOfCheck: null,
                 generalRemarks: '',
             };
             
@@ -125,13 +127,19 @@ export function UnitArrivalChecklistForm() {
             });
             return initial;
         })(),
+        validate: {
+            typeModel: (value) => (value ? null : 'Type/Model is required'),
+            vin: (value) => (value ? null : 'VIN is required'),
+            noChassis: (value) => (value ? null : 'No. Chassis is required'),
+            noEngine: (value) => (value ? null : 'No. Engine is required'),
+            dateOfCheck: (value) => (value ? null : 'Date of Check is required')
+        }
     });
 
     // effect to load data model from API
     useEffect(() => {
         const fetchUnitModels = async () => {
             try {
-                // Panggil API dengan BrandID "RT"
                 const response = await fetch('http://127.0.0.1:5000/api/unit-types/RT');
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
@@ -152,8 +160,19 @@ export function UnitArrivalChecklistForm() {
         
         const brand = 'renault';
 
+        const formattedValues = { ...values };
+        
+        if (formattedValues.dateOfCheck instanceof Date && !isNaN(formattedValues.dateOfCheck)) {
+            const day = String(formattedValues.dateOfCheck.getDate()).padStart(2, '0');
+            const month = String(formattedValues.dateOfCheck.getMonth() + 1).padStart(2, '0');
+            const year = formattedValues.dateOfCheck.getFullYear();
+            formattedValues.dateOfCheck = `${day}-${month}-${year}`
+        } else {
+            formattedValues.dateOfCheck = null;
+        }
+
         try {
-            const response = await fetch('http://127.0.0.1:5000/api/checklist/submit', {
+            const response = await fetch('http://127.0.0.1:5000/api/arrival-check/renault/submit', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -181,14 +200,14 @@ export function UnitArrivalChecklistForm() {
             <Card shadow="sm" padding="lg" radius="md" withBorder mb="lg">
                 <Title order={3} mb="md">{sectionTitle}</Title>
                 <Grid gutter="xl">
-                    {items.map((items) => {
-                        const statusFieldName = `${sectionKey}_${items.id}_status`;
-                        const remarksFieldName = `${sectionKey}_${items.id}_remarks`;
+                    {items.map((item) => {
+                        const statusFieldName = `${sectionKey}_${item.id}_status`;
+                        const remarksFieldName = `${sectionKey}_${item.id}_remarks`;
 
                         return (
                             <ChecklistRadioItem
-                                key={items.id}
-                                label={`${items.id}. ${items.label}`}
+                                key={item.id}
+                                label={`${item.id}. ${item.label}`}
                                 statusFormProps={form.getInputProps(statusFieldName)}
                                 remarksFormProps={form.getInputProps(remarksFieldName)}
                                 showRemarks={form.values[statusFieldName] === 'checked_with_remarks'}
@@ -203,7 +222,7 @@ export function UnitArrivalChecklistForm() {
 
     return (
         <Box maw="100%" mx="auto" px="md">
-            <Title order={1} mt="md" mb="lg" c="black">Unit Arrival Check List</Title>
+            <Title order={1} mt="md" mb="lg" c="black"> Unit Arrival Check </Title>
             <form onSubmit={form.onSubmit(handleSubmit)}>
             <Card shadow="sm" padding="lg" radius="md" withBorder mb="lg">
                 <Title order={3} mb="md" c="black">Unit Information</Title>
@@ -216,7 +235,7 @@ export function UnitArrivalChecklistForm() {
                             searchable
                             clearable
                             {...form.getInputProps('typeModel')}
-                            renderOption={({ option, checked }) => (
+                            renderOption={({ option }) => (
                                 <Text c="black">{option.label}</Text>
                             )}
                         />
@@ -242,10 +261,58 @@ export function UnitArrivalChecklistForm() {
                             {...form.getInputProps('vin')}
                         />
                     </Grid.Col>
+                    <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
+                        <DateInput
+                            label="Date of Check"
+                            placeholder="Select Date"
+                            {...form.getInputProps('dateOfCheck')}
+                            valueFormat="DD/MM/YYYY"
+                            rightSection={<IconCalendar size={16} />}
+                            styles={{
+                                input: { color: '#000000 !important' },
+                                calendarHeaderControl: {
+                                    color: '#000000 !important',
+                                },
+                                calendarHeader: {
+                                    color: '#000000 !important',
+                                    justifyContent: 'center',
+                                },
+                                weekday: {
+                                    color: '#000000 !important',
+                                },
+                                day: {
+                                    color: '#000000 !important',
+                                    fontSize: 'var(--mantine-font-size-sm)',
+                                    padding: 'var(--mantine-spacing-xs)',
+                                },
+                                month: {
+                                    color: '#000000 !important',
+                                },
+                                year: {
+                                    color: '#000000 !important',
+                                },
+                                pickerControl: {
+                                    color: '#000000 !important',
+                                },
+                                pickerControlActive: {
+                                    color: '#000000 !important',
+                                },
+                                monthPicker: {
+                                    color: '#000000 !important',
+                                },
+                                yearPicker: {
+                                    color: '#000000 !important',
+                                },
+                                dropdownProps: {
+                                    backgroundColor: 'white',
+                                }
+                            }}
+                        />
+                    </Grid.Col>
                 </Grid>
             </Card>
             <>
-                <Title order={3} mb="md" c="black">Item Checklist</Title>
+                <Title order={3} mb="md" c="black">Arrival Checklist</Title>
                 {Object.keys(currentChecklistData).map(sectionKey => {
                     const sectionTitleMap = {
                         chassisAndCab: 'Chassis & Cab',
@@ -267,7 +334,7 @@ export function UnitArrivalChecklistForm() {
             </>
 
             <Card shadow="sm" padding="lg" radius="md" withBorder mb="lg">
-                <Title order={3} mb="md" c="black">General Remarks</Title>
+                <Title order={3} mb="md" c="black"> General Remarks </Title>
                 <Textarea
                     placeholder="Add any general remarks here..."
                     autosize

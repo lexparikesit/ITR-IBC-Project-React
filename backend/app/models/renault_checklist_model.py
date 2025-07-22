@@ -14,6 +14,7 @@ class RenaultChecklistModel(db.Model):
     UnitType = db.Column(db.String(50), nullable=True)
     VIN = db.Column(db.String(50), nullable=True)
     EngineNo = db.Column(db.String(50), nullable=True)
+    chassisNumber = db.Column(db.String(50), nullable=True)
 
     # column cab1 with bit type
     Cab1 = db.Column(db.Boolean, nullable=True)
@@ -92,6 +93,16 @@ class RenaultChecklistModel(db.Model):
     Functional2Remark = db.Column(db.String(150), nullable=True)
     Functional3Remark = db.Column(db.String(150), nullable=True)
     Functional4Remark = db.Column(db.String(150), nullable=True)
+
+    # column arrival remarks
+    arrival_remarks = db.Column(db.String(500), nullable=True)
+
+    # column for Created By and Created On
+    createdon = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    createdby = db.Column(db.String(50), nullable=False)
+
+    # column for created Date Check
+    arrivalDate = db.Column(db.Date, nullable=True)
 
     def __repr__(self):
 

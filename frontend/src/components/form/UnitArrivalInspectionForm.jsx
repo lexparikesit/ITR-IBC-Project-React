@@ -3,8 +3,9 @@
 import React, { useState, useEffect } from "react";
 import {
     TextInput,
-    Textarea, 
+    Textarea,
     Button,
+    Stack,
     Text,
     Grid,
     Group,
@@ -13,490 +14,405 @@ import {
     Divider,
     Box,
     Select,
-    Popover,
+    Radio,
 } from "@mantine/core";
-import { DateInput, DatePicker } from "@mantine/dates";
-import { TimeInput } from "@mantine/dates";
-import { IconClock, IconCalendar } from "@tabler/icons-react";
-import ChecklistRadioItem from "./ChecklistRadioItem";
+import { DateInput } from "@mantine/dates";
+import { IconCalendar } from "@tabler/icons-react";
+import { useForm } from '@mantine/form';
 
-const UnitArrivalInspectionForm = () => {
+// Definisi item checklist untuk Manitou (struktur data sesuai PDF)
+const manitouChecklistItemsDefinition = {
+    engine: [
+        { id: '01', label: 'Air Filter', itemKey: 'airFilter' },
+        { id: '02', label: 'Fuel Filter', itemKey: 'fuelFilter' },
+        { id: '03', label: 'Fuel Pipes and Filters', itemKey: 'fuelPipeFilters' },
+        { id: '04', label: 'Injection / Carburation System', itemKey: 'injectionCarburationSystem' },
+        { id: '05', label: 'Radiator and Cooling Systems', itemKey: 'radiatorCoolingSystems' },
+        { id: '06', label: 'Belts', itemKey: 'belts' },
+        { id: '07', label: 'Hoses', itemKey: 'hosesEngine' },
+    ],
+    transmission: [
+        { id: '01', label: 'Reversing System', itemKey: 'reversingSystem' },
+        { id: '02', label: 'Gear Oil Leaks', itemKey: 'gearOilLeaks' },
+        { id: '03', label: 'Direction Disconnect Pedal', itemKey: 'directionDisconnectPedal' },
+        { id: '04', label: 'Clutch', itemKey: 'clutch' },
+    ],
+    axleTransferBox: [
+        { id: '01', label: 'Operation and Tightness', itemKey: 'operationTightness' },
+        { id: '02', label: 'Adjustment of Stops', itemKey: 'adjustmentStops' },
+    ],
+    hydraulicHydrostaticCircuits: [
+        { id: '01', label: 'Oil Tank', itemKey: 'oilTank' },
+        { id: '02', label: 'Pumps and Coupling', itemKey: 'pumpsCoupling' },
+        { id: '03', label: 'Tightness of Unions', itemKey: 'tightnessOfUnions' },
+        { id: '04', label: 'Lifting Rams', itemKey: 'liftingRams' },
+        { id: '05', label: 'Tilting Rams', itemKey: 'tiltingRams' },
+        { id: '06', label: 'Accessory Rams', itemKey: 'accessoryRams' },
+        { id: '07', label: 'Telescope Rams', itemKey: 'telescopeRams' },
+        { id: '08', label: 'Compensating Rams', itemKey: 'compensatingRams' },
+        { id: '09', label: 'Steering Rams', itemKey: 'steeringRams' },
+        { id: '10', label: 'Control Valves', itemKey: 'controlValves' },
+        { id: '11', label: 'Counterbalance Valve', itemKey: 'counterBalanceValve' },
+    ],
+    brakingCircuits: [
+        { id: '01', label: 'Service Brake & Parking Brake Operation', itemKey: 'serviceBrakeParkingBrakeOperation' },
+        { id: '02', label: 'Brake Fluid Level (if applicable)', itemKey: 'brakeFluidLevel' },
+    ],
+    lubrication: [
+        { id: '01', label: 'Lubrication', itemKey: 'lubrication' },
+    ],
+    boomMastManiscopicManicess: [
+        { id: '01', label: 'Boom & Telescopes', itemKey: 'boomTelescopes' },
+        { id: '02', label: 'Wear Pads', itemKey: 'wearPads' },
+        { id: '03', label: 'Linkage', itemKey: 'linkage' },
+        { id: '04', label: 'Carriage', itemKey: 'carriageBooms' },
+        { id: '05', label: 'Forks', itemKey: 'forksBooms' }
+    ],
+    mastUnit: [
+        { id: '01', label: 'Fixed & Movable Mast(s)', itemKey: 'fixedMovableMast' },
+        { id: '02', label: 'Carriage', itemKey: 'carriageMast' },
+        { id: '03', label: 'Chains', itemKey: 'chains' },
+        { id: '04', label: 'Rollers', itemKey: 'rollers' },
+        { id: '05', label: 'Forks', itemKey: 'forksMastUnit' },
+    ],
+    accessories: [
+        { id: '01', label: 'Adaptation to Machine', itemKey: 'adaptationToMachine' },
+        { id: '02', label: 'Hydraulic Connections', itemKey: 'hydraulicConnections' },
+    ],
+    cabProtectiveDeviceElectricCircuit: [
+        { id: '01', label: 'Seat', itemKey: 'seat' },
+        { id: '02', label: 'Control Panel & Radio', itemKey: 'controlPanelRadio' },
+        { id: '03', label: 'Horn & Warning Light, Safety Device', itemKey: 'hornWarningLightSafetyDevice' },
+        { id: '04', label: 'Heating & Air Conditioning', itemKey: 'heatingAirConditioning' },
+        { id: '05', label: 'Windscreen Wiper / Washer', itemKey: 'windscreenWiperWasher' },
+        { id: '06', label: 'Horns', itemKey: 'horns' },
+        { id: '07', label: 'Backup Alarm', itemKey: 'backupAlarm' },
+        { id: '08', label: 'Lighting', itemKey: 'lighting' },
+        { id: '09', label: 'Additional Lighting', itemKey: 'additionalLighting' },
+        { id: '10', label: 'Rotating Beacon', itemKey: 'rotatingBeacon' },
+        { id: '11', label: 'Battery', itemKey: 'battery' },
+    ],
+    wheels: [
+        { id: '01', label: 'Rims', itemKey: 'rims' },
+        { id: '02', label: 'Tires & Pressure', itemKey: 'tiresPressure' },
+    ],
+    // Other items (flat structure in state, not nested)
+    otherItems: [
+        { id: '01', label: 'Screws and Nuts', itemKey: 'screwsNuts' },
+        { id: '02', label: 'Frame and Body', itemKey: 'frameBody' },
+        { id: '03', label: 'Name Plate', itemKey: 'namePlate' },
+        { id: '04', label: 'General Operation', itemKey: 'generalOperation' },
+        { id: '05', label: 'Operator\'s Manual', itemKey: 'operatorsManual' },
+        { id: '06', label: 'Instructions for Customer', itemKey: 'instructionsForCustomer' },
+    ],
+};
 
-    // dummy data for model/ type and technician (will be replaced then by API)
-    const dummyModels = [
-        { value: 'M20-4', label: 'M20-4' },
-        { value: 'MLT 737-130 PS+', label: 'MLT 737-130 PS+' },
-        { value: 'MT 625 H', label: 'MT 625 H' },
-        { value: 'MRT 2550 Privilege Plus', label: 'MRT 2550 Privilege Plus' },
-    ]
 
-    const dummyTechnician = [
-        { value: 'john_doe', label: 'John Doe' },
-        { value: 'jane_smith', label: 'Jane Smith' },
-        { value: 'peter_jones', label: 'Peter Jones' },
-    ]
+export function UnitArrivalInspectionForm() {
+    // State to store models fetched from API
+    const [modelsData, setModelsData] = useState([]);
 
-    const [unitInfo, setUnitInfo] = useState({
-        model: null,
-        serialNo: "",
-        hourMeter: "",
-        dateOfCheck: null,
-        timeOfCheck: "",
-        technician: "null",
+    // Initialize useForm with all fields
+    const form = useForm({
+        initialValues: (() => {
+            const initialManitouValues = {
+                model: null,
+                serialNo: "", // VIN
+                hourMeter: "",
+                dateOfCheck: null,
+                generalRemarks: "",
+            };
+
+            // Dynamically add checklist items to initial values
+            Object.keys(manitouChecklistItemsDefinition).forEach(sectionKey => {
+                if (sectionKey === 'otherItems') {
+                    manitouChecklistItemsDefinition[sectionKey].forEach(item => {
+                        initialManitouValues[item.itemKey] = ""; // Flat structure for otherItems
+                    });
+                } else {
+                    initialManitouValues[sectionKey] = {}; // Nested object for sections
+                    manitouChecklistItemsDefinition[sectionKey].forEach(item => {
+                        initialManitouValues[sectionKey][item.itemKey] = "";
+                    });
+                }
+            });
+            return initialManitouValues;
+        })(),
     });
 
-    // state for controlling DatePickerOpened
-    const [datePickerOpened, setDatePickerOpened] = useState(false);
-
-    const [checklistItems, setChecklistItems] = useState({
-        engine: {
-            airFilter: "",
-            fuelFilter: "",
-            fuelPipeFilters: "",
-            injectionCarburationSystem: "",
-            radiatorCoolingSystems: "",
-            belts: "",
-            hosesEngine: "",
-        },
-
-        transmission: {
-            reversingSystem: "",
-            gearOilLeaks: "",
-            directionDisconnectPedal: "",
-            clutch: "",
-        },
-
-        hydraulicHydrostaticCircuits: {
-            oilTank: "",
-            pumpsCoupling: "",
-            tightnessOfUnions: "",
-            fillingLevel: "",
-            hosesHydraulic: "",
-            accessoryParts: "",
-            telescopeRams: "",
-            tiltLiftRams: "",
-            steeringControlValves: "",
-            controlValves: "",
-        },
-
-        brakingCircuits: {
-            serviceBrakeParkingBrakeOperation: "",
-            brakeFluidLevel: "",
-        },
-
-        lubrication: {
-            lubrication: "",
-        },
-
-        boomMastManiscopicManicess: {
-            boomTelescopes: "",
-            wearPads: "",
-            linkage: "",
-            forks: "",
-        },
-
-        mastUnitCheckboxes: {
-            fixedMovableMast: "",
-            carriage: "",
-            chains: "",
-            rollers: "",
-            forksMastUnit: "",
-        },
-
-        accessoriesCheckboxes: {
-            adaptationToMachine: "",
-            hydraulicConnections: "",
-        },
-
-        cabProtectiveDeviceElectricCircuit: {
-            seat: "",
-            controlPanelRadio: "",
-            hornWarningLightSafetyDevice: "",
-            heatingAirConditioning: "",
-            windscreenWiperWasher: "",
-            horns: "",
-            backupAlarm: "",
-            lighting: "",
-            additionalLighting: "",
-            rotatingBeacon: "",
-            battery: "",
-        },
-
-        wheels: {
-            rims: "",
-            tiresPressure: "",
-        },
-        
-        // single Item checklist that are not nested in an object
-        screwsNuts: "",
-        frameBody: "",
-        paint: "",
-        operatorsManual: "",
-        instructionsForCustomer: "",
-    });
-
-    const [generalRemarks, setGeneralRemarks] = useState("");
-
-    const handleUnitInfoChange = (e) => {
-        const { name, value } = e.target;
-        setUnitInfo((prev) => ({ ...prev, [name]: value }));
-    };
-
-    const handleDateChange = (value) => {
-        setUnitInfo((prev) => ({ ...prev, dateOfCheck: value }));
-        setDatePickerOpened(false);
-    };
-
-    const handleTimeChange = (value) => {
-        setUnitInfo((prev) => ({ ...prev, timeOfCheck: value }));
-    };
-
-    // Handler of radio status (Good/Missing/Bad)
-    const handleChecklistItemStatusChange = (section, itemKey, value) => {
-        setChecklistItems((prev) => {
-            // check if the section is nested object or single item
-            if (typeof prev[section] === 'object' && prev[section] !== null && prev[section].hasOwnProperty(itemKey)) {
-                return {
-                    ...prev,
-                    [section]: {
-                        ...prev[section],
-                        [itemKey]: value, // directly update status
-                    },
-                };
-            } else {
-                // for single item which directly in root checklistItems
-                return {
-                    ...prev,
-                    [itemKey]: value, // directly update status
-                };
-            }
-        });
-    };
-
-    // Dummy data to get a technician name (later will using API)
+    // useEffect to fetch models from backend
     useEffect(() => {
-        // const fetchTechnician = async () => {
-        //     const response = await fetch('/api/get-current-user-lastname');
-        //     const data = await response.json();
+        const fetchModels = async () => {
+            try {
+                // API mstType
+                const response = await fetch('http://127.0.0.1:5000/api/unit-types/MA');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                
+                const formattedModels = data
+                    .filter(item => item.value !== null && item.value !== undefined && item.label !== null && item.label !== undefined) // Filter berdasarkan 'value' dan 'label'
+                    .map(item => ({
+                        value: item.value,
+                        label: item.label
+                    }));
+                    setModelsData(formattedModels);
 
-        //     if (data && data.lastName) {
-        //         setUnitInfo(prev => ({ ...prev, technician: data.lastName }));
-        //     }
-        // };
-        // fetchTechnician();
+            } catch (error) {
+                console.error("Failed to fetch models:", error);
+                setModelsData([]);
+            }
+        };
+
+        fetchModels();
     }, []);
 
-    const handleSubmit = (e) => {
-        e.preventDefault();
-        console.log("Unit Information: ", unitInfo);
-        console.log("Item Checklist: ", checklistItems);
-        console.log("Remarks: ", generalRemarks);
-        
-        alert("Form Submitted!");
-        // here we send the data to the server or handle it as needed
+    const handleSubmit = async (values) => {
+        console.log('Form Submitted (Frontend Data)', values);
+
+        const payload = {
+            brand: 'manitou', // Hardcoded for Manitou
+            
+            unitInfo: {
+                model: values.model,
+                serialNo: values.serialNo,
+                hourMeter: values.hourMeter,
+                dateOfCheck: (values.dateOfCheck instanceof Date && !isNaN(values.dateOfCheck)) 
+                            ? values.dateOfCheck.toISOString() 
+                            : null,
+            },
+            generalRemarks: values.generalRemarks,
+            checklistItems: {}, // Initialize checklistItems object
+        };
+
+        // Populate checklistItems from form values
+        Object.keys(manitouChecklistItemsDefinition).forEach(sectionKey => {
+            if (sectionKey === 'otherItems') {
+                manitouChecklistItemsDefinition[sectionKey].forEach(item => {
+                    // Handle special mapping for 'namePlate' and 'generalOperation' (backend expects 'namePlate' and 'general')
+                    if (item.itemKey === 'namePlate') {
+                        payload.checklistItems['namePlate'] = values[item.itemKey];
+                    } else if (item.itemKey === 'generalOperation') {
+                        payload.checklistItems['general'] = values[item.itemKey];
+                    } else {
+                        payload.checklistItems[item.itemKey] = values[item.itemKey];
+                    }
+                });
+            } else {
+                // For nested sections, copy the entire object
+                payload.checklistItems[sectionKey] = values[sectionKey];
+            }
+        });
+
+        console.log("Payload to Backend: ", payload);
+
+        try {
+            const response = await fetch(`http://127.0.0.1:5000/api/arrival-check/manitou/submit`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(payload),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Failed to submit checklist');
+            }
+
+            const result = await response.json();
+            alert(result.message || 'Form submitted successfully!');
+            form.reset(); // Reset form after successful submission
+
+        } catch (error) {
+            console.error('Error submitting form:', error);
+            alert(`Error: ${error.message}`);
+        }
     };
 
+    const renderChecklistItem = (label, formProps, spanValue, key) => {
+        return (
+            <Grid.Col span={spanValue} key={key}>
+                <Stack gap="xs">
+                    <Text size="sm" style={{ color: '#000000 !important', fontWeight: 500 }}>{label}</Text>
+
+                    <Radio.Group
+                        {...formProps}
+                        orientation="horizontal"
+                        spacing="xl"
+                    >
+                        <Group mt="xs">
+                            <Radio value="Good" label={<Text style={{ color: '#000000 !important' }}>Good</Text>} />
+                            <Radio value="Missing" label={<Text style={{ color: '#000000 !important' }}>Missing</Text>} />
+                            <Radio value="Bad" label={<Text style={{ color: '#000000 !important' }}>Bad</Text>} />
+                        </Group>
+                    </Radio.Group>
+                </Stack>
+            </Grid.Col>
+        );
+    };
+
+    // Helper for checklist Render
     const renderChecklistSection = (sectionTitle, sectionKey, items) => {
         return (
             <Card shadow="sm" p="xl" withBorder mb="lg">
-                <Title order={3} mb="md" style={{ color: '#000000 !important' }}> {sectionTitle} </Title>
+                <Title order={3} mb="md" style={{ color: '#000000 !important' }}>{sectionTitle}</Title>
                 <Grid gutter="xl">
-                    {items.map((item, index) => (
-                        <ChecklistRadioItem
-                            key={index} // use index as key if there is no stable unique id
-                            label={<Text style={{ color: '#000000 !important' }}>{`${item.id}. ${item.label}`}</Text>}
-                            section={sectionKey}
-                            itemKey={item.itemKey} // Using existing itemKey in state structure
-                            currentStatus={checklistItems[sectionKey][item.itemKey] || ""} // Only status
-                            onStatusChange={handleChecklistItemStatusChange}
-                            span={{ base: 12, sm: 6 }}
-                        />
+                    {items.map((item) => ( 
+                        renderChecklistItem(
+                            `${item.id}. ${item.label}`, 
+                            form.getInputProps(`${sectionKey}.${item.itemKey}`),
+                            { base: 12, sm: 6 },
+                            `${sectionKey}-${item.itemKey}`
+                        )
                     ))}
                 </Grid>
             </Card>
         );
     };
 
-    const engineItems = [
-        { id: '01', label: 'Air Filter', itemKey: 'airFilter' },
-        { id: '02', label: 'Fuel Filter', itemKey: 'fuelFilter' },
-        { id: '03', label: 'Fuel Pipe Filters', itemKey: 'fuelPipeFilters' },
-        { id: '04', label: 'Injection Carburation System', itemKey: 'injectionCarburationSystem' },
-        { id: '05', label: 'Radiator Cooling Systems', itemKey: 'radiatorCoolingSystems' },
-        { id: '06', label: 'Belts', itemKey: 'belts' },
-        { id: '07', label: 'Hoses Engine', itemKey: 'hosesEngine' },
-    ];
-
-    const transmissionItems = [
-        { id: '01', label: 'Reversing System', itemKey: 'reversingSystem' },
-        { id: '02', label: 'Gear Oil Leaks', itemKey: 'gearOilLeaks' },
-        { id: '03', label: 'Direction Disconnect Pedal', itemKey: 'directionDisconnectPedal' },
-        { id: '04', label: 'Clutch', itemKey: 'clutch' },
-    ];
-
-    const hydraulicHydrostaticCircuitsItems = [
-        { id: '01', label: 'Oil Tank', itemKey: 'oilTank' },
-        { id: '02', label: 'Pump and Coupling', itemKey: 'pumpsCoupling' },
-        { id: '03', label: 'Tightness of Unions', itemKey: 'tightnessOfUnions' },
-        { id: '04', label: 'Filling Level', itemKey: 'fillingLevel' },
-        { id: '05', label: 'Hoses (e.g.)', itemKey: 'hosesHydraulic' },
-        { id: '06', label: 'Accessory Parts', itemKey: 'accessoryParts' },
-        { id: '07', label: 'Telescope Rams', itemKey: 'telescopeRams' },
-        { id: '08', label: 'Tilt Lift Rams', itemKey: 'tiltLiftRams' },
-        { id: '09', label: 'Steering Control Valves', itemKey: 'steeringControlValves' },
-        { id: '10', label: 'Control Valves', itemKey: 'controlValves' },
-    ];
-
-    const brakingCircuitsItems = [
-        { id: '01', label: 'Checking of Service Brake and Parking Brake Operation', itemKey: 'serviceBrakeParkingBrakeOperation' },
-        { id: '02', label: 'Checking of Brake Fluid Level (as Per Assembly)', itemKey: 'brakeFluidLevel' },
-    ];
-
-    const lubricationItems = [
-        { id: '01', label: 'Lubrication', itemKey: 'lubrication' },
-    ];
-
-    const boomMastManiscopicManicessItems = [
-        { id: '01', label: 'Boom and Telescopes', itemKey: 'boomTelescopes' },
-        { id: '02', label: 'Wear Pads', itemKey: 'wearPads' },
-        { id: '03', label: 'Linkage', itemKey: 'linkage' },
-        { id: '04', label: 'Forks', itemKey: 'forks' },
-    ];
-
-    const mastUnitItems = [
-        { id: '01', label: 'Fixed and Movable Mast', itemKey: 'fixedMovableMast' },
-        { id: '02', label: 'Carriage', itemKey: 'carriage' },
-        { id: '03', label: 'Chains', itemKey: 'chains' },
-        { id: '04', label: 'Rollers', itemKey: 'rollers' },
-        { id: '05', label: 'Forks', itemKey: 'forksMastUnit' },
-    ];
-
-    const accessoriesItems = [
-        { id: '01', label: 'Adaptation to Machine', itemKey: 'adaptationToMachine' },
-        { id: '02', label: 'Hydraulic Connections', itemKey: 'hydraulicConnections' },
-    ];
-
-    const cabProtectiveDeviceElectricCircuitItems = [
-        { id: '01', label: 'Seat', itemKey: 'seat' },
-        { id: '02', label: 'Control Panel and Radio', itemKey: 'controlPanelRadio' },
-        { id: '03', label: 'Horn and Warning Lights, Safety Devices', itemKey: 'hornWarningLightSafetyDevice' },
-        { id: '04', label: 'Heater/ Air Conditioning', itemKey: 'heatingAirConditioning' },
-        { id: '05', label: 'Windscreen Wiper/ Washer', itemKey: 'windscreenWiperWasher' },
-        { id: '06', label: 'Horns', itemKey: 'horns' },
-        { id: '07', label: 'Backup Alarm', itemKey: 'backupAlarm' },
-        { id: '08', label: 'Head Lighting', itemKey: 'lighting' },
-        { id: '09', label: 'Additional Lighting', itemKey: 'additionalLighting' },
-        { id: '10', label: 'Rotating Beacon', itemKey: 'rotatingBeacon' },
-        { id: '11', label: 'Battery', itemKey: 'battery' },
-    ];
-
-    const wheelsItems = [
-        { id: '01', label: 'Rims', itemKey: 'rims' },
-        { id: '02', label: 'Tires / Pressure', itemKey: 'tiresPressure' },
-    ];
-
-    // single item 
-    const otherItems = [
-        { id: '015', label: 'Secrews and Nuts', itemKey: 'screwsNuts', section: 'screwsNuts' },
-        { id: '016', label: 'Frame and Body', itemKey: 'frameBody', section: 'frameBody' },
-        { id: '017', label: 'Paint', itemKey: 'paint', section: 'paint' },
-        { id: '018', label: 'Operators Manual', itemKey: 'operatorsManual', section: 'operatorsManual' },
-        { id: '019', label: 'Instructions for Customer', itemKey: 'instructionsForCustomer', section: 'instructionsForCustomer' },
-    ];
-
+    // Helper for other's checklist
+    const renderOtherItemsSection = (items) => {
+        return (
+            <Card shadow="sm" p="xl" withBorder mb="lg">
+                <Title order={3} mb="md" style={{ color: '#000000 !important' }}> Other's </Title>
+                <Grid gutter="xl">
+                    {items.map((item) => ( // Index dihapus
+                        renderChecklistItem(
+                            `${item.id} ${item.label}`,
+                            form.getInputProps(item.itemKey),
+                            { base: 12, sm: 6 },
+                            `other-${item.itemKey}`
+                        )
+                    ))}
+                </Grid>
+            </Card>
+        );
+    };
 
     return (
-        // Box as outer wrapper to adjust width and placement
         <Box maw="100%" mx="auto" px="md">
-            {/* Main Title, left align */}
-            <Title order={1} mt="md" mb="lg" c="black"> Unit Arrival Check Inspection </Title>
-            <form onSubmit={handleSubmit}>
-                {/* Informasi Unit dalam Card */}
+            <Title
+                order={1}
+                mt="md"
+                mb="lg"
+                style={{ color: '#000000 !important' }}
+            >
+                Unit Arrival Check
+            </Title>
+
+            <form onSubmit={form.onSubmit(handleSubmit)}>
                 <Card shadow="sm" p="xl" withBorder mb="lg">
-                    <Title order={3} mb="lg" c="black"> Unit Information </Title>
+                    <Title order={3} mb="md" style={{ color: '#000000 !important' }}> Unit Information </Title>
                     <Grid gutter="xl">
                         <Grid.Col span={{ base: 12, md: 6, lg: 4 }}>
                             <Select
                                 label={<Text style={{ color: '#000000 !important' }}> Type/ Model </Text>}
-                                name="model"
                                 placeholder="Select Model"
-                                data={dummyModels}
-                                value={unitInfo.model}
-                                onChange={(value) => handleSelectChange('model', value)}
+                                data={modelsData}
                                 searchable
                                 clearable
-                                //custome render option
-                                renderOption={({ option, checked }) => (
-                                    <Text c="black">{option.label}</Text>
+                                {...form.getInputProps('model')}
+                                renderOption={({ option }) => (
+                                    <Text c='black'>{option.label}</Text>
                                 )}
                             />
                         </Grid.Col>
                         <Grid.Col span={{ base: 12, md: 6, lg: 4 }}>
                             <TextInput
-                                label={<Text style={{ color: '#000000 !important' }}> VIN Number </Text>}
-                                name="serialNo"
+                                label={<Text style={{ color: '#000000 !important' }}> VIN </Text>}
                                 placeholder="Input VIN Number"
-                                value={unitInfo.serialNo}
-                                onChange={handleUnitInfoChange}
+                                {...form.getInputProps('serialNo')}
+                                styles={{ input: { color: '#000000 !important' } }}
                             />
                         </Grid.Col>
                         <Grid.Col span={{ base: 12, md: 6, lg: 4 }}>
                             <TextInput
                                 label={<Text style={{ color: '#000000 !important' }}> Hour Meter </Text>}
-                                name="hourMeter"
                                 placeholder="Input Hour Meter"
-                                value={unitInfo.hourMeter}
-                                onChange={handleUnitInfoChange}
+                                {...form.getInputProps('hourMeter')}
+                                styles={{ input: { color: '#000000 !important' } }}
                             />
                         </Grid.Col>
                         <Grid.Col span={{ base: 12, md: 6, lg: 4 }}>
-                            <Popover
-                                opened={datePickerOpened}
-                                onChange={setDatePickerOpened}
-                                position="bottom-start"
-                                shadow="md"
-                                trapFocus
-                                withArrow
-                                zIndex={1000}
-                            >
-                                <Popover.Target>
-                                    <TextInput
-                                        label={<Text style={{ color: '#000000 !important' }}> Date of Check </Text>}
-                                        placeholder="Select date"
-                                        value={unitInfo.dateOfCheck ? unitInfo.dateOfCheck.toLocaleDateString('id-ID', { year: 'numeric', month: '2-digit', day: '2-digit' }) : ''}
-                                        readOnly
-                                        onClick={() => setDatePickerOpened(true)}
-                                        rightSection={<IconCalendar size={16} style={{ cursor: 'pointer' }} onClick={() => setDatePickerOpened(true)} />}
-                                        styles={{ input: { color: '#000000 !important' } }}
-                                    />
-                                </Popover.Target>
-                                <Popover.Dropdown>
-                                    <DatePicker
-                                        value={unitInfo.dateOfCheck}
-                                        onChange={handleDateChange}
-                                        styles={{
-                                            calendarHeaderControl: {
-                                                color: '#000000 !important',
-                                            },
-                                            calendarHeader: {
-                                                color: '#000000 !important',
-                                            },
-                                            weekday: {
-                                                color: '#000000 !important',
-                                            },
-                                            day: {
-                                                color: '#000000 !important',
-                                                fontSize: 'var(--mantine-font-size-sm)',
-                                                padding: 'var(--mantine-spacing-xs)',
-                                            },
-                                            month: {
-                                                color: '#000000 !important',
-                                                fontSize: 'var(--mantine-font-size-sm)',
-                                            },
-                                            year: {
-                                                color: '#000000 !important',
-                                                fontSize: 'var(--mantine-font-size-sm)',
-                                            },
-                                            pickerControl: {
-                                                color: '#000000 !important',
-                                            },
-                                            pickerControlActive: {
-                                                color: '#000000 !important',
-                                            },
-                                            monthPicker: {
-                                                color: '#000000 !important',
-                                            },
-                                            yearPicker: {
-                                                color: '#000000 !important',
-                                            },
-                                        }}
-                                    />
-                                </Popover.Dropdown>
-                            </Popover>
-                        </Grid.Col>
-                        <Grid.Col span={{ base: 12, md: 6, lg: 4 }}>
-                            <TimeInput
-                                label={<Text style={{ color: '#000000 !important' }}> Time of Check </Text>}
-                                placeholder="Select Time"
-                                value={unitInfo.timeOfCheck}
-                                onChange={handleTimeChange}
-                                rightSection={<IconClock size={16} />}
-                            />
-                        </Grid.Col>
-                        <Grid.Col span={{ base: 12, md: 6, lg: 4 }}>
-                            <Select
-                                label={<Text style={{ color: '#000000 !important' }}> Technician </Text>}
-                                name="technician"
-                                placeholder="Select Technician"
-                                data={dummyTechnician}
-                                value={unitInfo.technician}
-                                onChange={(value) => handleSelectChange('technician', value)}
-                                searchable
-                                clearable
-                                //custome render option
-                                renderOption={({ option, checked }) => (
-                                    <Text c="black">{option.label}</Text>
-                                )}
-                            />
-                        </Grid.Col>
-                    </Grid>
-                </Card>
-
-                {/* Checklist */}
-                <Title order={3} mb="md" c="black"> Item Checklist </Title>
-
-                {renderChecklistSection("001 - Engine", "engine", engineItems)}
-                {renderChecklistSection("002 - Transmission", "transmission", transmissionItems)}
-                {renderChecklistSection("003 - Hydraulic/ Hydrostatic Circuits", "hydraulicHydrostaticCircuits", hydraulicHydrostaticCircuitsItems)}
-                {renderChecklistSection("004 - Braking Circuits", "brakingCircuits", brakingCircuitsItems)}
-                {renderChecklistSection("005 - Lubrication", "lubrication", lubricationItems)}
-                {renderChecklistSection("006 - Boom/ Mast Maniscopic/ Manicess", "boomMastManiscopicManicess", boomMastManiscopicManicessItems)}
-                {renderChecklistSection("007 - Unit Mast", "mastUnitCheckboxes", mastUnitItems)}
-                {renderChecklistSection("008 - Accessories", "accessoriesCheckboxes", accessoriesItems)}
-                {renderChecklistSection("009 - Cabin, Protective Devices/ Electrical Circuits", "cabProtectiveDeviceElectricCircuit", cabProtectiveDeviceElectricCircuitItems)}
-                {renderChecklistSection("010 - Wheels", "wheels", wheelsItems)}
-
-                {/* Other Items (outside numbered categories) */}
-                <Card shadow="sm" p="xl" withBorder mb="lg">
-                    <Title order={3} mb="md" style={{ color: '#000000 !important' }}> Other Items </Title>
-                    <Grid gutter="xl">
-                        {otherItems.map((item, index) => (
-                            <ChecklistRadioItem
-                                key={index}
-                                label={<Text style={{ color: '#000000 !important' }}>{`${item.id} ${item.label}`}</Text>}
-                                section={item.section} 
-                                itemKey={item.itemKey} 
-                                currentStatus={checklistItems[item.itemKey] || ""}
-                                onStatusChange={(section, itemKey, value) => {
-                                    setChecklistItems(prev => ({
-                                        ...prev,
-                                        [item.itemKey]: value
-                                    }));
+                            <DateInput
+                                label={<Text style={{ color: '#000000 !important' }}> Date of Check </Text>}
+                                placeholder="Select Date"
+                                valueFormat="DD-MM-YYYY"
+                                {...form.getInputProps('dateOfCheck')}
+                                onChange={(value) => {
+                                    console.log("DateInput onChange value:", value);
+                                    const parsedDate = value ? new Date(value) : null;
+                                    console.log("DateInput onChange value (parsed):", parsedDate);
+                                    form.setFieldValue('dateOfCheck', parsedDate);
                                 }}
-                                span={{ base: 12, sm: 6 }}
+                                rightSection={<IconCalendar size={16} />}
+                                styles={{
+                                    input: { color: '#000000 !important' },
+                                    calendarHeaderControl: { color: '#000000 !important' },
+                                    calendarHeader: { color: '#000000 !important' },
+                                    weekday: { color: '#000000 !important' },
+                                    day: { color: '#000000 !important', fontSize: 'var(--mantine-font-size-sm)', padding: 'var(--mantine-spacing-xs)' },
+                                    month: { color: '#000000 !important', fontSize: 'var(--mantine-font-size-sm)' },
+                                    year: { color: '#000000 !important', fontSize: 'var(--mantine-font-size-sm)' },
+                                    pickerControl: { color: '#000000 !important' },
+                                    pickerControlActive: { color: '#000000 !important' },
+                                    monthPicker: { color: '#000000 !important' },
+                                    yearPicker: { color: '#000000 !important' },
+                                    dropdown: {
+                                        backgroundColor: 'white',
+                                    }
+                                }}
                             />
-                        ))}
+                        </Grid.Col>
                     </Grid>
                 </Card>
 
+                <Title order={3} mb="md" style={{ color: '#000000 !important' }}> Arrival Checklist </Title>
+
+                {/* Render sections based on manitouChecklistItemsDefinition */}
+                {Object.keys(manitouChecklistItemsDefinition).filter(key => key !== 'otherItems').map(sectionKey => (
+                    <div key={sectionKey}>
+                        {renderChecklistSection(
+                            // Map sectionKey to a readable title as per PDF
+                            {
+                                engine: "001 Engine",
+                                transmission: "002 Transmission",
+                                axleTransferBox: "003 Axles / Transfer Box",
+                                hydraulicHydrostaticCircuits: "004 Hydraulic / Hydrostatic Circuits",
+                                brakingCircuits: "005 Braking Circuits",
+                                lubrication: "006 Lubrication",
+                                boomMastManiscopicManicess: "007 Boom / Mast Maniscopic / Manices",
+                                mastUnit: "008 Mast Unit",
+                                accessories: "009 Accessories",
+                                cabProtectiveDeviceElectricCircuit: "010 Cab / Protective Device / Electric Circuit",
+                                wheels: "011 Wheels",
+                            }[sectionKey] || sectionKey, // Fallback to sectionKey if not found
+                            sectionKey,
+                            manitouChecklistItemsDefinition[sectionKey]
+                        )}
+                    </div>
+                ))}
+
+                {/* Render other items section */}
+                {renderOtherItemsSection(manitouChecklistItemsDefinition.otherItems)}
 
                 <Divider my="xl" />
-                {/* Remarks */}
-                <Title order={3} mb="md" c="black"> Remarks </Title>
+                <Title order={3} mb="md" style={{ color: '#000000 !important' }}> General Remarks </Title>
                 <Textarea
-                    placeholder="Remarks"
-                    value={generalRemarks}
-                    onChange={(e) => setGeneralRemarks(e.currentTarget.value)}
+                    placeholder="Add any general remarks here..."
                     minRows={4}
                     mb="xl"
+                    {...form.getInputProps('generalRemarks')}
                 />
 
                 <Group justify="flex-end" mt="md">
-                    <Button type="submit"> Submit Checklist </Button>
+                    <Button type="submit">Submit Checklist</Button>
                 </Group>
             </form>
         </Box>
     );
-};
+}
 
 export default UnitArrivalInspectionForm;

@@ -1,0 +1,27 @@
+from flask import Blueprint
+from app.controllers import arrival_check_controller
+
+arrival_check_bp = Blueprint('arrival_check', __name__)
+
+@arrival_check_bp.route('/<brand>/submit', methods=['POST'])
+def submit_arrival_checklist_route(brand):
+    """
+    Routes the submission of an arrival checklist form to the controller.
+    """
+    # The 'brand' is passed in the URL, but the controller expects it in the JSON body.
+    # We will ensure the frontend sends it in the body.
+    return arrival_check_controller.submit_arrival_checklist()
+
+@arrival_check_bp.route('/<brand>', methods=['GET'])
+def get_all_arrival_checklists_route(brand):
+    """
+    Routes the request to retrieve all arrival checklists for a brand to the controller.
+    """
+    return arrival_check_controller.get_all_arrival_checklists_by_brand(brand)
+
+@arrival_check_bp.route('/<brand>/<uuid:item_id>', methods=['GET'])
+def get_arrival_checklist_by_brand_and_id_route(brand, item_id):
+    """
+    Routes the request to retrieve a single arrival checklist by brand and ID to the controller.
+    """
+    return arrival_check_controller.get_arrival_checklist_by_brand_and_id(brand, item_id)
