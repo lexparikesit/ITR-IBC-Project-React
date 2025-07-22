@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
     Box,
     Title,
@@ -15,19 +15,53 @@ import {
     Radio,
     Select,
 } from '@mantine/core';
+import { DateInput } from "@mantine/dates";
 import { useForm } from '@mantine/form';
+import { IconCalendar } from '@tabler/icons-react';
+
+const ChecklistRadioItem = ({
+    label,
+    statusFormProps,
+    remarksFormProps,
+    showRemarks,
+    span
+}) => {
+    return(
+        <Grid.Col span={span}>
+            <Stack gap="xs">
+                <Text size="sm" style={{ color: '#000000 !important', fontWeight: 500 }}>{label}</Text>
+                <Radio.Group
+                    description="Select one option"
+                    {...statusFormProps}
+                    orientation="horizontal"
+                >
+                    <Group mt="xs" spacing="md">
+                        <Radio value="checked_with_remarks" label={<Text c="black">Checked, With Remarks</Text>} />
+                        <Radio value="checked_without_remarks" label={<Text c="black">Checked, Without Remarks</Text>} />
+                    </Group>
+                </Radio.Group>
+
+                {showRemarks && (
+                    <Textarea
+                        placeholder="Enter Remarks Here"
+                        rows={2}
+                        autosize
+                        minRows={2}
+                        maxRows={4}
+                        {...remarksFormProps} 
+                    />
+                )}
+            </Stack>
+        </Grid.Col>
+    );
+};
 
 export function UnitArrivalChecklistForm() {
-    
-    // Dummy for Type/Model
-    const dummyModels = [
-        { value: 'range-t', label: 'Range T' },
-        { value: 'c-range', label: 'C Series' },
-        { value: 'k-series', label: 'K Series' },
-        { value: 'premium', label: 'Premium' }
-    ]
 
-    const checklistData = {
+    // state for saving data model from API
+    const [unitModels, setUnitModels] = useState([]);
+
+    const checklistDataRenault = {
         chassisAndCab: [
             { id: '1', label: 'Check Cabin and Surround Condition' },
             { id: '2', label: 'Check Front and Rear Towing Condition' },
@@ -69,70 +103,116 @@ export function UnitArrivalChecklistForm() {
         ],
     };
 
+    //const selectedBrand = 'renault';
+    const currentChecklistData = checklistDataRenault;
+        
     const form  = useForm({
         initialValues: (() => {
             const initial = {
-                brand: '',
+                brand: "renault",
                 typeModel: null,
                 vin: '',
                 noChassis: '',
                 noEngine: '',
+                dateOfCheck: null,
+                generalRemarks: '',
             };
-            Object.keys(checklistData).forEach(sectionKey => {
-                checklistData[sectionKey].forEach(item => {
-                    // default status as string
-                    initial[`${sectionKey}_${item.id}_status`] = '';
-                    initial[`${sectionKey}_${item.id}_remarks`] = '';
+            
+            Object.keys(checklistDataRenault).forEach(sectionKey => {
+                checklistDataRenault[sectionKey].forEach(item => {
+                    const fieldNamePrefix = `${sectionKey}_${item.id}`;
+                    initial[`${fieldNamePrefix}_status`] = '';
+                    initial[`${fieldNamePrefix}_remarks`] = '';
                 });
             });
             return initial;
         })(),
+        validate: {
+            typeModel: (value) => (value ? null : 'Type/Model is required'),
+            vin: (value) => (value ? null : 'VIN is required'),
+            noChassis: (value) => (value ? null : 'No. Chassis is required'),
+            noEngine: (value) => (value ? null : 'No. Engine is required'),
+            dateOfCheck: (value) => (value ? null : 'Date of Check is required')
+        }
     });
 
-    const handleSubmit = (values) => {
-        console.log('Form Submitted:', values);
-        alert('Form Submitted!');
+    // effect to load data model from API
+    useEffect(() => {
+        const fetchUnitModels = async () => {
+            try {
+                const response = await fetch('http://127.0.0.1:5000/api/unit-types/RT');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                setUnitModels(data);
+            } catch (error) {
+                console.error("Error fetching unit models:", error);
+                setUnitModels([]);
+            }
+        };
+
+        fetchUnitModels();
+    }, [form.values.brand]);
+
+    const handleSubmit = async (values) => {
+        console.log('Form Submitted (Frontend Data)', values);
+        
+        const brand = 'renault';
+
+        const formattedValues = { ...values };
+        
+        if (formattedValues.dateOfCheck instanceof Date && !isNaN(formattedValues.dateOfCheck)) {
+            const day = String(formattedValues.dateOfCheck.getDate()).padStart(2, '0');
+            const month = String(formattedValues.dateOfCheck.getMonth() + 1).padStart(2, '0');
+            const year = formattedValues.dateOfCheck.getFullYear();
+            formattedValues.dateOfCheck = `${day}-${month}-${year}`
+        } else {
+            formattedValues.dateOfCheck = null;
+        }
+
+        try {
+            const response = await fetch('http://127.0.0.1:5000/api/arrival-check/renault/submit', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(values),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Failed to submit checklist');
+            }
+
+            const result = await response.json();
+            alert(result.message || 'Form submitted successfully');
+            form.reset();
+
+        } catch (error) {
+            console.error('Error submitting form:', error);
+            alert(`Error: ${error.message}`);
+        }
     };
 
-    const  renderChecklistSection =  (sectionTitle, items, columns=4, rows=2) => {
-        const sectionKeyClean = sectionTitle.toLowerCase().replace(/\s|\&/g, '');
-
+    const renderChecklistSection =  (sectionTitle, sectionKey, items) => {
         return (
             <Card shadow="sm" padding="lg" radius="md" withBorder mb="lg">
                 <Title order={3} mb="md">{sectionTitle}</Title>
                 <Grid gutter="xl">
-                    {items.map((items, index) => {
-                        const statusFieldName = `${sectionKeyClean}_${items.id}_status`;
-                        const remarksFieldName = `${sectionKeyClean}_${items.id}_remarks`;
+                    {items.map((item) => {
+                        const statusFieldName = `${sectionKey}_${item.id}_status`;
+                        const remarksFieldName = `${sectionKey}_${item.id}_remarks`;
 
                         return (
-                            <Grid.Col span={{ base: 12, sm: 6, md: 3 }} key={items.id}>
-                                <Stack gap="xs">
-                                    <Text size="sm" weight={500}>{`${index + 1}. ${items.label}`}</Text>
-
-                                    {/* Radio.Group for Status */}
-                                    <Radio.Group
-                                        description="Select one option"
-                                        {...form.getInputProps(statusFieldName)}>
-                                        <Group mt="xs">
-                                            <Radio value="checked_with_remarks" label="Checked, With Remarks" />
-                                            <Radio value="checked_without_remarks" label="Checked, Without Remarks" />
-                                        </Group>
-                                    </Radio.Group>
-
-                                    {/* Textarea for Remarks, will be seen if "Checked, With Remarks" is choosen */}
-                                    {form.values[statusFieldName] === 'checked_with_remarks' && (
-                                        <Textarea
-                                            placeholder="Enter remarks here"
-                                            rows={rows}
-                                            autosize
-                                            minRows={rows}
-                                            maxRows={4}
-                                            {...form.getInputProps(remarksFieldName)}
-                                        />
-                                    )}
-                                </Stack>
-                            </Grid.Col>
+                            <ChecklistRadioItem
+                                key={item.id}
+                                label={`${item.id}. ${item.label}`}
+                                statusFormProps={form.getInputProps(statusFieldName)}
+                                remarksFormProps={form.getInputProps(remarksFieldName)}
+                                showRemarks={form.values[statusFieldName] === 'checked_with_remarks'}
+                                span={{ base: 12, sm: 6, md: 3 }}
+                            />
                         );
                     })}
                 </Grid>
@@ -142,7 +222,7 @@ export function UnitArrivalChecklistForm() {
 
     return (
         <Box maw="100%" mx="auto" px="md">
-            <Title order={1} mt="md" mb="lg" c="black">Unit Arrival Check List</Title>
+            <Title order={1} mt="md" mb="lg" c="black"> Unit Arrival Check </Title>
             <form onSubmit={form.onSubmit(handleSubmit)}>
             <Card shadow="sm" padding="lg" radius="md" withBorder mb="lg">
                 <Title order={3} mb="md" c="black">Unit Information</Title>
@@ -151,12 +231,11 @@ export function UnitArrivalChecklistForm() {
                         <Select
                             label="Type/ Model"
                             placeholder="Select a Model"
-                            data={dummyModels}
+                            data={unitModels}
                             searchable
                             clearable
                             {...form.getInputProps('typeModel')}
-                            //custome render option
-                            renderOption={({ option, checked }) => (
+                            renderOption={({ option }) => (
                                 <Text c="black">{option.label}</Text>
                             )}
                         />
@@ -182,18 +261,92 @@ export function UnitArrivalChecklistForm() {
                             {...form.getInputProps('vin')}
                         />
                     </Grid.Col>
+                    <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
+                        <DateInput
+                            label="Date of Check"
+                            placeholder="Select Date"
+                            {...form.getInputProps('dateOfCheck')}
+                            valueFormat="DD/MM/YYYY"
+                            rightSection={<IconCalendar size={16} />}
+                            styles={{
+                                input: { color: '#000000 !important' },
+                                calendarHeaderControl: {
+                                    color: '#000000 !important',
+                                },
+                                calendarHeader: {
+                                    color: '#000000 !important',
+                                    justifyContent: 'center',
+                                },
+                                weekday: {
+                                    color: '#000000 !important',
+                                },
+                                day: {
+                                    color: '#000000 !important',
+                                    fontSize: 'var(--mantine-font-size-sm)',
+                                    padding: 'var(--mantine-spacing-xs)',
+                                },
+                                month: {
+                                    color: '#000000 !important',
+                                },
+                                year: {
+                                    color: '#000000 !important',
+                                },
+                                pickerControl: {
+                                    color: '#000000 !important',
+                                },
+                                pickerControlActive: {
+                                    color: '#000000 !important',
+                                },
+                                monthPicker: {
+                                    color: '#000000 !important',
+                                },
+                                yearPicker: {
+                                    color: '#000000 !important',
+                                },
+                                dropdownProps: {
+                                    backgroundColor: 'white',
+                                }
+                            }}
+                        />
+                    </Grid.Col>
                 </Grid>
             </Card>
-                    {renderChecklistSection('Chassis & Cab', checklistData.chassisAndCab)}
-                    {renderChecklistSection('Axle, Spring, and Tyre', checklistData.axleSpringTyre, 4, 1)}
-                    {renderChecklistSection('Battery', checklistData.battery, 2, 1)}
-                    {renderChecklistSection('Electrical Check', checklistData.electrical, 3, 1)}
-                    {renderChecklistSection('Additional Equipment Check', checklistData.additionalEquipment, 3, 1)}
-                    {renderChecklistSection('Functional Check', checklistData.functionalCheck, 2, 1)}
-                <Group justify="flex-end" mt="md">
-                    <Button type="submit">Submit Checklist</Button>
-                </Group>
-            </form>
-        </Box>
+            <>
+                <Title order={3} mb="md" c="black">Arrival Checklist</Title>
+                {Object.keys(currentChecklistData).map(sectionKey => {
+                    const sectionTitleMap = {
+                        chassisAndCab: 'Chassis & Cab',
+                        axleSpringTyre: 'Axle, Spring, and Tyre',
+                        battery: 'Battery',
+                        electrical: 'Electrical Check',
+                        additionalEquipment: 'Additional Equipment Check',
+                        functionalCheck: 'Functional Check',
+                    };
+                    const displayTitle = sectionTitleMap[sectionKey] || sectionKey;
+                    const items = currentChecklistData[sectionKey];
+
+                    return (
+                        <div key={sectionKey}>
+                            {renderChecklistSection(displayTitle, sectionKey, items)}
+                        </div>
+                    );
+                })}
+            </>
+
+            <Card shadow="sm" padding="lg" radius="md" withBorder mb="lg">
+                <Title order={3} mb="md" c="black"> General Remarks </Title>
+                <Textarea
+                    placeholder="Add any general remarks here..."
+                    autosize
+                    minRows={3}
+                    {...form.getInputProps('generalRemarks')}
+                />
+            </Card>
+
+            <Group justify="flex-end" mt="md">
+                <Button type="submit">Submit Checklist</Button>
+            </Group>
+        </form>
+    </Box>
     );
-};
+}
