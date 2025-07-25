@@ -24,11 +24,11 @@ const mockdata = [
         ],
     },
     {
-        label: 'Storage Maintenance List',
+        label: 'Maintenance List',
         icon: IconNotes,
         links: [
             { label: 'Manitou', link: '/' },
-            { label: 'Renault Trucks', link: '/' },
+            { label: 'Renault Trucks', link: '/dashboard/maintenance-list/renault-trucks' },
             { label: 'SDLG', link: '/' },
         ],
     },

@@ -3,7 +3,6 @@
 
 import { UnitArrivalChecklistForm } from '@/components/form/UnitArrivalChecklistForm';
 
-
 export default function RenaultTrucksArrivalCheckPage() {
     return (
         <div>

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Burger, Group, Code, ActionIcon, Menu, Text } from '@mantine/core';
-import { IconBell, IconSettings, IconLogout } from '@tabler/icons-react';
+import { IconBell, IconSettings, IconLogout, IconWorldSearch } from '@tabler/icons-react';
 import { NavbarNested } from "@/components/navbar/NavbarNested";
 import { UserButton } from '@/components/navbar/UserButton';
 import { usePathname } from 'next/navigation';
@@ -45,6 +45,10 @@ export default function DashboardLayout({ children }) {
             const segment = path.split('/').pop() // get last segment
             const capitalizedSegment = segment.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
             return `Arrival Check - ${capitalizedSegment}`
+        } else if (path.startsWith('/dashboard/maintenance-list')) {
+            const segment = path.split('/').pop()
+            const capitalizedSegment = segment.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+            return `Maintenance List - ${capitalizedSegment}`
         }
         // to input another logic below this section
 

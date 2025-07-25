@@ -32,9 +32,9 @@ export function LinksGroup({ label, icon: Icon, initiallyOpened, links }) {
             {hasLinks && (
                 <IconChevronRight
                     size={14}
-                    className={classes.linksGroupItemChevron} // <-- Terapkan kelas di sini
+                    className={classes.linksGroupItemChevron}
                     style={{
-                        transform: opened ? 'rotate(90deg)' : 'none', // Rotasi 90 derajat untuk membuka
+                        transform: opened ? 'rotate(90deg)' : 'none',
                         transition: 'transform 200ms ease',
                     }}
                 />
