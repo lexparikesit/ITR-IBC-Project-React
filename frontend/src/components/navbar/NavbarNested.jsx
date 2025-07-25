@@ -13,7 +13,11 @@ import { Logo } from './Logo';
 import classes from './NavbarNested.module.css';
 
 const mockdata = [
-    { label: 'Dashboard', icon: IconGauge },
+    {   
+        label: 'Dashboard', 
+        icon: IconGauge, 
+        link: '/dashboard'
+    },
     {
         label: 'Arrival Check',
         icon: IconNotes,
@@ -27,7 +31,7 @@ const mockdata = [
         label: 'Maintenance List',
         icon: IconNotes,
         links: [
-            { label: 'Manitou', link: '/' },
+            { label: 'Manitou', link: '/dashboard/maintenance-list/manitou' },
             { label: 'Renault Trucks', link: '/dashboard/maintenance-list/renault-trucks' },
             { label: 'SDLG', link: '/' },
         ],
