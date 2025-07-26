@@ -70,6 +70,16 @@ class AuthController:
 
         return user
 
+    def get_user_by_id(self, user_id):
+        return User.query.get(user_id)
+
+    def get_last_otp_time(self, user_id):
+        """Get the timestamp of the last OTP generated for a user"""
+        last_otp = UserOtp.query.filter_by(user_id=user_id)\
+                               .order_by(UserOtp.created_at.desc())\
+                               .first()
+        return last_otp.created_at if last_otp else None
+
     def send_otp(self, email, otp_code):
         body = f"Your OTP code is: {otp_code}"
         self.email_service.send_email(email, body)
