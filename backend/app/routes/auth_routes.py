@@ -8,7 +8,9 @@ from flask_jwt_extended import (
     jwt_required,
     get_jwt_identity,
     get_jwt,
-    current_user
+    set_refresh_cookies,
+    unset_refresh_cookies,
+    current_user,
 )
 from uuid import UUID
 import threading
@@ -90,14 +92,17 @@ def verify_otp():
         identity=str(found_user.userid),
     )
 
+    response = jsonify(
+        {
+            "message": "OTP Verified Successfully!",
+            "access_token": access_token,
+        }
+    )
+
+    set_refresh_cookies(response, refresh_token)
+
     return (
-        jsonify(
-            {
-                "message": "OTP Verified Successfully!",
-                "access_token": access_token,
-                "refresh_token": refresh_token,
-            }
-        ),
+        response,
         200,
     )
 
@@ -191,7 +196,7 @@ def get_authenticated_user():
 
 # Post /api/auth/refresh
 @auth_bp.route("/refresh", methods=["POST"])
-@jwt_required(refresh=True)
+@jwt_required(refresh=True, locations=["cookies"])
 def refresh():
     """Generate a new access token from a refresh token"""
     current_user_id = get_jwt_identity()
@@ -209,13 +214,23 @@ def refresh():
         },
     )
 
+    new_refresh_token = create_refresh_token(
+        identity=str(user.userid),
+    )
+
+    response = jsonify(
+        {
+            "message": "Token refreshed successfully!",
+            "access_token": new_access_token,
+        }
+    )
+
+    unset_refresh_cookies(response)  # Clear old refresh token cookies
+    # Set new refresh token cookies
+    set_refresh_cookies(response, new_refresh_token)
+
     return (
-        jsonify(
-            {
-                "message": "Token refreshed successfully!",
-                "access_token": new_access_token,
-            }
-        ),
+        response,
         200,
     )
 
