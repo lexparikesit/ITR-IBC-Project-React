@@ -1,13 +1,14 @@
 from flask import Blueprint, request, jsonify, session, current_app
 from datetime import datetime
 from app.controllers.auth_controller import AuthController
-from app.models.models import User
+from app.models.user_model import User
 from flask_jwt_extended import (
     create_access_token,
     create_refresh_token,
     jwt_required,
     get_jwt_identity,
     get_jwt,
+    current_user
 )
 from uuid import UUID
 import threading
@@ -170,11 +171,7 @@ def register():
 @auth_bp.route("/me", methods=["GET"])
 @jwt_required()
 def get_authenticated_user():
-    user_id = get_jwt_identity()
-
-    user = auth_controller.get_user_by_id(user_id)
-
-    if not user:
+    if not current_user:
         return jsonify({"error": "User not found!"}), 404
 
     return (
@@ -182,9 +179,9 @@ def get_authenticated_user():
             {
                 "message": "Hello, this is your authenticated user!",
                 "user": {
-                    "username": user.username,
-                    "email": user.email,
-                    "first_name": user.firstName,
+                    "username": current_user.username,
+                    "email": current_user.email,
+                    "first_name": current_user.firstName,
                 },
             }
         ),

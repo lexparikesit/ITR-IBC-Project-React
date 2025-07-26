@@ -1,5 +1,7 @@
 from werkzeug.security import generate_password_hash, check_password_hash
-from app.models.models import db, User, UserOtp
+from app.models.user_model import User
+from app.models.user_otp_model import UserOtp
+from app import db
 from app.service.email_service import EmailService
 import random
 import string

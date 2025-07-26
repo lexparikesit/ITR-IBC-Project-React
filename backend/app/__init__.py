@@ -74,6 +74,13 @@ def create_app():
             "msg": "Authorization token is required",
             "error": "authorization_required",
         }, 401
+        
+    from app.models.user_model import User
+    
+    @jwt.user_lookup_loader
+    def user_lookup_callback(jwt_header, jwt_payload):
+        user_id = jwt_payload["sub"]
+        return User.query.get(user_id)  # Assuming User is your user model
 
     # Cors  for ReactJS/ NextJS frontend
     CORS(app, supports_credentials=True, origins=["http://localhost:3000"])

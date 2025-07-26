@@ -1,5 +1,6 @@
 from app import create_app, db
-from app.models.models import User, UserOtp
+from app.models.user_model import User
+from app.models.user_otp_model import UserOtp
 
 app = create_app()
 
