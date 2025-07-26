@@ -167,7 +167,7 @@ def register():
     return jsonify({"message": "User registered successfully!"}), 201
 
 
-@auth_bp.route("/auth/me", methods=["GET"])
+@auth_bp.route("/me", methods=["GET"])
 @jwt_required()
 def get_authenticated_user():
     user_id = get_jwt_identity()
@@ -193,7 +193,7 @@ def get_authenticated_user():
 
 
 # Post /api/auth/refresh
-@auth_bp.route("/auth/refresh", methods=["POST"])
+@auth_bp.route("/refresh", methods=["POST"])
 @jwt_required(refresh=True)
 def refresh():
     """Generate a new access token from a refresh token"""
@@ -224,7 +224,7 @@ def refresh():
 
 
 # Post /api/auth/logout
-@auth_bp.route("/auth/logout", methods=["POST"])
+@auth_bp.route("/logout", methods=["POST"])
 @jwt_required()
 def logout():
     """Logout endpoint - in a production app, you'd want to blacklist the token"""

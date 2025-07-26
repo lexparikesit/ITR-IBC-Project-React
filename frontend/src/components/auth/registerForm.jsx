@@ -25,7 +25,7 @@ export default function RegisterForm() {
 		try {
 			setIsLoading(true);
 
-			const data = await apiClient.post("/register", {
+			const data = await apiClient.post("/auth/register", {
 				username,
 				firstName,
 				lastName,

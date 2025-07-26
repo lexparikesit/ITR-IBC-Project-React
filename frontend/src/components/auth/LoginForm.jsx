@@ -21,7 +21,7 @@ const LoginForm = () => {
 		e.preventDefault();
 
 		try {
-			const response = await apiClient.post("/login", {
+			const response = await apiClient.post("/auth/login", {
 				username,
 				password,
 				remember,

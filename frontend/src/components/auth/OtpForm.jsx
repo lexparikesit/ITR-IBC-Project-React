@@ -68,7 +68,7 @@ export default function OtpForm() {
 		}
 
 		try {
-			const data = await apiClient.post("/verify-otp", {
+			const data = await apiClient.post("/auth/verify-otp", {
 				user_id: userID,
 				otp: otp,
 			});
@@ -100,15 +100,11 @@ export default function OtpForm() {
 		}
 
 		try {
-			const response = await fetch("/resend-otp", {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				credentials: "include", // Include cookies for session management
-				body: JSON.stringify({ user_id: userID }),
+			const response = await apiClient.post("/auth/resend-otp", {
+				user_id: userID,
 			});
 
-			const data = await response.json();
-			console.log(data);
+			const data = await response.data;
 
 			if (response.ok) {
 				alert("OTP Resent Successfully!");
