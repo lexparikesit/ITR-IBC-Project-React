@@ -4,6 +4,8 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_mail import Mail
 from flask_session import Session
 from dotenv import load_dotenv
+from flask_jwt_extended import JWTManager
+from datetime import timedelta
 import os
 
 db = SQLAlchemy()
@@ -49,6 +51,25 @@ def create_app():
     app.config['MAIL_USERNAME'] = os.getenv('EMAIL_USER')
     app.config['MAIL_PASSWORD'] = os.getenv('EMAIL_PASS')
     app.config['MAIL_DEFAULT_SENDER'] = os.getenv('EMAIL_USER')
+
+    # Initialize JWT config
+    app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'itribc')
+    app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=1)
+    app.config['JWT_REFRESH_TOKEN_EXPIRES'] = timedelta(days=30)
+    jwt = JWTManager(app)
+
+    # JWT Error Handlers
+    @jwt.expired_token_loader
+    def expired_token_callback(jwt_header, jwt_payload):
+        return {"msg": "The token has expired", "error": "token_expired"}, 401
+
+    @jwt.invalid_token_loader
+    def invalid_token_callback(error):
+        return {"msg": "Invalid token", "error": "invalid_token"}, 401
+
+    @jwt.unauthorized_loader
+    def missing_token_callback(error):
+        return {"msg": "Authorization token is required", "error": "authorization_required"}, 401
 
     # Cors  for ReactJS/ NextJS frontend
     CORS(app, supports_credentials=True, origins=["http://localhost:3000"])
