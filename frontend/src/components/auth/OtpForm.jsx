@@ -4,29 +4,31 @@ import { useEffect, useState } from "react";
 import { Button, Stack, PinInput, Text } from "@mantine/core";
 import { redirect, useRouter } from "next/navigation";
 import { notifications } from "@mantine/notifications";
+import { useUser } from "@/context/UserContext"; 
 import apiClient from "@/libs/api";
 
 export default function OtpForm() {
 	const [otp, setOtp] = useState("");
-	const [timer, setTimer] = useState(60); // Timer for OTP expiration
+	const [timer, setTimer] = useState(300); // Timer for OTP expiration
 	const [canResend, setCanResend] = useState(false);
-	const [userID, setUserID] = useState(null);
+	const [userEmail, setUserEmail] = useState(null);
+	const [isLoading, setIsLoading] = useState(false);
 	const router = useRouter();
+	const { login } = useUser();
 
 	// countdown timer
 	useEffect(() => {
-		const storedUserID = localStorage.getItem("user_id");
+		const storedUserEmail = localStorage.getItem("user_email_for_otp");
+	
+		console.log("OtpForm - User Email from localStorage:", storedUserEmail); // DEBUGGING
 
-		console.log("OtpForm - User ID from localStorage:", storedUserID); //--> debuging
-
-		if (storedUserID) {
-			setUserID(storedUserID);
+		if (storedUserEmail && storedUserEmail !== "null" && storedUserEmail !== "undefined") {
+			setUserEmail(storedUserEmail);
+			console.log("OtpForm - Has Setting:", storedUserEmail); // --> debugging
 		} else {
-			console.log(
-				"OtpForm - No User ID found in localStorage. Redirecting to login."
-			); // --> debugging
+			console.log("OtpForm - No User ID or Email found in localStorage. Redirecting to login."); // --> debugging
 			notifications.show({
-				title: "User ID not found",
+				title: "Email Not Found!",
 				message: "Please log in again to receive a new OTP.",
 				color: "red",
 				autoClose: 5000,
@@ -38,7 +40,7 @@ export default function OtpForm() {
 		const otpSent = localStorage.getItem("otp_sent") === "true";
 		if (otpSent) {
 			setCanResend(false);
-			setTimer(60); // Reset timer to 60 seconds
+			setTimer(300); // Reset timer to 300 seconds
 			localStorage.removeItem("otp_sent"); // Clear the flag
 		}
 
@@ -56,72 +58,115 @@ export default function OtpForm() {
 				});
 			}, 1000);
 		}
-
 		return () => clearInterval(countdownInterval);
 	}, [canResend, router]);
 
 	const handleVerify = async () => {
-		if (!userID) {
-			alert("User ID not found. Please log in again.");
-			router.push("/login");
-			return;
-		}
+		if (!userEmail) {
+            notifications.show({
+                title: "Error",
+                message: "Email not found. Please log in again.",
+                color: "red",
+                autoClose: 5000,
+            });
+            router.push("/login");
+            return;
+        }
+
+		setIsLoading(true);
 
 		try {
-			const data = await apiClient.post("/verify-otp", {
-				user_id: userID,
-				otp: otp,
+			const response = await apiClient.post("/login-otp", {
+				email: userEmail,
+				otp_code: otp,
 			});
 
-			notifications.show({
-				title: "OTP Verified Successfully",
-				message: "You can now access your account.",
-				color: "green",
-				autoClose: 5000,
-			});
-			localStorage.removeItem("user_id");
-			router.push("/dashboard"); // Redirect to dashboard or home page
+			const data = response.data;
+			console.log("Respon API Verifikasi OTP:", data);
+
+			if (data.user_id && data.email && data.user && data.access_token) {
+                localStorage.setItem("access_token", data.access_token);
+                localStorage.setItem("user_data", JSON.stringify(data.user));
+
+				login(data.user);
+
+				localStorage.removeItem("user_email_for_otp");
+
+				notifications.show({
+					title: "OTP Verified Successfully",
+					message: "You can now access your account.",
+					color: "green",
+					autoClose: 5000,
+				});
+				router.push("/dashboard");
+			} else {
+				console.error("OTP verification was successful but the required data was incomplete in the response:", data);
+				notifications.show({
+                    title: "Verficiation Failed",
+                    message: "The required data is incomplete from the server. Please try again or contact support.",
+                    color: "red",
+                    autoClose: 5000,
+                });
+			}
 		} catch (error) {
-			console.error("OTP verification error:", error);
-			notifications.show({
-				title: "Error",
-				message: "An error occurred during verification.",
-				color: "red",
-				autoClose: 5000,
-			});
+			console.error("Network error during OTP verification:", error);
+            const errorMessage = error.response?.data?.message || "Network Error! Please Retry";
+            notifications.show({
+                title: "Error",
+                message: errorMessage,
+                color: "red",
+                autoClose: 5000,
+            });
+		} finally {
+			setIsLoading(false);
 		}
 	};
 
 	const handleResend = async () => {
-		if (!userID) {
-			alert("User ID not found. Cannot resend OTP. Please log in again.");
-			router.push("/login");
-			return;
-		}
+		if (!userEmail) {
+            notifications.show({
+                title: "Error",
+                message: "Email not found. Cannot resend OTP. Please log in again.",
+                color: "red",
+                autoClose: 5000,
+            });
+            router.push("/login");
+            return;
+        }
 
 		try {
-			const response = await fetch("/resend-otp", {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				credentials: "include", // Include cookies for session management
-				body: JSON.stringify({ user_id: userID }),
+			const response = await apiClient.post("/resend-otp", {
+				email: userEmail,
 			});
-
-			const data = await response.json();
-			console.log(data);
-
-			if (response.ok) {
-				alert("OTP Resent Successfully!");
-				setOtp(""); // Clear the OTP input
-				setTimer(60); // Reset the timer
-				setCanResend(false); // Disable resend button until timer expires
-			} else {
-				alert(data.message || "Failed to resend OTP!");
-			}
+			notifications.show({
+                title: "OTP Resent",
+                message: "A new OTP has been sent to your email.",
+                color: "blue",
+                autoClose: 5000,
+            });
+			setOtp(""); // Clear the OTP input
+            setTimer(300); // Reset the timer to 5 minutes
+            setCanResend(false); // Disable resend button until timer expires
+		
 		} catch (error) {
 			console.error("Resend OTP error:", error);
+			const errorMessage = error.response?.data?.message || "Failed to resend OTP.";
+            notifications.show({
+                title: "Error",
+                message: errorMessage,
+                color: "red",
+                autoClose: 5000,
+            });
+		} finally {
+			setIsLoading(false);
 		}
 	};
+
+	const formatTime = (seconds) => {
+        const minutes = Math.floor(seconds / 60);
+        const remainingSeconds = seconds % 60;
+        return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+    };
 
 	return (
 		<div className="flex flex-col items-center gap-2">
@@ -133,11 +178,11 @@ export default function OtpForm() {
 				type="number"
 				my={12}
 			/>
-			<Button color="#A91D3A" onClick={handleVerify}>
+			<Button color="#A91D3A" onClick={handleVerify} loading={isLoading}>
 				Verify OTP
 			</Button>
 			<p className="text-sm mt-2" style={{ color: "#7E99A3" }}>
-				{canResend ? "Didn’t receive OTP?" : `Resend available in ${timer}s`}{" "}
+				{canResend ? "Didn’t receive OTP?" : `Resend available in ${formatTime(timer)}s`}{" "}
 				{canResend && (
 					<span
 						onClick={handleResend}

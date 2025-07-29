@@ -1,120 +1,173 @@
-from flask import Blueprint, request, jsonify, session, current_app
-from datetime import datetime
-from app.controllers.auth_controller import AuthController
+from flask import Blueprint, request, jsonify, make_response, session, current_app, g
+from datetime import datetime, timedelta
 from app.models.models import User
 from uuid import UUID
+from app.controllers.auth_controller import AuthController, generate_jwt_token, jwt_required, verify_otp_and_login, request_otp_for_login, register_user, auth_controller_instance
 import threading
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/api')
-auth_controller = AuthController()
-
-def send_email_with_context(app, email, otp):
-    """Helper function to send OTP email within Flask application context"""
-    with app.app_context():
-        auth_controller.send_otp_email(email, otp)
-
-# Post /api/login
-@auth_bp.route('/login', methods=['POST'])
-def login():
-    
-    data = request.json
-    user = auth_controller.verify_credentials(data['username'], data['password'])
-
-    if not user:
-        return jsonify({"error": "Invalid Credentials!"}), 401
-
-    otp = auth_controller.generate_otp(user.userid)
-
-    # Send OTP email in background thread to avoid blocking the response
-    email_thread = threading.Thread(
-        target=send_email_with_context, 
-        args=(current_app._get_current_object(), user.email, otp)
-    )
-    email_thread.daemon = True  # Thread will terminate when main program exits
-    email_thread.start()
-    
-    return jsonify({
-        "message": "OTP Sent to Your Email!",
-        "user_id": str(user.userid) 
-    }), 200
-    
-# Post /api/verify-otp
-@auth_bp.route('/verify-otp', methods=['POST'])
-def verify_otp():
-
-    # print("DEBUG SESSION: ", dict(session))
-    
-    data = request.json
-    user_id = data.get('user_id')
-    entered_otp = data.get('otp')
-
-    if not user_id or not entered_otp:
-        return jsonify({"error": "Missing user_id or OTP!"}), 400
-    
-    try:
-        user_id_uuid = UUID(user_id)
-    
-    except ValueError:
-        return jsonify({"error": "Invalid user ID format!"}), 400
-
-    verified = auth_controller.verify_otp(user_id_uuid, entered_otp)
-
-    if not verified:
-        return jsonify({"error": "Invalid or Expired OTP!"}), 401
-
-    return jsonify({"message": "OTP Verified Successfully!"}), 200
-
-# Post /api/resend-otp
-@auth_bp.route('/resend-otp', methods=['POST'])
-def resend_otp():
-    
-    data = request.json
-    user_id = data.get('user_id')
-
-    if not user_id:
-        return jsonify({"error": "Missing user ID!"}), 401
-    
-    try:
-        user_id = UUID(user_id)
-    
-    except ValueError:
-        return jsonify({"error": "Invalid user ID format!"}), 400
-    
-    user = User.query.get(user_id)
-
-    if not user:
-        return jsonify({"error": "User not found!"}), 404
-    
-    last_otp = auth_controller.get_last_otp_time(user_id)
-    
-    if last_otp and (datetime.now() - last_otp).total_seconds() < 60:
-        wait_time = int(60 - (datetime.now() - last_otp).total_seconds())
-        return jsonify({"error": f"Please wait {wait_time} seconds before requesting a new OTP."}), 429
-    
-    # Generate OTP baru dan simpan ke database
-    otp = auth_controller.generate_otp(user.userid, user.email)
-
-    # send emaill
-    email_thread = threading.Thread(
-        target=send_email_with_context,
-        args=(current_app._get_current_object(), user.email, otp)
-    )
-    email_thread.daemon = True
-    email_thread.start()
-
-    return jsonify({"message": "OTP Resent Successfully!"}), 200
 
 # Post /api/register
 @auth_bp.route('/register', methods=['POST'])
 def register():
     
-    data = request.json
-    
-    if User.query.filter((User.username == data['username']) | (User.email == data['email'])).first():
-        return jsonify({"error": "Email already exists!"}), 400
-    
+    """
+    endpoint to register new account
+    """
+    data = request.get_json()
+
+    if not data or not all(key in data for key in ["username", "firstName", "lastName", "email", "password", "confirmPassword"]):
+        return jsonify({"message": "Missing required fields"}), 400
+
     if data['password'] != data['confirmPassword']:
-        return jsonify({"error": "Passwords do not match!"}), 400
+        return jsonify({"message": "Passwords do not match!"}), 400
     
-    auth_controller.create_user(data)
-    return jsonify({"message": "User registered successfully!"}), 201
+    user = register_user(data)
+
+    if user:
+        current_app.logger.info(f"User registered successfully: {user.email}")
+        return jsonify({"message": "User registered successfully. Please proceed to login with OTP."}), 201
+    else:
+        current_app.logger.warning(f"Registration failed for email: {data.get('email')} or username: {data.get('username')}")
+        return jsonify({"message": "User with this email or username already exists"}), 409
+
+# Post /api/login
+@auth_bp.route('/login', methods=['POST'])
+def login():
+
+    """
+    endpoint for starting login process w/ Username & Password andget_ OTP()
+    """
+    data = request.get_json()
+    username = data.get('username')
+    password = data.get('password')
+
+    if not username or not password:
+        return jsonify({"message": "Username and Password are required!"}), 400
+    
+    user = auth_controller_instance.verify_credentials(username, password)
+
+    if not user:
+        current_app.logger.warning(f"Invalid credentials for username: {username}")
+        return jsonify({"message": "Invalid credentials!"}), 401
+    
+    # call global request_otp_for_login for generate and send OTP
+    if request_otp_for_login(user.email):
+        current_app.logger.info(f"OTP sent to {user.email} for login.")
+        return jsonify({
+            "message": "OTP Sent to Your Email!",
+            "email": user.email
+        }), 200
+    else:
+        current_app.logger.error(f"Failed to send OTP for {user.email}.")
+        return jsonify({"message": "Failed to send OTP. Please try again."}), 500
+
+# Post /api/login-otp (Verification of OTP and set JWT Cookie)
+@auth_bp.route('/login-otp', methods=['POST'])
+def login_with_otp():
+    
+    """
+    Endpoint for login with OTP
+    If successfully, it creates JWT and set within cookie HttpOnly
+    """
+    data = request.get_json()
+    email = data.get('email')
+    otp_code = data.get('otp_code')
+
+    if not email or not otp_code:
+        return jsonify({"message": "Email and OTP code are required!"}), 400
+    
+    # call function global verify_otp_and_login from controller
+    user = verify_otp_and_login(email, otp_code)
+
+    if user:
+        # if otp successfully verified, create JWT
+        user_full_name = f"{user.firstName} {user.lastName}" if user.firstName and user.lastName else user.username
+        token = generate_jwt_token(user.userid, user.email, user_full_name)
+        
+        response = make_response(jsonify({
+            "message": "Login successful!",
+            "access_token": token,
+            "user_id": str(user.userid),
+            "email": user.email,
+            "user": {
+                "id": str(user.userid),
+                "username": user.username,
+                "firstName": user.firstName,
+                "lastName": user.lastName,
+                "email": user.email,
+            }
+        }), 200)
+
+        # Set HttpOnly cookie
+        response.set_cookie(
+            'session_token', 
+            token, 
+            httponly=True, 
+            secure=current_app.config.get('FLASK_ENV') == 'production',
+            samesite='Lax', 
+            max_age=timedelta(days=7).total_seconds()
+        )
+        current_app.logger.info(f"User {user.email} logged in successfully via OTP.")
+        return response
+    else:
+        current_app.logger.warning(f"Invalid OTP login attempt for email: {email}")
+        return jsonify({"message": "Invalid OTP or email!"}), 401
+
+# POST /api/resend-otp
+@auth_bp.route('/resend-otp', methods=['POST'])
+def resend_otp():
+    
+    """
+    Endpoint to resend OTP.
+    Receive user_id (or email, email recommended for consistency).
+    """
+    data = request.get_json()
+    email = data.get('email')
+
+    if not email:
+        return jsonify({"message": "Email is required!"}), 400
+    
+    if request_otp_for_login(email):
+        current_app.logger.info(f"OTP resent to {email}.")
+        return jsonify({"message": "OTP Resent Successfully!"}), 200
+    else:
+        current_app.logger.error(f"Failed to resend OTP for {email}.")
+        return jsonify({"message": "Failed to resend OTP. Please wait or try again."}), 500
+    
+# GET /api/user/me
+@auth_bp.route('/user/me', methods=['GET'])
+@jwt_required
+def get_current_user():
+    
+    """
+    Endpoint to get the information of the user who is logged in.
+    Requires a valid ‘session_token’ cookie.
+    User information is already available in `g` thanks to the `jwt_required` decorator.
+    """
+    return jsonify({
+        "id": g.user_id,
+        "email": g.user_email,
+        "name": g.user_name 
+    }), 200
+
+# POST /api/logout (Endpoint for logout)
+@auth_bp.route('/logout', methods=['POST'])
+@jwt_required
+def logout():
+    
+    """
+    Endpoint for user logout by deleting session cookies.
+    """
+    response = make_response(jsonify({"message": "Logged out successfully"}), 200)
+    response.set_cookie(
+        'session_token', 
+        '', 
+        expires=0, 
+        httponly=True, 
+        secure=current_app.config.get('FLASK_ENV') == 'production', 
+        samesite='Lax'
+    )
+
+    current_app.logger.info(f"User {g.user_email} logged out.")
+    return response

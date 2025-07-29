@@ -6,6 +6,9 @@ import "@mantine/core/styles.css";
 import '@mantine/dates/styles.css';
 import "@mantine/notifications/styles.css";
 
+import { UserProvider } from '@/context/UserContext'; 
+import { Notifications } from "@mantine/notifications";
+
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -26,7 +29,10 @@ export default function RootLayout({ children }) {
     <html lang="en" >
       <body className={`${geistSans.variable} ${geistMono.variable}`}>
         <MantineProviders>
-          {children}
+          <Notifications />
+          <UserProvider> 
+            {children}
+          </UserProvider>
         </MantineProviders>
       </body>
     </html>

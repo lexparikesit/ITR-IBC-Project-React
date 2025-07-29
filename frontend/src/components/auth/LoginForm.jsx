@@ -1,7 +1,6 @@
 import {
 	Anchor,
 	Button,
-	Checkbox,
 	Flex,
 	PasswordInput,
 	TextInput,
@@ -14,50 +13,60 @@ import apiClient from "@/libs/api";
 const LoginForm = () => {
 	const [username, setUsername] = useState("");
 	const [password, setPassword] = useState("");
-	const [remember, setRemember] = useState(false);
+	const [isLoading, setIsLoading] = useState(false);
 	const router = useRouter();
 
 	const handleLogin = async (e) => {
 		e.preventDefault();
+		setIsLoading(true);
 
 		try {
 			const response = await apiClient.post("/login", {
-				username,
-				password,
-				remember,
+				username: username,
+				password: password,
 			});
 
 			const data = response.data;
 
 			console.log("Login API Response:", data);
 
-			if (data.user_id) {
-				localStorage.setItem("user_id", data.user_id);
-				console.log("User ID stored in localStorage:", data.user_id);
-				localStorage.setItem("otp_sent", "true");
+			if (response.status === 200 && data.message === "OTP Sent to Your Email!" && data.email) {
+				localStorage.setItem("user_email_for_otp", data.email);
+				
 				notifications.show({
-					title: "OTP is sent!",
-					message: "Check your email for the OTP.",
-					autoClose: 5000,
-					position: "top-center",
-					color: "orange",
-				});
+                    title: "OTP is sent!",
+                    message: "Check your email for the OTP.",
+                    autoClose: 5000,
+                    position: "top-center",
+                    color: "orange",
+                });
 				router.push("/otp");
 			} else {
 				console.error(
-					"Login successful but user_id missing in response:",
-					data
+                    "Unexpected Response From /api/login",
+                    data
 				);
-				alert(
-					"Login successful, but User ID was not provided. Please contact support."
-				);
+				notifications.show({ 
+                    title: "Login Failed",
+                    message: "Login successful, but required data was not provided by the server. Please contact support.",
+                    color: "red",
+                    autoClose: 5000,
+                });
 			}
 		} catch (error) {
-			console.error("Network error during login:", error); // <-- LOG INI
-			alert("Network error. Please try again.");
+			console.error("Network error during login:", error);
+            const errorMessage = error.response?.data?.message || "Network error. Please try again.";
+            notifications.show({
+                title: "Error",
+                message: errorMessage,
+                color: "red",
+                autoClose: 5000,
+            });
+		} finally {
+			setIsLoading(false);
 		}
 	};
-
+	
 	return (
 		<div>
 			<TextInput
@@ -79,18 +88,12 @@ const LoginForm = () => {
 			/>
 
 			<Flex justify="space-between" w="100%" mt="lg">
-				<Checkbox
-					label="Remember Me"
-					checked={remember}
-					onChange={(e) => setRemember(e.currentTarget.checked)}
-					// styles={inputStyles}
-				/>
 				<Anchor href="#" size="sm">
 					Forget Password
 				</Anchor>
 			</Flex>
 
-			<Button fullWidth mt="lg" onClick={handleLogin} color="#A91D3A">
+			<Button fullWidth mt="lg" onClick={handleLogin} color="#A91D3A" loading={isLoading}>
 				Login
 			</Button>
 		</div>

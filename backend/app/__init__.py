@@ -2,13 +2,11 @@ from flask import Flask
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from flask_mail import Mail
-from flask_session import Session
 from dotenv import load_dotenv
 import os
 
 db = SQLAlchemy()
 mail = Mail()
-session = Session()
 
 def create_app():
     
@@ -16,16 +14,16 @@ def create_app():
     load_dotenv() # Load environment variables from .env file
 
     # config dari environment variables
-    app.secret_key = os.getenv("SECRET_KEY", "super-secret-key")
+    app.config['SECRET_KEY'] = os.getenv("SECRET_KEY")
+    if not app.config['SECRET_KEY']:
+        raise ValueError("SECRET_KEY environment variable not set. This is critical for Flask security.")
+
+    app.config['FLASK_JWT_SECRET_KEY'] = os.getenv("FLASK_JWT_SECRET_KEY")
+    if not app.config['FLASK_JWT_SECRET_KEY']:
+        raise ValueError("FLASK_JWT_SECRET_KEY environment variable not set. This is critical for JWT security.")
     
-    # app session config
-    app.config['SESSION_TYPE'] = 'filesystem'
-    app.config['SESSION_PERMANENT'] = False
-    app.config['SESSION_USE_SIGNER'] = True
-    app.config['SESSION_COOKIE_SAMESITE'] = 'None'
-    app.config['SESSION_COOKIE_SECURE'] = True
-    
-    session.init_app(app)
+    # Default to 'development'
+    app.config['FLASK_ENV'] = os.getenv('FLASK_ENV', 'development')
 
     # DB connfig
     DB_SERVER = os.getenv('DB_SERVER', 'localhost')
