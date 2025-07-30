@@ -33,12 +33,12 @@ const mockdata = [
         links: [
             { label: 'Manitou', link: '/dashboard/maintenance-list/manitou' },
             { label: 'Renault Trucks', link: '/dashboard/maintenance-list/renault-trucks' },
-            { label: 'SDLG', link: '/' },
+            { label: 'SDLG', link: '/dashboard/maintenance-list/sdlg' },
         ],
     },
     { 
         label: 'Pre-Delivery Inspection', 
-        icon: IconTool,
+        icon: IconNotes,
         links: [
             { label: 'Manitou', link: '/' },
             { label: 'Renault Trucks', link: '/' },
@@ -47,7 +47,7 @@ const mockdata = [
     },
     { 
         label: 'IBC Form', 
-        icon: IconTool,
+        icon: IconNotes,
     },
     {
         label: 'Settings',
