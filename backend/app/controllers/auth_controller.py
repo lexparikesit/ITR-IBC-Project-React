@@ -59,11 +59,16 @@ def jwt_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
 
-        token = request.cookies.get("session_token")
+        auth_header = request.headers.get('Authorization')
 
-        if not token:
+        if not auth_header:
             return jsonify({"message": "Authentication token is missing!"}), 401
         
+        try:
+            token = auth_header.split(" ")[1]
+        except IndexError:
+            return jsonify({"message": "Token format invalid (Expected 'Bearer <token>')!"}), 401
+
         # verify token:
         payload = verify_jwt_token(token)
 

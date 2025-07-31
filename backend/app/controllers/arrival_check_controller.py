@@ -1,8 +1,10 @@
-from flask import json, jsonify, request
+from flask import json, jsonify, request, current_app, g
 from app import db
 from app.models.renault_checklist_model import RenaultChecklistModel
 from app.models.manitou_checklist_model import ManitouChecklistModel
-from datetime import datetime, time
+from datetime import datetime, time, date
+from app.controllers.auth_controller import jwt_required
+import uuid
 
 # mapping brand to model database
 BRAND_MODELS = {
@@ -11,6 +13,7 @@ BRAND_MODELS = {
     # sdlg
 }
 
+@jwt_required
 def submit_arrival_checklist():
 
     data = request.get_json()
@@ -29,47 +32,46 @@ def submit_arrival_checklist():
 
     try:
         # set created by and created on (common for all brands)
-        new_checklist_entry.createdby = "John Doe"  # later replace with actual user
+        new_checklist_entry.createdby = g.user_name
         new_checklist_entry.createdon = datetime.utcnow()
 
         # helper function to convert frontend status to DB Boolean (RT)
         def convert_renault_status_to_boolean(status):
+            
             if status == "checked_without_remarks":
                 return True #1
             elif status == "checked_with_remarks":
                 return False #0
-            return None # None for unchecked
         
         # helper to convert frontend status to DB SmallInteger (Manitou)
         def convert_manitou_status_to_tinyint(status_str):
+            
             if status_str and isinstance(status_str, str):
                 status_lower = status_str.lower()
-                if status_lower == "good":
+                if status_lower == "missing":
+                    return 0
+                elif status_lower == "good":
                     return 1
-                elif status_lower == "missing":
-                    return 2
                 elif status_lower == "bad":
-                    return 3
-                return None # None for unchecked
+                    return 2
         
         # Logic for Renault
         if brand.lower() == 'renault':
             new_checklist_entry.UnitType = data.get("typeModel")
             new_checklist_entry.VIN = data.get("vin")
             new_checklist_entry.EngineNo = data.get("noEngine")
-            new_checklist_entry.chassisNumber = data.get("noChassis") 
+            new_checklist_entry.chassisNumber = data.get("noChassis")
+            new_checklist_entry.technician = data.get("technician")
+            new_checklist_entry.approvalBy = data.get("approvalBy") 
 
             date_of_check_str = data.get("dateOfCheck")
 
             if date_of_check_str:
-                
                 try:
                     new_checklist_entry.arrivalDate = datetime.fromisoformat(date_of_check_str.replace('Z', '+00:00')).date()
-                
                 except ValueError as e: 
                     print(f"Error parsing date for Renault: {e}") 
                     return jsonify({"message": f"Invalid 'dateOfCheck' format for Renault. Please use ISO 8601 (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS.sssZ). Error: {e}", "status": "error"}), 400
-            
             else:
                 new_checklist_entry.arrivalDate = None
 
@@ -122,7 +124,8 @@ def submit_arrival_checklist():
             new_checklist_entry.UnitType = unit_info.get('model')
             new_checklist_entry.VIN = unit_info.get('serialNo')
             new_checklist_entry.HourMeter = unit_info.get('hourMeter')
-            new_checklist_entry.Technician = unit_info.get('technician')
+            new_checklist_entry.Technician = data.get('technician')
+            new_checklist_entry.approvalBy = data.get('approver')
             new_checklist_entry.arrival_remarks = data.get('generalRemarks')
 
             date_of_check_val = unit_info.get('dateOfCheck')
@@ -245,7 +248,7 @@ def submit_arrival_checklist():
         
         return jsonify({'message': f'Error submitting {brand.capitalize()} checklist: {str(e)}'}), 500
 
-        
+@jwt_required 
 def get_all_arrival_checklists_by_brand(brand):
     """ Retrieves all arrival checklists for a given brand. """
     
@@ -256,7 +259,8 @@ def get_all_arrival_checklists_by_brand(brand):
     checklists = ModelClass.query.all()
 
     return jsonify([checklist.to_dict() for checklist in checklists]), 200
-    
+
+@jwt_required
 def get_arrival_checklist_by_brand_and_id(brand, item_id): 
     """ Retrieves a single arrival checklist by brand and ID. """
     
@@ -281,3 +285,29 @@ def get_arrival_checklist_by_brand_and_id(brand, item_id):
         return jsonify(checklist.to_dict()), 200
     
     return jsonify({'message': 'Checklist not found for this brand and ID'}), 404
+
+def check_vin_existence(vin):
+    """Checks if a given VIN already exists in either Renault or Manitou checklists."""
+
+    if not vin:
+        return jsonify({"message": "VIN is required"}), 400
+
+    vin_exists = False
+    
+    for brand_key, ModelClass in BRAND_MODELS.items():
+        if hasattr(ModelClass, 'VIN'):
+            if ModelClass.VIN.type.__class__.__name__ == 'UNIQUEIDENTIFIER':
+                try:
+                    existing_entry = db.session.query(ModelClass).filter(ModelClass.VIN == vin).first()
+                except ValueError:
+                    existing_entry = None
+            else:
+                existing_entry = db.session.query(ModelClass).filter(ModelClass.VIN == vin).first()
+            
+            if existing_entry:
+                vin_exists = True
+                break
+        else:
+            print(f"DEBUG: Model {brand_key} does not have a 'VIN' column defined.")
+    
+    return jsonify({'exists': vin_exists}), 200

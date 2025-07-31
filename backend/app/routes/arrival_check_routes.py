@@ -1,4 +1,4 @@
-from flask import Blueprint
+from flask import Blueprint, jsonify
 from app.controllers import arrival_check_controller
 
 arrival_check_bp = Blueprint('arrival_check', __name__)
@@ -25,3 +25,10 @@ def get_arrival_checklist_by_brand_and_id_route(brand, item_id):
     Routes the request to retrieve a single arrival checklist by brand and ID to the controller.
     """
     return arrival_check_controller.get_arrival_checklist_by_brand_and_id(brand, item_id)
+
+@arrival_check_bp.route('/check-vin/<string:vin>', methods=['GET'])
+def check_vin_route(vin):
+    """
+    Routes the VIN existence check to the controller.
+    """
+    return arrival_check_controller.check_vin_existence(vin)

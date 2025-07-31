@@ -19,6 +19,7 @@ import {
 import { DateInput } from "@mantine/dates";
 import { IconCalendar } from "@tabler/icons-react";
 import { useForm } from '@mantine/form';
+import { notifications } from "@mantine/notifications";
 
 // Definisi item checklist untuk Manitou (struktur data sesuai PDF)
 const manitouChecklistItemsDefinition = {
@@ -111,6 +112,24 @@ const manitouChecklistItemsDefinition = {
 export function UnitArrivalInspectionForm() {
     // State to store models fetched from API
     const [modelsData, setModelsData] = useState([]);
+    const [technicians, setTechniciansData] = useState([]);
+    const [approvers, setApproversData] = useState([]);
+
+    const generateChecklistValidation = () => {
+        let validationRules =  {};
+        Object.keys(manitouChecklistItemsDefinition).forEach(sectionKey => {
+            if (sectionKey === 'otherItems') {
+                manitouChecklistItemsDefinition[sectionKey].forEach(item => {
+                    validationRules[item.itemKey] = (value) => value ? null : 'Please Select an Option';
+                });
+            } else {
+                manitouChecklistItemsDefinition[sectionKey].forEach(item => {
+                    validationRules[`${sectionKey}.${item.itemKey}`] = (value) => value ? null : 'Please Select an Option';
+                });
+            }
+        });
+        return validationRules;
+    };
 
     // Initialize useForm with all fields
     const form = useForm({
@@ -120,6 +139,8 @@ export function UnitArrivalInspectionForm() {
                 serialNo: "", // VIN
                 hourMeter: "",
                 dateOfCheck: null,
+                technician: null,
+                approver: null,
                 generalRemarks: "",
             };
 
@@ -138,6 +159,21 @@ export function UnitArrivalInspectionForm() {
             });
             return initialManitouValues;
         })(),
+
+        validate: {
+            model: (value) => (value ? null : 'Model is Required!'),
+            serialNo: (value) => (value ? null : 'VIN is Required!'),
+            hourMeter: (value) => {
+                if (!value) return 'Hour Meter is Required!';
+                if (isNaN(Number(value))) return 'Hour Meter Must be a Number!';
+                if (Number(value) < 0) return 'Hour Meter Cannot be Negative!';
+                return null;
+            },
+            dateOfCheck: (value) => (value ? null : 'Date of Check is Required!'),
+            technician: (value) => (value ? null : 'Technician is Required!'),
+            approver: (value) => (value ? null : 'Approver is Required!'),
+            ...generateChecklistValidation(), //
+        }
     });
 
     // useEffect to fetch models from backend
@@ -150,26 +186,160 @@ export function UnitArrivalInspectionForm() {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
                 const data = await response.json();
-                
                 const formattedModels = data
                     .filter(item => item.value !== null && item.value !== undefined && item.label !== null && item.label !== undefined) // Filter berdasarkan 'value' dan 'label'
                     .map(item => ({
                         value: item.value,
                         label: item.label
                     }));
-                    setModelsData(formattedModels);
-
+                setModelsData(formattedModels);
             } catch (error) {
                 console.error("Failed to fetch models:", error);
+                notifications.show({
+                    title: "Error Loading Data",
+                    message: "Failed to load models. Please try again!",
+                    color: "red",
+                });
                 setModelsData([]);
             }
+            // set technician
+			// dummy models
+			const dummyTechniciansData = [
+				{ value: "tech1", label: "John Doe" },
+                { value: "tech2", label: "Jane Smith" },
+                { value: "tech3", label: "Peter Jones" }
+			];
+			setTechniciansData(dummyTechniciansData);
+
+            // later with API
+            /* try {
+                const response = await fetch('http://127.0.0.1:5000/api/technicians');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                const formattedTechnicians = data
+                    .filter(item => item.value !== null && item.value !== undefined && item.label !== null && item.label !== undefined)
+                    .map(item => ({
+                        value: item.value,
+                        label: item.label
+                    }));
+                setTechniciansData(formattedTechnicians);
+            } catch (error) {
+                console.error("Failed to fetch technicians:", error);
+                notifications.show({
+                    title: "Error Loading Data",
+                    message: "Failed to load technicians. Please try again!",
+                    color: "red",
+                });
+                setTechniciansData([]);
+            } */
+
+            // set approval
+			// dummy models
+			const dummyApproverData = [
+				{ value: "app1", label: "Alice Brown" },
+                { value: "app2", label: "Bob White" },
+                { value: "app3", label: "John Green" }
+			];
+			setApproversData(dummyApproverData);
+
+            // later with API
+            /* try {
+                const response = await fetch('http://127.0.0.1:5000/api/approvers');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                const formattedApprovers = data
+                    .filter(item => item.value !== null && item.value !== undefined && item.label !== null && item.label !== undefined)
+                    .map(item => ({
+                        value: item.value,
+                        label: item.label
+                    }));
+                setApproversData(formattedApprovers);
+            } catch (error) {
+                console.error("Failed to fetch approvers:", error);
+                notifications.show({
+                    title: "Error Loading Data",
+                    message: "Failed to load approvers. Please try again!",
+                    color: "red",
+                });
+                setApproversData([]);
+            } */
         };
 
         fetchModels();
     }, []);
 
+    const checkVinExists = async (vin) => {
+		const token = localStorage.getItem('access_token');
+		
+		if (!token) {
+			console.warn("No authentication token found for VIN check.");
+			notifications.show({
+				title: "Authentication Required",
+				message: "Please log in to perform VIN check.",
+				color: "red",
+			});
+			return false; 
+		}
+
+		try {
+			const response = await fetch(`http://127.0.0.1:5000/api/arrival-check/check-vin/${vin}`, {
+				method: "GET",
+				headers: {
+					"Content-Type": "application/json",
+					"Authorization": `Bearer ${token}`
+				},
+			});
+
+			if (!response.ok) {
+				const errorText = await response.text();
+				notifications.show({
+					title: "VIN Check Failed",
+					message: `Server error during VIN verification. Please try again.`,
+					color: "red",
+				});
+				return true;
+			}
+			const data = await response.json();
+			return data.exists;
+		} catch (error) {
+			console.error("Network Error or Failed to Check VIN:", error);
+			notifications.show({
+				title: "Network Error",
+                message: "Failed to verify VIN. Check your internet connection.",
+                color: "red",
+			});
+			return true;
+		}
+	};
+
     const handleSubmit = async (values) => {
         console.log('Form Submitted (Frontend Data)', values);
+
+        const token = localStorage.getItem('access_token');
+        if (!token) {
+            notifications.show({
+                title: "Authentication Required",
+                message: "Please log in to submit the form.",
+                color: "red",
+            });
+            return;
+        }
+
+        if (values.serialNo) {
+            const vinExists = await checkVinExists(values.serialNo);
+            if (vinExists) {
+                notifications.show({
+                    title: "Submission Blocked",
+                    message: "VIN already exists! Please enter a unique VIN.",
+                    color: "red",
+                });
+                return;
+            }
+        }
 
         const payload = {
             brand: 'manitou', // Hardcoded for Manitou
@@ -182,6 +352,8 @@ export function UnitArrivalInspectionForm() {
                             ? values.dateOfCheck.toISOString() 
                             : null,
             },
+            technician: values.technician,
+            approver: values.approver,
             generalRemarks: values.generalRemarks,
             checklistItems: {}, // Initialize checklistItems object
         };
@@ -190,7 +362,6 @@ export function UnitArrivalInspectionForm() {
         Object.keys(manitouChecklistItemsDefinition).forEach(sectionKey => {
             if (sectionKey === 'otherItems') {
                 manitouChecklistItemsDefinition[sectionKey].forEach(item => {
-                    // Handle special mapping for 'namePlate' and 'generalOperation' (backend expects 'namePlate' and 'general')
                     if (item.itemKey === 'namePlate') {
                         payload.checklistItems['namePlate'] = values[item.itemKey];
                     } else if (item.itemKey === 'generalOperation') {
@@ -200,7 +371,6 @@ export function UnitArrivalInspectionForm() {
                     }
                 });
             } else {
-                // For nested sections, copy the entire object
                 payload.checklistItems[sectionKey] = values[sectionKey];
             }
         });
@@ -212,6 +382,7 @@ export function UnitArrivalInspectionForm() {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
                 },
                 body: JSON.stringify(payload),
             });
@@ -222,12 +393,20 @@ export function UnitArrivalInspectionForm() {
             }
 
             const result = await response.json();
-            alert(result.message || 'Form submitted successfully!');
+            notifications.show({
+                title: "Success",
+                message: result.message || 'Form submitted successfully!',
+                color: "green",
+            });
             form.reset(); // Reset form after successful submission
 
         } catch (error) {
             console.error('Error submitting form:', error);
-            alert(`Error: ${error.message}`);
+            notifications.show({
+                title: "Submission Error",
+                message: error.message || "An unexpected error occurred. Please try again.",
+                color: "red",
+            });
         }
     };
 
@@ -276,7 +455,7 @@ export function UnitArrivalInspectionForm() {
     const renderOtherItemsSection = (items) => {
         return (
             <Card shadow="sm" p="xl" withBorder mb="lg">
-                <Title order={3} mb="md" style={{ color: '#000000 !important' }}> Other's </Title>
+                <Title order={3} mb="md" style={{ color: '#000000 !important' }}> 12. Other Item </Title>
                 <Grid gutter="xl">
                     {items.map((item) => ( // Index dihapus
                         renderChecklistItem(
@@ -366,6 +545,32 @@ export function UnitArrivalInspectionForm() {
                                 }}
                             />
                         </Grid.Col>
+                        <Grid.Col span={{ base: 12, md: 6, lg: 4 }}>
+                            <Select
+                                label={<Text style={{ color: '#000000 !important' }}> Technician </Text>}
+                                placeholder="Select Technician"
+                                data={technicians}
+                                searchable
+                                clearable
+                                {...form.getInputProps('technician')}
+                                renderOption={({ option }) => (
+                                    <Text c='black'>{option.label}</Text>
+                                )}
+                            />
+                        </Grid.Col>
+                        <Grid.Col span={{ base: 12, md: 6, lg: 4 }}>
+                            <Select
+                                label={<Text style={{ color: '#000000 !important' }}> Approval By </Text>}
+                                placeholder="Select Approver"
+                                data={approvers}
+                                searchable
+                                clearable
+                                {...form.getInputProps('approver')}
+                                renderOption={({ option }) => (
+                                    <Text c='black'>{option.label}</Text>
+                                )}
+                            />
+                        </Grid.Col>
                     </Grid>
                 </Card>
 
@@ -377,17 +582,17 @@ export function UnitArrivalInspectionForm() {
                         {renderChecklistSection(
                             // Map sectionKey to a readable title as per PDF
                             {
-                                engine: "001 Engine",
-                                transmission: "002 Transmission",
-                                axleTransferBox: "003 Axles / Transfer Box",
-                                hydraulicHydrostaticCircuits: "004 Hydraulic / Hydrostatic Circuits",
-                                brakingCircuits: "005 Braking Circuits",
-                                lubrication: "006 Lubrication",
-                                boomMastManiscopicManicess: "007 Boom / Mast Maniscopic / Manices",
-                                mastUnit: "008 Mast Unit",
-                                accessories: "009 Accessories",
-                                cabProtectiveDeviceElectricCircuit: "010 Cab / Protective Device / Electric Circuit",
-                                wheels: "011 Wheels",
+                                engine: "01. Engine",
+                                transmission: "02. Transmission",
+                                axleTransferBox: "03. Axles / Transfer Box",
+                                hydraulicHydrostaticCircuits: "04. Hydraulic / Hydrostatic Circuits",
+                                brakingCircuits: "05. Braking Circuits",
+                                lubrication: "06. Lubrication",
+                                boomMastManiscopicManicess: "07. Boom / Mast Maniscopic / Manices",
+                                mastUnit: "08. Mast Unit",
+                                accessories: "09. Accessories",
+                                cabProtectiveDeviceElectricCircuit: "10. Cab / Protective Device / Electric Circuit",
+                                wheels: "11. Wheels",
                             }[sectionKey] || sectionKey, // Fallback to sectionKey if not found
                             sectionKey,
                             manitouChecklistItemsDefinition[sectionKey]
@@ -408,7 +613,7 @@ export function UnitArrivalInspectionForm() {
                 />
 
                 <Group justify="flex-end" mt="md">
-                    <Button type="submit">Submit Checklist</Button>
+                    <Button type="submit">Submit</Button>
                 </Group>
             </form>
         </Box>
