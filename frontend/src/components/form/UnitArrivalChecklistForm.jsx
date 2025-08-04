@@ -11,6 +11,7 @@ import {
 	Card,
 	Button,
 	Group,
+	Divider,
 	Stack,
 	Radio,
 	Select,
@@ -451,7 +452,13 @@ export function UnitArrivalChecklistForm() {
 					</Grid>
 				</Card>
 
-				<Title order={3} mb="md"> Arrival Checklist </Title>
+				<Divider my="xl" label={<Text style={{ color: '#000000 !important' }}>Legend</Text>} labelPosition="center" />
+					<Group justify="center" gap="xl" mb="lg">
+						<Text style={{ color: '#000000 !important' }}> 1: Check Without Remarks </Text>
+						<Text style={{ color: '#000000 !important' }}> 0: Check With Remarks </Text>
+					</Group>
+				<Divider my="xl" />
+
 				{Object.keys(currentChecklistData).map((sectionKey) => {
 					const sectionTitleMap = {
 						chassisAndCab: "Chassis & Cab",

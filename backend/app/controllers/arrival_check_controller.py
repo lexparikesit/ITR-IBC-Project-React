@@ -16,6 +16,9 @@ BRAND_MODELS = {
 @jwt_required
 def submit_arrival_checklist():
 
+    print("DEBUG (ARRIVAL CHECK): Headers received:")
+    print(request.headers)
+
     data = request.get_json()
     brand = data.get("brand")
 

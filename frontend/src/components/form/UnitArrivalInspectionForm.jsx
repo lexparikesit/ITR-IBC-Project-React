@@ -423,8 +423,8 @@ export function UnitArrivalInspectionForm() {
                     >
                         <Group mt="xs">
                             <Radio value="Good" label={<Text style={{ color: '#000000 !important' }}>Good</Text>} />
-                            <Radio value="Missing" label={<Text style={{ color: '#000000 !important' }}>Missing</Text>} />
                             <Radio value="Bad" label={<Text style={{ color: '#000000 !important' }}>Bad</Text>} />
+                            <Radio value="Missing" label={<Text style={{ color: '#000000 !important' }}>Missing</Text>} />
                         </Group>
                     </Radio.Group>
                 </Stack>
@@ -574,7 +574,13 @@ export function UnitArrivalInspectionForm() {
                     </Grid>
                 </Card>
 
-                <Title order={3} mb="md" style={{ color: '#000000 !important' }}> Arrival Checklist </Title>
+                <Divider my="xl" label={<Text style={{ color: '#000000 !important' }}>Legend</Text>} labelPosition="center" />
+                    <Group justify="center" gap="xl" mb="lg">
+                        <Text style={{ color: '#000000 !important' }}> 1: Good </Text>
+                        <Text style={{ color: '#000000 !important' }}> 2: Bad </Text>
+                        <Text style={{ color: '#000000 !important' }}> 0: Missing </Text>
+                    </Group>
+                <Divider my="xl" />
 
                 {/* Render sections based on manitouChecklistItemsDefinition */}
                 {Object.keys(manitouChecklistItemsDefinition).filter(key => key !== 'otherItems').map(sectionKey => (

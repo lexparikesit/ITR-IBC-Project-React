@@ -19,6 +19,7 @@ import {
 import { DateInput } from "@mantine/dates";
 import { IconCalendar } from "@tabler/icons-react";
 import { useForm } from '@mantine/form';
+import { notifications } from "@mantine/notifications";
 
 const manitouStorageItemDefinition = {
     engine: [
@@ -100,36 +101,61 @@ const manitouStorageItemDefinition = {
     ],
 };
 
+// Initialize useForm with all fields
+const getInitialValues = () => {
+    const initialManitouValues = {
+        model: null,
+        serialNo: "",
+        hourMeter: "",
+        dateOfCheck: null,
+        technician: "",
+        approvalBy: "",
+        remarks: "",
+        checklistItems: {}
+    };
+    
+    Object.keys(manitouStorageItemDefinition).forEach(sectionKey => {
+        initialManitouValues.checklistItems[sectionKey] = {};
+        manitouStorageItemDefinition[sectionKey].forEach(item => {
+            initialManitouValues.checklistItems[sectionKey][item.itemKey] = "";
+        });
+    });
+
+    return initialManitouValues;
+};
+
 export function ManitouStorageMaintenanceForm() {
     // State to store models fetched from API
     const [modelsData, setModelsData] = useState([]);
+    const [technician, setTechnician] = useState([]);
+    const [approvers, setApprovers] = useState([]);
 
-    // Initialize useForm with all fields
-    const form = useForm({
-        initialValues: (() => {
-            const initialManitouValues = {
-                model: null,
-                serialNo: "", // VIN
-                hourMeter: "",
-                dateOfCheck: null,
-                technician: "",
-                signature: "",
-                remarks: "",
-            };
-
-            // Dynamically add checklist items to initial values
-            Object.keys(manitouStorageItemDefinition).forEach(sectionKey => {
-                initialManitouValues[sectionKey] = {};
-                manitouStorageItemDefinition[sectionKey].forEach(item => {
-                    initialManitouValues[sectionKey][item.itemKey] = "";
-                });
+    const createChecklistValidation = () => {
+        const checklistValidation = {};
+        Object.keys(manitouStorageItemDefinition).forEach(sectionKey => {
+            manitouStorageItemDefinition[sectionKey].forEach(item => {
+                const fieldKey = `checklistItems.${sectionKey}.${item.itemKey}`;
+                checklistValidation[fieldKey] = (value) => (value ? null : "This field is required!");
             });
-            return initialManitouValues;
-        })(),
+        });
+        return checklistValidation;
+    };
+
+    const form = useForm({
+        initialValues: getInitialValues(),
+        validate: {
+            model: (value) => (value ? null : "Model Type is Required!"),
+            serialNo: (value) => (value ? null : "VIN is Required!"),
+            hourMeter: (value) => (value ? null : "Hour Meter is Required!"),
+            dateOfCheck: (value) => (value ? null : "Date of Check is Required!"),
+            technician: (value) => (value ? null : "Technician is Required!"),
+            approvalBy: (value) => (value ? null: "Approval By is Required!"),
+            ...createChecklistValidation(),
+        },
     });
 
     // useEffect to fetch models from backend
-    /* useEffect(() => {
+    useEffect(() => {
         const fetchModels = async () => {
             try {
                 // API mstType
@@ -149,19 +175,88 @@ export function ManitouStorageMaintenanceForm() {
 
             } catch (error) {
                 console.error("Failed to fetch models:", error);
-                setModelsData([]);
+                notifications.show({
+                    title: "Error Loading Data",
+					message: "Failed to Load Unit Models. Please Try Again!",
+					color: "red",
+                });
             }
+
+            // set technician
+            // dummy models
+            const dummyTechnicians = [
+				{ value: "tech1", label: "John Doe" },
+                { value: "tech2", label: "Jane Smith" },
+                { value: "tech3", label: "Peter Jones" }
+			];
+			setTechnician(dummyTechnicians);
+
+            // later with API
+			/* try {
+				const techResponse = await fetch("http://127.0.0.1:5000/api/technicians");
+				if (!techResponse.ok) {
+					throw new Error(`HTTP error status! ${techResponse.status}`)
+				}
+				const techData = await techResponse.json();
+				setTechnician(techData.map(item => ({ value: item.code, label: item.name })));
+			} catch (error) {
+				console.error("Error fetching technician:", error);
+				notifications.show({
+					title: "Error Loading Data",
+					message: "Failed to Load Technician Name. Please Try Again!",
+					color: "red",
+				});
+			} */
+
+            // set approval
+			// dummy models
+			const dummyApprover = [
+				{ value: "app1", label: "Alice Brown" },
+                { value: "app2", label: "Bob White" },
+                { value: "app3", label: "John Green" }
+			];
+			setApprovers(dummyApprover);
+
+            // later with API
+			/* try {
+				const appResponse = await fetch("http://127.0.0.1:5000/api/approvers");
+				if (!appResponse.ok) {
+					throw new Error(`HTTP error status! ${appResponse.status}`)
+				}
+				const appData = await appResponse.json();
+				setApprovers(appData.map(item => ({ value: item.code, label: item.name })));
+			} catch (error) {
+				console.error("Error fetching approver:", error);
+				notifications.show({
+					title: "Error Loading Data",
+					message: "Failed to Load Approver Name. Please Try Again!",
+					color: "red",
+				});
+			} */
         };
 
         fetchModels();
-    }, []); */
+    }, []);
 
     const handleSubmit = async (values) => {
+        const token = localStorage.getItem('access_token');
+        
+            console.log("DEBUG: Token from localStorage:", token); // --> DEBUG
+    
+            if (!token) {
+            notifications.show({
+                title: "Authentication Error",
+                message: "Please log in again. Authentication token is missing.",
+                color: "red",
+            });
+                console.log("Authentication token is missing.");
+                return;
+            }
+
         console.log('Form Submitted (Frontend Data)', values);
 
         const payload = {
             brand: 'manitou', // Hardcoded for Manitou
-            
             unitInfo: {
                 model: values.model,
                 serialNo: values.serialNo,
@@ -171,7 +266,7 @@ export function ManitouStorageMaintenanceForm() {
                                 : null,
                 timeOfCheck: values.timeOfCheck,
                 technician: values.technician,
-                signature: values.signature,
+                approvalBy: values.approvalBy,
             },
             remarks: values.remarks, // Renamed from generalRemarks
             checklistItems: values.checklistItems, // Directly use the nested object
@@ -185,6 +280,7 @@ export function ManitouStorageMaintenanceForm() {
                 method: "POST",
                 headers: {
                     'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
                 },
                 body: JSON.stringify(payload),
             });
@@ -195,12 +291,21 @@ export function ManitouStorageMaintenanceForm() {
             }
 
             const result = await response.json();
-            alert(result.message || 'Form Submitted Succesfully!');
+            notifications.show({
+                title: "Submission Successful!",
+                message: result.message || "Form Submitted Successfully.",
+                color: "green",
+            })
             form.reset();
         
         } catch (error) {
             console.error('Error submitting form:', error);
-            alert(`Error: ${error.message}`);
+            console.log('Error submitting form:', error);
+            notifications.show({
+                title: "Submission Error",
+                message: `Failed to submit form: ${error.message}`,
+                color: "red",
+            });
         }
     };
 
@@ -215,8 +320,8 @@ export function ManitouStorageMaintenanceForm() {
                     >
                         <Group mt="xs">
                             <Radio value="Good" label={<Text style={{ color: '#000000 !important' }}>Good</Text>} />
+                            <Radio value="Bad" label={<Text style={{ color: '#000000 !important' }}>Bad</Text>} />
                             <Radio value="Missing" label={<Text style={{ color: '#000000 !important' }}>Missing</Text>} />
-                            <Radio value="Bad" label={<Text style={{ color: '#000000 !important' }}>Missing</Text>} />
                         </Group>
                     </Radio.Group>
                 </Stack>
@@ -233,27 +338,8 @@ export function ManitouStorageMaintenanceForm() {
                     {items.map((item) => ( 
                         renderChecklistItem(
                             `${item.id}. ${item.label}`, 
-                            form.getInputProps(`${sectionKey}.${item.itemKey}`),
+                            form.getInputProps(`checklistItems.${sectionKey}.${item.itemKey}`),
                             `${sectionKey}-${item.itemKey}`
-                        )
-                    ))}
-                </Grid>
-            </Card>
-        );
-    };
-
-    // Helper for other's checklist
-    const renderOtherItemsSection = (items) => {
-        return (
-            <Card shadow="sm" p="xl" withBorder mb="lg">
-                <Title order={3} mb="md" style={{ color: '#000000 !important' }}> Other's </Title>
-                <Grid gutter="xl">
-                    {items.map((item) => ( // Index dihapus
-                        renderChecklistItem(
-                            `${item.id} ${item.label}`,
-                            form.getInputProps(item.itemKey),
-                            { base: 12, sm: 6 },
-                            `other-${item.itemKey}`
                         )
                     ))}
                 </Grid>
@@ -337,42 +423,58 @@ export function ManitouStorageMaintenanceForm() {
                             />
                         </Grid.Col>
                         <Grid.Col span={{ base: 12, md: 6, lg: 4 }}>
-                            <TextInput
+                            <Select
                                 label={<Text style={{ color: '#000000 !important' }}> Technician </Text>}
-                                placeholder="Input Technician Name"
+                                placeholder="Select Technician"
+                                data={technician}
+                                searchable
+                                clearable
                                 {...form.getInputProps('technician')}
-                                styles={{ input: { color: '#000000 !important' } }}
+                                renderOption={({ option }) => (
+                                    <Text c='black'>{option.label}</Text>
+                                )}
                             />
                         </Grid.Col>
                         <Grid.Col span={{ base: 12, md: 6, lg: 4 }}>
-                            <TextInput
-                                label={<Text style={{ color: '#000000 !important' }}> Signature </Text>}
-                                placeholder="Input Signature (e.g., Name/ID)"
-                                {...form.getInputProps('signature')}
-                                styles={{ input: { color: '#000000 !important' } }}
+                            <Select
+                                label={<Text style={{ color: '#000000 !important' }}> Approval By </Text>}
+                                placeholder="Select Approver"
+                                data={approvers}
+                                searchable
+                                clearable
+                                {...form.getInputProps('approvalBy')}
+                                renderOption={({ option }) => (
+                                    <Text c='black'>{option.label}</Text>
+                                )}
                             />
                         </Grid.Col>
                     </Grid>
                 </Card>
 
-                <Title order={3} mb="md" style={{ color: '#000000 !important' }}> Arrival Checklist </Title>
+                <Divider my="xl" label={<Text style={{ color: '#000000 !important' }}>Legend</Text>} labelPosition="center" />
+                    <Group justify="center" gap="xl" mb="lg">
+                        <Text style={{ color: '#000000 !important' }}> 1: Good </Text>
+                        <Text style={{ color: '#000000 !important' }}> 2: Bad </Text>
+                        <Text style={{ color: '#000000 !important' }}> 0: Missing </Text>
+                    </Group>
+                <Divider my="xl" />
 
                 {/* Render sections based on manitouStorageItemDefinition */}
-                {renderChecklistSection("001 Engine", "engine", manitouStorageItemDefinition.engine)}
-                {renderChecklistSection("002 Driveline", "driveline", manitouStorageItemDefinition.driveline)}
-                {renderChecklistSection("003 Hydraulic / Hydrostatic Circuits", "hydraulicHydrostaticCircuits", manitouStorageItemDefinition.hydraulicHydrostaticCircuits)}
-                {renderChecklistSection("004 Braking Circuits", "brakingCircuits", manitouStorageItemDefinition.brakingCircuits)}
-                {renderChecklistSection("005 Boom Unit / Maniscopic / Maniaccess", "boomMastManiscopicManicess", manitouStorageItemDefinition.boomMastManiscopicManicess)}
-                {renderChecklistSection("006 Mast Unit", "mastUnit", manitouStorageItemDefinition.mastUnit)}
-                {renderChecklistSection("007 Accesseories", "accessories", manitouStorageItemDefinition.accessories)}
-                {renderChecklistSection("008 Cab / Protective Device / Electric Circuit", "cabProtectiveDeviceElectricCircuit", manitouStorageItemDefinition.cabProtectiveDeviceElectricCircuit)}
-                {renderChecklistSection("009 Wheels", "wheels", manitouStorageItemDefinition.wheels)}
-                {renderChecklistSection("010 Screw and Nuts", "screwsAndNuts", manitouStorageItemDefinition.screwsAndNuts)}
-                {renderChecklistSection("011 Frame and Body", "frameBody", manitouStorageItemDefinition.frameBody)}
-                {renderChecklistSection("012 Paint", "paint", manitouStorageItemDefinition.paint)}
-                {renderChecklistSection("013 General Operation", "generalOperation", manitouStorageItemDefinition.generalOperation)}
-                {renderChecklistSection("014 Operator's Manual", "operatorsManual", manitouStorageItemDefinition.operatorsManual)}
-                {renderChecklistSection("015 Instruction For Customer", "instructionsForCustomer", manitouStorageItemDefinition.instructionsForCustomer)}
+                {renderChecklistSection("01. Engine", "engine", manitouStorageItemDefinition.engine)}
+                {renderChecklistSection("02. Driveline", "driveline", manitouStorageItemDefinition.driveline)}
+                {renderChecklistSection("03. Hydraulic / Hydrostatic Circuits", "hydraulicHydrostaticCircuits", manitouStorageItemDefinition.hydraulicHydrostaticCircuits)}
+                {renderChecklistSection("04. Braking Circuits", "brakingCircuits", manitouStorageItemDefinition.brakingCircuits)}
+                {renderChecklistSection("05. Boom Unit / Maniscopic / Maniaccess", "boomMastManiscopicManicess", manitouStorageItemDefinition.boomMastManiscopicManicess)}
+                {renderChecklistSection("06. Mast Unit", "mastUnit", manitouStorageItemDefinition.mastUnit)}
+                {renderChecklistSection("07. Accesseories", "accessories", manitouStorageItemDefinition.accessories)}
+                {renderChecklistSection("08. Cab / Protective Device / Electric Circuit", "cabProtectiveDeviceElectricCircuit", manitouStorageItemDefinition.cabProtectiveDeviceElectricCircuit)}
+                {renderChecklistSection("09. Wheels", "wheels", manitouStorageItemDefinition.wheels)}
+                {renderChecklistSection("10. Screw and Nuts", "screwsAndNuts", manitouStorageItemDefinition.screwsAndNuts)}
+                {renderChecklistSection("11. Frame and Body", "frameBody", manitouStorageItemDefinition.frameBody)}
+                {renderChecklistSection("12. Paint", "paint", manitouStorageItemDefinition.paint)}
+                {renderChecklistSection("13. General Operation", "generalOperation", manitouStorageItemDefinition.generalOperation)}
+                {renderChecklistSection("14. Operator's Manual", "operatorsManual", manitouStorageItemDefinition.operatorsManual)}
+                {renderChecklistSection("15. Instruction For Customer", "instructionsForCustomer", manitouStorageItemDefinition.instructionsForCustomer)}
 
                 <Divider my="xl" />
                 <Title order={3} mb="md" style={{ color: '#000000 !important' }}> General Remarks </Title>
@@ -385,7 +487,7 @@ export function ManitouStorageMaintenanceForm() {
                 />
 
                 <Group justify="flex-end" mt="md">
-                    <Button type="submit">Submit Checklist</Button>
+                    <Button type="submit">Submit</Button>
                 </Group>
             </form>
         </Box>

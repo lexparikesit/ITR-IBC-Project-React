@@ -67,5 +67,8 @@ def create_app():
     
     from app.routes.unit_type_routes import unit_type_bp
     app.register_blueprint(unit_type_bp, url_prefix='/api/unit-types')
+
+    from app.routes.maintenance_check_routes import maintenance_api_bp
+    app.register_blueprint(maintenance_api_bp)
     
     return app

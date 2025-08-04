@@ -15,10 +15,12 @@ import {
     Box,
     Radio,  
     Table,
+    Select,
 } from "@mantine/core";
 import { DateInput } from "@mantine/dates";
 import { IconCalendar } from "@tabler/icons-react";
 import { useForm } from "@mantine/form";
+import { notifications } from "@mantine/notifications";
 
 const renaultChecklistItemDefinition = {
     operationsInCab: [
@@ -63,7 +65,7 @@ const renaultChecklistItemDefinition = {
         { id: '33', label: 'Make Sure the Drive Axle(s) are Leak-tight and Control the Breather Tube(s).', itemKey: 'driveAxleLeakTightness' },
         { id: '34', label: 'Check the Drive Axle Oil Level; Top-up if Necessary.', itemKey: 'driveAxleOilLevel' },
         { id: '35', label: 'Check Inspect the State of the Braking System (Fixing of the Brake Cylinders, Brake Pads, Disks, Calipers, Levers, Piping, Hoses, Valves, Connection of the Brake Lining Wear Sensors etc).', itemKey: 'brakingSystemState' },
-        { id: '36', label: 'Inspect the State of the Springs, Pads, Anti-roll Bars and Shock Absorbers.', ItemKey: 'springsPadsAntiRollBarsShockAbsorbers' },
+        { id: '36', label: 'Inspect the State of the Springs, Pads, Anti-roll Bars and Shock Absorbers.', itemKey: 'springsPadsAntiRollBarsShockAbsorbers' },
         { id: '37', label: 'Inspect the General Condition and the Mountings on the Wiring Bundles on the Chassis (Electrical, Pneumatic, Hydraulic, Fuel Supply Piping, etc).', itemKey: 'wiringBundlesChassis' },
         { id: '38', label: 'Check (via Purges) the Presence of Water or Oil in the Compressed Air Tanks.', itemKey: 'compressedAirTanksWaterOil' },
         { id: '39', label: 'Make Sure the Transfer Box is Leak-tight (Oil, Air) *.', itemKey: 'transferBoxLeakTightness' },
@@ -85,74 +87,161 @@ const renaultChecklistItemDefinition = {
     ],
 }
 
+const initialChecklistValues = Object.keys(renaultChecklistItemDefinition).reduce((acc, sectionKey) => {
+    acc[sectionKey] = renaultChecklistItemDefinition[sectionKey].reduce((itemAcc, item) => {
+        itemAcc[item.itemKey] = '';
+        return itemAcc;
+    }, {});
+    return acc;
+}, {});
+
+const initialRenaultValues = {
+    vinNo: '',
+    engineTypeNo: '',
+    transmissionTypeNo: '',
+    hourMeter: '',
+    mileage: '',
+    repairOrderNo: '',
+    dateOfCheck: null,
+    technician: '',
+    approvalBy: '',
+
+    // checklist items
+    checklistItems: initialChecklistValues,
+
+    // battery inspection
+    batteryInspection: [
+        { batteryCheck: 'Front Battery', electrolyteLevel: '', voltage: '', statusOnBatteryAnalyzer: '' },
+        { batteryCheck: 'Rear Battery', electrolyteLevel: '', voltage: '', statusOnBatteryAnalyzer: '' },
+    ],
+
+    // fault codes
+    faultCodes: [
+        { faultCode: '', status: '' },
+        { faultCode: '', status: '' },
+        { faultCode: '', status: '' },
+        { faultCode: '', status: '' },
+        { faultCode: '', status: '' },
+    ],
+
+    // repair notes
+    repairNotes: '',
+};
+
 export function RenaultStorageMaintenanceForm() {
-    // state to store model fetched from API (if applicable for Renault)
-    const [modelData, setModelsData] = useState([]);
+    const [technician, setTechnician] = useState([]);
+    const [approval, setApproval] = useState([]);
 
-    // initiate useForm with all fields
+    const buildChecklistValidation = () => {
+        const checklistValidation = {};
+        Object.keys(renaultChecklistItemDefinition).forEach(sectionKey => {
+            renaultChecklistItemDefinition[sectionKey].forEach(item => {
+                const fieldKey = `checklistItems.${sectionKey}.${item.itemKey}`;
+                checklistValidation[fieldKey] = (value) => (value ? null : "This field is required!");
+            });
+        });
+        return checklistValidation;
+    };
+
     const form = useForm({
-        initialValues: (() => {
-            const initialRenaultValues = {
-                vinNo: '',
-                engineTypeNo: '',
-                transmissionTypeNo: '',
-                hourMeter: '',
-                mileage: '',
-                repairOrderNo: '',
-                date: null,
-                carriedOutBy: '',
-                approvedBy: '',
-
-                // checklist items
-                ...Object.keys(renaultChecklistItemDefinition).reduce((acc, sectionKey) => {
-                    acc[sectionKey] = renaultChecklistItemDefinition[sectionKey].reduce((itemAcc, item) => {
-                        return itemAcc;
-                    }, {});
-                    return acc;
-                }, {}),
-
-                // battery inspection
-                batteryInspection: [
-                    { batteryCheck: 'Front Battery', electrolyteLevel: '', voltage: '', statusOnBatteryAnalyzer: '' },
-                    { batteryCheck: 'Rear Battery',electrolyteLevel: '', voltage: '', statusOnBatteryAnalyzer: '' },
-                ],
-
-                // fault codes
-                faultCodes: [
-                    { faultCode: '', status: '' },
-                    { faultCode: '', status: '' },
-                    { faultCode: '', status: '' },
-                    { faultCode: '', status: '' },
-                    { faultCode: '', status: '' },
-                ],
-
-                // repair notes
-                repairNotes: '',
-            };
-            return initialRenaultValues;
-        })(),
+        initialValues: initialRenaultValues,
+        validate: {
+            vinNo: (value) => (value ? null: "VIN is Required!"),
+            engineTypeNo: (value) => (value ? null: "Engine Type/ No. is Required!"),
+            transmissionTypeNo: (value) => (value ? null: "Transmission Type/ No. is Required!"),
+            hourMeter: (value) => (value ? null: "Hour Meter is Required!"),
+            mileage: (value) => (value ? null: "Mileage is Required!"),
+            dateOfCheck: (value) => (value ? null: "Date is Required!"),
+            technician: (value) => (value ? null: "Technician is Required!"),
+            approvalBy: (value) => (value ? null: "Approval By is Required!"),
+            repairOrderNo: (value) => {
+                if (!value) {
+                    return "Repair Order/ Work Order No. is Required!";
+                }
+                const regex = /^WO\d{8}$/;
+                if (!regex.test(value)) {
+                    return "Must be 10 characters long, starting with 'WO' followed by 8 digits.";
+                }
+                return null;
+            },
+            ...buildChecklistValidation(),
+        },
     });
 
-    // useEffect to fect models from backend 
-    // For now, is commented
-    /* useEffect(() => {
-        const fetchModels = async () => {
-            try {
-                const response = await fetch('http://127.0.0.1:5000/api/unit-types/RT');
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+    // useEffect to fetch models from backend
+    useEffect(() => {
+        const fetchDropdownData = async () => {
+            // set technician
+            // dummy models
+            const dummyTechnicians = [
+                { value: "tech1", label: "John Doe" },
+                { value: "tech2", label: "Jane Smith" },
+                { value: "tech3", label: "Peter Jones" }
+            ];
+            setTechnician(dummyTechnicians);
+
+        // later with API
+        /* try {
+				const techResponse = await fetch("http://127.0.0.1:5000/api/technicians");
+				if (!techResponse.ok) {
+					throw new Error(`HTTP error status! ${techResponse.status}`)
+				}
+				const techData = await techResponse.json();
+				setTechnician(techData.map(item => ({ value: item.code, label: item.name })));
+			} catch (error) {
+				console.error("Error fetching technician:", error);
+				notifications.show({
+					title: "Error Loading Data",
+					message: "Failed to Load Technician Name. Please Try Again!",
+					color: "red",
+				});
+			} */
+
+            // set technician
+            // dummy models
+            const dummyApprover = [
+                { value: "app1", label: "Alice Brown" },
+                { value: "app2", label: "Bob White" },
+                { value: "app3", label: "John Green" }
+            ];
+            setApproval(dummyApprover);
+
+        // later with API
+            /* try {
+                const appResponse = await fetch("http://127.0.0.1:5000/api/approvers");
+                if (!appResponse.ok) {
+                    throw new Error(`HTTP error status! ${appResponse.status}`)
                 }
-                const data = await response.json();
-                setUnitModels(data);
+                const appData = await appResponse.json();
+                setApprovers(appData.map(item => ({ value: item.code, label: item.name })));
             } catch (error) {
-                console.error("Error fetching unit models:", error);
-                setUnitModels([]);
-            }
+                console.error("Error fetching approver:", error);
+                notifications.show({
+                    title: "Error Loading Data",
+                    message: "Failed to Load Approver Name. Please Try Again!",
+                    color: "red",
+                });
+            } */
         };
-        fetchModels();
-    }, [form.values.brand]); */
+
+        fetchDropdownData();
+    }, []);
 
     const handleSubmit = async (values) => {
+        const token = localStorage.getItem('access_token');
+
+        console.log("DEBUG: Token from localStorage:", token); // --> DEBUG
+
+        if (!token) {
+        notifications.show({
+            title: "Authentication Error",
+            message: "Please log in again. Authentication token is missing.",
+            color: "red",
+        });
+            console.log("Authentication token is missing.");
+            return;
+        }
+
         console.log('Form Submitted (Frontend Data)', values);
 
         const payload = {
@@ -164,11 +253,11 @@ export function RenaultStorageMaintenanceForm() {
                 hourMeter: values.hourMeter,
                 mileage: values.mileage,
                 repairOrderNo: values.repairOrderNo,
-                date: (values.date instanceof Date && !isNaN(values.date))
-                        ? values.date.toISOString()
+                dateOfCheck: (values.dateOfCheck instanceof Date && !isNaN(values.dateOfCheck))
+                        ? values.dateOfCheck.toISOString()
                         : null,
-                carrieOutBy: values.carriedOutBy,
-                approvedBy: values.approvedBy,
+                technician: values.technician,
+                approvalBy: values.approvalBy,
             },
             checklistItems: values.checklistItems,
             batteryInspection: values.batteryInspection,
@@ -184,6 +273,7 @@ export function RenaultStorageMaintenanceForm() {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
                 },
                 body: JSON.stringify(payload),
             });
@@ -194,15 +284,23 @@ export function RenaultStorageMaintenanceForm() {
             }
 
             const result = await response.json();
-            alert(result.message || "Form Submitted Form:", error);
+            notifications.show({
+                title: "Submission Successful!",
+                message: result.message || "Form Submitted Successfully.",
+                color: "green",
+            })
+            form.reset();
         
         } catch (error) {
             console.log('Error submitting form:', error);
-            alert(`Error: ${error.message}`);
+            notifications.show({
+                title: "Submission Error",
+                message: `Failed to submit form: ${error.message}`,
+                color: "red",
+            });
         }
     };
 
-    // helper for render item checklist with radio button
     const renderChecklistItem = (label, formProps, key) => {
         return (
             <Grid.Col span={{ base: 12 }} key={key}>
@@ -213,10 +311,10 @@ export function RenaultStorageMaintenanceForm() {
                         orientation="horizontal"
                     >
                         <Group mt="xs" justify="space-between" style={{ width: '100%' }}>
-                            <Radio value="Repaired" label={<Text style={{ color: '#000000 !important' }}> Repaired, Without Notes </Text>} />
-                            <Radio value="Recommended" label={<Text style={{ color: '#000000 !important' }}> Repair Recommended </Text>} />
-                            <Radio value="Immediately" label={<Text style={{ color: '#000000 !important' }}> Repair Immediately </Text>} />
-                            <Radio value="N/A" label={<Text style={{ color: '#000000 !important' }}> Not Applicable </Text>} />
+                            <Radio value="repaired" label={<Text style={{ color: '#000000 !important' }}> Repaired, Without Notes </Text>} />
+                            <Radio value="recommended_repair" label={<Text style={{ color: '#000000 !important' }}> Repair Recommended </Text>} />
+                            <Radio value="immediately_repair" label={<Text style={{ color: '#000000 !important' }}> Repair Immediately </Text>} />
+                            <Radio value="not_applicable" label={<Text style={{ color: '#000000 !important' }}> Not Applicable </Text>} />
                         </Group>
                     </Radio.Group>
                 </Stack>
@@ -230,13 +328,15 @@ export function RenaultStorageMaintenanceForm() {
             <Card shadow="sm" p="xl" withBorder mb="lg">
                 <Title order={3} mb="md" style={{ color: '#000000 !important' }}>{sectionTitle}</Title>
                 <Grid gutter="xl">
-                    {items.map((item) => (
-                        renderChecklistItem(
+                    {items.map((item) => {
+                        const fieldName = `checklistItems.${sectionKey}.${item.itemKey}`;
+                        console.log('Rendering field:', fieldName);
+                        return renderChecklistItem(
                             `${item.id}. ${item.label}`,
-                            form.getInputProps(`checklistItems.${sectionKey}.${item.itemKey}`),
-                            `${sectionKey}-${item.itemKey}`
-                        )
-                    ))}
+                                form.getInputProps(`checklistItems.${sectionKey}.${item.itemKey}`),
+                            `${sectionKey}-${item.itemKey}`,
+                        );
+                    })}
                 </Grid>
             </Card>
         );
@@ -310,12 +410,13 @@ export function RenaultStorageMaintenanceForm() {
                                 label={<Text style={{ color: '#000000 !important' }}> Date </Text>}
                                 placeholder="Select Date"
                                 valueFormat="DD-MM-YYYY"
-                                {...form.getInputProps('date')}
+                                {...form.getInputProps('dateOfCheck')}
                                 onChange={(value) => {
-                                    const parsedDate = value instanceof Date && !isNaN(value) ? value: null;
-                                    form.setFieldValue('date', parsedDate)
+                                    console.log("DateInput onChange value:", value);
+                                    const parsedDate = value ? new Date(value) : null;
+                                    console.log("DateInput onChange value (parsed):", parsedDate);
+                                    form.setFieldValue('dateOfCheck', parsedDate);
                                 }}
-
                                 rightSection={<IconCalendar size={16} />}
                                 styles={{
                                     input: { color: '#000000 !important' },
@@ -336,30 +437,36 @@ export function RenaultStorageMaintenanceForm() {
                             />
                         </Grid.Col>
                         <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
-                            <TextInput
-                                label={<Text style={{ color: '#000000 !important' }}> Carried Out By </Text>}
-                                placeholder="Input Mechanics Name"
-                                {...form.getInputProps('carriedOutBy')}
-                                styles={{ input: { color: '#000000 !important' } }}
+                            <Select
+                                label={<Text style={{ color: '#000000 !important' }}> Technician </Text>}
+                                placeholder="Select Technician"
+                                data={technician}
+                                searchable
+                                clearable
+                                {...form.getInputProps('technician')}
+                                renderOption={({ option }) => <Text>{option.label}</Text>}
                             />
                         </Grid.Col>
                         <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
-                            <TextInput
-                                label={<Text style={{ color: '#000000 !important' }}> Approved By </Text>}
-                                placeholder="Input Name"
-                                {...form.getInputProps('approvedBy')}
-                                styles={{ input: { color: '#000000 !important' } }}
+                            <Select
+                                label={<Text style={{ color: '#000000 !important' }}> Approval By </Text>}
+                                placeholder="Select Approver"
+                                data={approval}
+                                searchable
+                                clearable
+                                {...form.getInputProps('approvalBy')}
+                                renderOption={({ option }) => <Text>{option.label}</Text>}
                             />
                         </Grid.Col>
                     </Grid>
                 </Card>
                 <Divider my="xl" label={<Text style={{ color: '#000000 !important' }}>Legend</Text>} labelPosition="center" />
-                <Group justify="center" gap="xl" mb="lg">
-                    <Text style={{ color: '#000000 !important' }}> 1: Repaired, Without Notes </Text>
-                    <Text style={{ color: '#000000 !important' }}> 2: Repair Recommended </Text>
-                    <Text style={{ color: '#000000 !important' }}> 3: Repair Immediately </Text>
-                    <Text style={{ color: '#000000 !important' }}> 4: Not Applicable </Text>
-                </Group>
+                    <Group justify="center" gap="xl" mb="lg">
+                        <Text style={{ color: '#000000 !important' }}> 1: Repaired, Without Notes </Text>
+                        <Text style={{ color: '#000000 !important' }}> 2: Repair Recommended </Text>
+                        <Text style={{ color: '#000000 !important' }}> 3: Repair Immediately </Text>
+                        <Text style={{ color: '#000000 !important' }}> 0: Not Applicable </Text>
+                    </Group>
                 <Divider my="xl" />
 
                 {/* Checklist Sections */}
@@ -385,7 +492,7 @@ export function RenaultStorageMaintenanceForm() {
                 )}
                 {renderChecklistSection(
                     "Dynamic Test",
-                    "dynamicTest",
+                    "dynamicTesting",
                     renaultChecklistItemDefinition.dynamicTesting
                 )}
 
@@ -477,7 +584,7 @@ export function RenaultStorageMaintenanceForm() {
                     />
                 </Card>
                 <Group justify="flex-end" mt="md">
-                    <Button type="submit">Submit Checklist</Button>
+                    <Button type="submit">Submit</Button>
                 </Group>
             </form>
         </Box>
