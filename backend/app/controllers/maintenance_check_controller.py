@@ -2,16 +2,15 @@ from flask import json, jsonify, request, current_app, g
 from app import db
 from app.models.renault_maintenance_model import RenaultMaintenanceModel
 from app.models.manitou_maintenance_model import ManitouMaintenanceModel
-# from app.models.sdlg_maintenance_model import SDLGMaintenanceModel
+from app.models.sdlg_maintenance_model import SDLGMaintenanceModel, SDLGDefectsAndRemarksModel
 from datetime import datetime, time, date
 from app.controllers.auth_controller import jwt_required
-import uuid
 
 # mapping for brand Models
 BRAND_MODELS = {
     'renault': RenaultMaintenanceModel,
-    'manitou': ManitouMaintenanceModel
-    # sdlg
+    'manitou': ManitouMaintenanceModel,
+    'sdlg': SDLGMaintenanceModel,
 }
 
 @jwt_required
@@ -287,17 +286,63 @@ def submit_maintenance_checklist():
                     print(f"WARNING: DB column '{db_column}' not found in model.")
             
         elif brand.lower() == 'sdlg':
-            # Logic for SDLG (Placeholder)
-            # ...
-            pass
-        
-        db.session.add(new_checklist_entry)
-        db.session.commit()
+            unit_info = data.get("unitInfo", {})
+            checklist_items = data.get("checklistItems", {})
+            defect = data.get("defect", [])
+            
+            new_checklist_entry.model = data.get("model")
+            new_checklist_entry.vehicleNumber = data.get("vehicleNumber")
+            new_checklist_entry.workingHour = data.get("workingHour")
+            new_checklist_entry.inspector = data.get("inspector")
 
-        return jsonify({
-            'message': f'{brand.capitalize()} Checklist submitted successfully!', 
-            'id': str(new_checklist_entry.storageID)
-        }), 201
+            vehicle_arrival_str = data.get("vehicleArrival")
+            inspection_date_str = data.get("inspectionDate")
+
+            if vehicle_arrival_str:
+                new_checklist_entry.vehicleArrival = datetime.fromisoformat(vehicle_arrival_str.replace('Z', ''))
+            if inspection_date_str:
+                new_checklist_entry.inspectionDate = datetime.fromisoformat(inspection_date_str.replace('Z', ''))
+
+            # inspection column
+            for i in range(1, 10):
+                column_name = f"inspection{i}"
+                setattr(new_checklist_entry, column_name, data.get(column_name, False))
+
+            # testing column
+            for i in range(10, 24):
+                column_name = f"testing{i}"
+                setattr(new_checklist_entry, column_name, data.get(column_name, False))
+
+            new_checklist_entry.signatureInspector = data.get("signatureInspector")
+            new_checklist_entry.signatureSupervisor = data.get("signatureSupervisor")
+            
+            inspector_date_str = data.get("signatureInspectorDate")
+            supervisor_date_str = data.get("signatureSupervisorDate")
+
+            if inspector_date_str:
+                new_checklist_entry.signatureInspectorDate = datetime.fromisoformat(inspector_date_str.replace('Z', ''))
+            if supervisor_date_str:
+                new_checklist_entry.signatureSupervisorDate = datetime.fromisoformat(supervisor_date_str.replace('Z', ''))
+
+            observed_conditions = data.get("observedConditions", [])
+            
+            for defect in observed_conditions:
+                new_defect_entry = SDLGDefectsAndRemarksModel(
+                    description=defect.get("description"),
+                    remarks=defect.get("remarks"),
+                )
+
+                new_checklist_entry.defect.append(new_defect_entry)
+        
+        if new_checklist_entry:
+            db.session.add(new_checklist_entry)
+            db.session.commit()
+            return jsonify({
+                'message': f'{brand.capitalize()} Checklist submitted successfully!',
+                'id': str(new_checklist_entry.storageID)
+            }), 201
+        else:
+            return jsonify({"error": "No logic found for the specified brand."}), 400
     
     except Exception as e:
         db.session.rollback()

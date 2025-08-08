@@ -2,6 +2,7 @@ from flask import json, jsonify, request, current_app, g
 from app import db
 from app.models.renault_checklist_model import RenaultChecklistModel
 from app.models.manitou_checklist_model import ManitouChecklistModel
+from app.models.sdlg_checklist_model import SDLGChecklistModels
 from datetime import datetime, time, date
 from app.controllers.auth_controller import jwt_required
 import uuid
@@ -10,7 +11,7 @@ import uuid
 BRAND_MODELS = {
     'renault': RenaultChecklistModel,
     'manitou': ManitouChecklistModel,
-    # sdlg
+    'sdlg': SDLGChecklistModels,
 }
 
 @jwt_required
@@ -57,6 +58,12 @@ def submit_arrival_checklist():
                     return 1
                 elif status_lower == "bad":
                     return 2
+                
+        # helper to convert 'Yes'/'No' to Boolean (SDLG)
+        def convert_sdlg_status_to_boolean(status_str):
+            if isinstance(status_str, str):
+                return status_str.lower() == 'yes'
+            return bool(status_str)
         
         # Logic for Renault
         if brand.lower() == 'renault':
@@ -234,6 +241,30 @@ def submit_arrival_checklist():
             new_checklist_entry.op_manual = convert_manitou_status_to_tinyint(checklist_data.get('operatorsManual'))
             new_checklist_entry.instruction = convert_manitou_status_to_tinyint(checklist_data.get('instructionsForCustomer'))
             
+        # Logic for sdlg
+        elif brand.lower() == 'sdlg':
+            print("DEBUG: Processing SDLG brand data...")
+
+            # Mapping kolom informasi unit
+            new_checklist_entry.distributionName = data.get("distributionName")
+            new_checklist_entry.containerNo = data.get("containerNo")
+            new_checklist_entry.leadSealingNo = data.get("leadSealingNo")
+            new_checklist_entry.VIN = data.get("vin")
+            new_checklist_entry.dateOfCheck = data.get("dateOfCheck")
+            new_checklist_entry.inspectorSignature = data.get("inspectorSignature")
+            new_checklist_entry.unitLanded = datetime.fromisoformat(data.get("unitLanded")) if data.get("unitLanded") else None
+            new_checklist_entry.clearanceCustom = convert_sdlg_status_to_boolean(data.get("clearanceCustom"))
+            new_checklist_entry.unitStripping = datetime.fromisoformat(data.get("unitStripping")) if data.get("unitStripping") else None
+
+            # Mapping checklist items (sn1 - sn11)
+            for i in range(1, 12): # Loop dari 1 sampai 11
+                sn_key = f"sn{i}"
+                if sn_key in data:
+                    setattr(new_checklist_entry, sn_key, data.get(sn_key))
+            
+            # Mapping remarks
+            new_checklist_entry.remarks = data.get("remarks")
+
         db.session.add(new_checklist_entry)
         db.session.commit()
 

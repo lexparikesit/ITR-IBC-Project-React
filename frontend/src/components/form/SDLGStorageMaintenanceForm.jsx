@@ -1,6 +1,6 @@
 "use client";
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
     TextInput,
     Textarea,
@@ -14,6 +14,7 @@ import {
     Divider,
     Table,
     ActionIcon,
+    Select,
 } from '@mantine/core';
 import { DateInput } from '@mantine/dates';
 import { useForm } from '@mantine/form';
@@ -21,6 +22,10 @@ import { notifications } from '@mantine/notifications';
 import { IconPlus, IconTrash } from '@tabler/icons-react';
 
 export default function SDLGStorageMaintenanceForm() {
+    const [machineModelsData, setMachineModelsData] = useState([]);
+    const [inspectorData, setInspectorData] = useState([]);
+    const [supervisorData, setSupervisorData] = useState([]);
+    
     const form = useForm({
         initialValues: {
             machineModel: '',
@@ -43,16 +48,16 @@ export default function SDLGStorageMaintenanceForm() {
                 item13: false, item14: false, item15: false,
                 item16: false, item17: false, item18: false,
                 item19: false, item20: false, item21: false,
+                item22: false, item23: false,
             },
 
             // third part - record all observed condition
             observedConditions: [{ sn: 1, description: '', remarks: '' }],
 
-            // supervisor parts
-            inspectorSignature: '',
-            inspectorDate: null,
+            // supervisor part
+            signatureInspectorName: '',
+            signatureInspectorDate: null,
             supervisorName: '',
-            supervisorSignature: '',
             supervisorDate: null,
         },
 
@@ -63,10 +68,56 @@ export default function SDLGStorageMaintenanceForm() {
             vehicleArrivalDate: (value) => (value ? null: 'Vehicle Arrival Date is Required!'),
             inspectionDate: (value) => (value ? null: 'Inspection Date is Required!'),
             inspector: (value) => (value ? null: 'Inspector Name is Required!'),
+            signatureInspectorName: (value) => (value ? null : 'Inspector signature is required!'),
+            signatureInspectorDate: (value) => (value ? null : 'Inspector signature date is required!'),
             supervisorName: (value, values) => (values.supervisorDate ? (value ? null : 'Supervisor name is required if date is filled') : null),
             supervisorDate: (value, values) => (values.supervisorName ? (value ? null : 'Supervisor date is required if name is filled') : null),
         }
     });
+
+    useEffect(() => {
+        const fetchData = async () => {
+            try {
+                const response = await fetch('http://127.0.0.1:5000/api/unit-types/SDLG');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                const formattedModels = data
+                    .filter(item => item.value !== null && item.value !== undefined && item.label !== null && item.label !== undefined) // Filter berdasarkan 'value' dan 'label'
+                    .map(item => ({
+                        value: item.value,
+                        label: item.label
+                    }));
+                setMachineModelsData(formattedModels);
+            } catch (error) {
+                console.error("Failed to fetch machine models:", error);
+                notifications.show({
+                    title: "Error Loading Data",
+                    message: "Failed to load machine models. Please try again!",
+                    color: "red",
+                });
+            }
+
+            // Set dummy data for inspectors
+            const dummyInspectorData = [
+                { value: "tech1", label: "John Doe" },
+                { value: "tech2", label: "Jane Smith" },
+                { value: "tech3", label: "Peter Jones" }
+            ];
+            setInspectorData(dummyInspectorData);
+
+            // Set dummy data for approvers
+            const dummySupervisorData = [
+                { value: "app1", label: "Alice Brown" },
+                { value: "app2", label: "Bob White" },
+                { value: "app3", label: "John Green" }
+            ];
+            setSupervisorData(dummySupervisorData);
+        };
+
+        fetchData();
+    }, []);
 
     const inspectionItemsData = [
         "Routine inspection of surface/appearance, extent of paint damage, and rust prevention",
@@ -108,90 +159,168 @@ export default function SDLGStorageMaintenanceForm() {
         form.setFieldValue('observedConditions', form.values.observedConditions.filter((_, i) => i !== index));
     };
 
-    const handleSubmit = (values) => {
-        console.log("Form submitted with values:", values);
-        notifications.show({
-            title: 'Form Submitted Successfully',
-            message: 'Inspection and maintenance data has been successfully sent.',
-            color: 'green',
-        });
-
-        // api connection later
+    const formatDate = (date) => {
+        if (!date) return null;
+        const d = new Date(date);
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
     };
 
+    const handleSubmit = async (values) => { 
+        const token = localStorage.getItem('access_token');
+        console.log("DEBUG: Token from localStorage:", token);
+        
+        if (!token) {
+            notifications.show({
+                title: "Authentication Required",
+                message: "Please log in again. Authentication token is missing.",
+                color: "red",
+            });
+            return;
+        }
+        
+        console.log("Form submitted with values:", values);
+
+        const inspectionPayload = Object.entries(values.inspectionItems).reduce((acc, [key, value]) => {
+            const index = key.replace('item', '');
+            acc[`inspection${index}`] = value;
+            return acc;
+        }, {});
+
+        const testingPayload = Object.entries(values.testingItems).reduce((acc, [key, value]) => {
+            const index = key.replace('item', '');
+            acc[`testing${index}`] = value;
+            return acc;
+        }, {});
+
+        const payload = {
+            brand: 'SDLG',
+            model: values.machineModel,
+            vehicleNumber: values.vehicleNumber,
+            workingHour: values.workingHours,
+            inspector: values.inspector,
+
+            vehicleArrival: formatDate(values.vehicleArrivalDate),
+            inspectionDate: formatDate(values.inspectionDate),
+
+            ...inspectionPayload,
+            ...testingPayload,
+
+            signatureInspector: values.signatureInspectorName,
+            signatureInspectorDate: formatDate(values.signatureInspectorDate),
+            signatureSupervisor: values.supervisorName,
+            signatureSupervisorDate: formatDate(values.supervisorDate),
+            
+            observedConditions: values.observedConditions,
+        };
+
+        console.log("Payload sent to backend:", payload);
+
+        try {
+            const response = await fetch(`http://127.0.0.1:5000/api/storage-maintenance/sdlg/submit`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(payload),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || "Failed to submit SDLG Storage Maintenance Checklist");
+            }
+
+            const result = await response.json();
+            notifications.show({
+                title: "Submission Successful!",
+                message: result.message || "Form Submitted Successfully.",
+                color: "green",
+            })
+            form.reset();
+        
+        } catch (error) {
+            console.log('Error submitting form:', error);
+            notifications.show({
+                title: "Submission Error",
+                message: `Failed to submit form: ${error.message}`,
+                color: "red",
+            });
+        }
+    };
+        
     return (
         <Box maw="100%" mx="auto" px="md">
-            <Title order={1} ta="left" mt="md" mb="lg">
-                Storage Maintenance List
-            </Title>
+            <Title order={1} ta="left" mt="md" mb="lg">Storage Maintenance List</Title>
             <Paper p="md" shadow="xs">
-                <form onSubmit={form.onSubmit(handleSubmit)}>
+                <form onSubmit={form.onSubmit(handleSubmit, (validationError, values) => {
+                    console.error('Validation Errors:', validationError);
+                    notifications.show({
+                        title: "Validation Error",
+                        message: "Please fill in all required fields!",
+                        color: "red",
+                    });
+                })}>
                     <Box mb="xl">
                         <Title order={4} mb="md"> Vehicle Information </Title>
                         <Group grow mb="md">
-                            <TextInput
+                            <Select
                                 label="Machine Model"
-                                placeholder="Enter Machine Model"
+                                placeholder="Select a Machine Model"
+                                data={machineModelsData}
+                                searchable
+                                clearable
                                 {...form.getInputProps('machineModel')}
-                                onChange={(event) => {
-                                    form.setFieldValue('machineModel', event.currentTarget.value);
-                                    
-                                }}
                             />
                             <TextInput
                                 label="Vehicle Number"
-                                placeholder="Enter vehicle number"
+                                placeholder="Input Vehicle S/N"
                                 {...form.getInputProps('vehicleNumber')}
-                                onChange={(event) => {
-                                    form.setFieldValue('vehicleNumber', event.currentTarget.value);
-                                }}
                             />
                             <TextInput
                                 label="Working Hours"
-                                placeholder="Enter working hours"
+                                placeholder="Input Working Hours"
                                 {...form.getInputProps('workingHours')}
-                                onChange={(event) => {
-                                    form.setFieldValue('workingHours', event.currentTarget.value);
-                                }}
                             />
                         </Group>
                         <Group grow>
                             <DateInput
                                 label="Vehicle Arrival Date"
-                                placeholder="Select date"
-                                valueFormat="DD/MM/YYYY"
+                                placeholder="Select Date"
+                                valueFormat="DD-MM-YYYY"
                                 {...form.getInputProps('vehicleArrivalDate')}
-                                onChange={(value) => {
-                                    form.setFieldValue('vehicleArrivalDate', value);
-                                }}
                             />
                             <DateInput
                                 label="Inspection Date"
                                 placeholder="Select date"
-                                valueFormat="DD/MM/YYYY"
+                                valueFormat="DD-MM-YYYY"
                                 {...form.getInputProps('inspectionDate')}
-                                onChange={(value) => {
-                                    form.setFieldValue('inspectionDate', value);
-                                }}
                             />
-                            <TextInput
-                                label="Inspector"
-                                placeholder="Inspector name"
+                            <Select
+                                label="Inspector Name"
+                                placeholder="Select Inspector"
+                                clearable
+                                searchable
+                                data={inspectorData}
                                 {...form.getInputProps('inspector')}
-                                onChange={(event) => {
-                                    form.setFieldValue('inspector', event.currentTarget.value);
-                                }}
                             />
                         </Group>
-                        <Text size="xs" c="dimmed" mt="md">
-                            <Text component="span" fw={700}>Important:</Text> Please follow the safety instructions in the machine operation and maintenance manual. This inspection form is applicable for the maintenance of stock vehicles. For vehicles that have been in stock for more than 3 months, inspections should be conducted monthly according to this form.
-                        </Text>
                         <Text size="xs" c="dimmed" mt="xs">
-                            <ul style={{ listStyleType: 'disc', marginLeft: '20px' }}>
-                                <li>Regular maintenance of the machine during storage can prevent quality deterioration and appearance wear.</li>
-                                <li>If conditions are available, hydraulic-driven attachments should be stored in a dry environment.</li>
-                            </ul>
+                            <Text component="span" fw={700}>Important:</Text> 
+                            <Text component="span">Please follow the safety instructions in the machine operation and maintenance manual...</Text>
                         </Text>
+                        <Box size="xs" c="dimmed" mt="xs">
+                            <ul style={{ listStyleType: 'disc', marginLeft: '20px' }}>
+                                <li>
+                                    <Text size="xs" c="dimmed"> Regular maintenance of the machine during storage can prevent quality deterioration and appearance wear. </Text>
+                                </li>
+                                <li>
+                                    <Text size="xs" c="dimmed"> If conditions are available, hydraulic-driven attachments should be stored in a dry environment. </Text>
+                                </li>
+                            </ul>
+                        </Box>
                     </Box>
                     
                     <Divider my="xl" />
@@ -215,9 +344,6 @@ export default function SDLGStorageMaintenanceForm() {
                                             <Group justify='center'>
                                                 <Checkbox
                                                     {...form.getInputProps(`inspectionItems.item${index + 1}`, { type: 'checkbox' })}
-                                                    onChange={(event) => {
-                                                        form.setFieldValue(`inspectionItems.item${index + 1}`, event.currentTarget.checked);
-                                                    }}
                                                 />
                                             </Group>
                                         </Table.Td>
@@ -248,9 +374,6 @@ export default function SDLGStorageMaintenanceForm() {
                                             <Group justify='center'>
                                                 <Checkbox
                                                     {...form.getInputProps(`testingItems.item${index + 10}`, { type: 'checkbox' })}
-                                                    onChange={(event) => {
-                                                        form.setFieldValue(`testingItems.item${index + 10}`, event.currentTarget.checked);
-                                                    }}
                                                 />
                                             </Group>
                                         </Table.Td>
@@ -283,9 +406,6 @@ export default function SDLGStorageMaintenanceForm() {
                                                 autosize
                                                 minRows={1}
                                                 {...form.getInputProps(`observedConditions.${index}.description`)}
-                                                onChange={(event) => {
-                                                    form.setFieldValue(`observedConditions.${index}.description`, event.currentTarget.value);
-                                                }}
                                             />
                                         </Table.Td>
                                         <Table.Td>
@@ -294,9 +414,6 @@ export default function SDLGStorageMaintenanceForm() {
                                                 autosize
                                                 minRows={1}
                                                 {...form.getInputProps(`observedConditions.${index}.remarks`)}
-                                                onChange={(event) => {
-                                                    form.setFieldValue(`observedConditions.${index}.remarks`, event.currentTarget.value);
-                                                }}
                                             />
                                         </Table.Td>
                                         <Table.Td ta="center">
@@ -328,51 +445,43 @@ export default function SDLGStorageMaintenanceForm() {
                     <Box>
                         <Title order={4} mb="md">Signature</Title>
                         <Group grow mb="md">
-                            <TextInput
-                                label="Inspector"
-                                placeholder="Inspector Name"
-                                {...form.getInputProps('inspectorSignature')}
-                                onChange={(event) => {
-                                    form.setFieldValue('inspectorSignature', event.currentTarget.value);
-                                }}
+                            <Select
+                                label="Inspector Signature"
+                                placeholder="Select Inspector"
+                                clearable
+                                searchable
+                                data={inspectorData}
+                                {...form.getInputProps('signatureInspectorName')}
                             />
                             <DateInput
                                 label="Date"
-                                placeholder="Select date"
-                                valueFormat="DD/MM/YYYY"
-                                {...form.getInputProps('inspectorDate')}
-                                onChange={(value) => {
-                                    form.setFieldValue('inspectorDate', value);
-                                }}
+                                placeholder="Select Date"
+                                valueFormat="DD-MM-YYYY"
+                                {...form.getInputProps('signatureInspectorDate')}
                             />
                         </Group>
                         <Group grow>
-                            <TextInput
-                                label="Supervisor"
-                                placeholder="Supervisor Name"
+                            <Select
+                                label="Supervisor Signature"
+                                placeholder="Select Supervisor"
+                                clearable
+                                searchable
+                                data={supervisorData}
                                 {...form.getInputProps('supervisorName')}
-                                onChange={(event) => {
-                                    form.setFieldValue('supervisorName', event.currentTarget.value);
-                                }}
                             />
                             <DateInput
                                 label="Date"
                                 placeholder="Select date"
-                                valueFormat="DD/MM/YYYY"
+                                valueFormat="DD-MM-YYYY"
                                 {...form.getInputProps('supervisorDate')}
-                                onChange={(value) => {
-                                    form.setFieldValue('supervisorDate', value);
-                                }}
                             />
                         </Group>
                     </Box>
                     <Group justify="flex-end" mt="xl">
-                        <Button type="submit">
-                            Submit Form
-                        </Button>
+                        <Button type="submit">Submit</Button>
                     </Group>
                 </form>
             </Paper>
         </Box>
     );
-}
+};

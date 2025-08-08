@@ -3,7 +3,9 @@
 import {
     IconGauge,
     IconNotes,
-    IconTool
+    IconTool,
+    IconForms,
+    IconLogout
 } from '@tabler/icons-react';
 
 import { Code, Group, ScrollArea } from '@mantine/core';
@@ -24,7 +26,7 @@ const mockdata = [
         links: [
             { label: 'Manitou', link: '/dashboard/arrival-check/manitou' },
             { label: 'Renault Trucks', link: '/dashboard/arrival-check/renault-trucks' },
-            { label: 'SDLG', link: '/' },
+            { label: 'SDLG', link: '/dashboard/arrival-check/sdlg' },
         ],
     },
     {
@@ -37,6 +39,10 @@ const mockdata = [
         ],
     },
     { 
+        label: 'IBC Form', 
+        icon: IconForms,
+    },
+    { 
         label: 'Pre-Delivery Inspection', 
         icon: IconNotes,
         links: [
@@ -46,8 +52,15 @@ const mockdata = [
         ],
     },
     { 
-        label: 'IBC Form', 
+        label: 'Delivery Unit', 
         icon: IconNotes,
+        links: [
+            { label: 'Kalmar', link: '/' },
+            { label: 'Manitou', link: '/' },
+            { label: 'Mantsinen', link: '/' },
+            { label: 'Renault Trucks', link: '/' },
+            { label: 'SDLG', link: '/' },
+        ],
     },
     {
         label: 'Settings',
@@ -55,7 +68,7 @@ const mockdata = [
     },
     {
         label: 'Log Out',
-        icon: IconTool,
+        icon: IconLogout,
     },
 ];
 
