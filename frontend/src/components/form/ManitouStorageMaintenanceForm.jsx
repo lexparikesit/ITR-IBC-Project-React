@@ -153,7 +153,7 @@ export function ManitouStorageMaintenanceForm() {
             ...createChecklistValidation(),
         },
     });
-
+    
     // useEffect to fetch models from backend
     useEffect(() => {
         const fetchModels = async () => {

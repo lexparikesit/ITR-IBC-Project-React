@@ -18,6 +18,7 @@ import {
 } from '@mantine/core';
 import { DateInput } from '@mantine/dates';
 import { useForm } from '@mantine/form';
+import { IconCalendar } from "@tabler/icons-react";
 import { IconCircleCheck, IconCircleDashed } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 
@@ -279,6 +280,7 @@ export function ArrivingPackingQuality() {
                                 placeholder="Select Arrival Date"
                                 valueFormat="DD-MM-YYYY"
                                 {...form.getInputProps('dateOfCheck')}
+                                rightSection={<IconCalendar size={16} />}
                             />
                             <Select
                                 mt="md"
@@ -301,6 +303,7 @@ export function ArrivingPackingQuality() {
                                 placeholder="Select Unit Landed Date"
                                 valueFormat="DD-MM-YYYY"
                                 {...form.getInputProps('unitLanded')}
+                                rightSection={<IconCalendar size={16} />}
                             />
                         </Box>
                         <Box style={{ flex: 1, minWidth: '300px' }}>
@@ -317,6 +320,7 @@ export function ArrivingPackingQuality() {
                                 placeholder="Select Unit Stripping Date"
                                 valueFormat="DD-MM-YYYY"
                                 {...form.getInputProps('unitStripping')}
+                                rightSection={<IconCalendar size={16} />}
                             />
                         </Box>
                     </Flex>

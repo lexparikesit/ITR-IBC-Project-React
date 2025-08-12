@@ -41,6 +41,7 @@ const mockdata = [
     { 
         label: 'IBC Form', 
         icon: IconForms,
+        link: '/dashboard/ibc'
     },
     { 
         label: 'Pre-Delivery Inspection', 

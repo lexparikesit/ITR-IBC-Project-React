@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, app
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from flask_mail import Mail
@@ -70,5 +70,14 @@ def create_app():
 
     from app.routes.maintenance_check_routes import maintenance_api_bp
     app.register_blueprint(maintenance_api_bp)
+
+    from app.routes.customer_routes import customer_bp
+    app.register_blueprint(customer_bp)
+
+    from app.routes.accessories_routes import mst_accessories_bp
+    app.register_blueprint(mst_accessories_bp)
+
+    from app.routes.package_routes import mst_packages_bp
+    app.register_blueprint(mst_packages_bp)
     
     return app

@@ -19,6 +19,7 @@ import {
 import { DateInput } from '@mantine/dates';
 import { useForm } from '@mantine/form';
 import { notifications } from '@mantine/notifications';
+import { IconCalendar } from "@tabler/icons-react";
 import { IconPlus, IconTrash } from '@tabler/icons-react';
 
 export default function SDLGStorageMaintenanceForm() {
@@ -291,12 +292,14 @@ export default function SDLGStorageMaintenanceForm() {
                                 placeholder="Select Date"
                                 valueFormat="DD-MM-YYYY"
                                 {...form.getInputProps('vehicleArrivalDate')}
+                                rightSection={<IconCalendar size={16} />}
                             />
                             <DateInput
                                 label="Inspection Date"
                                 placeholder="Select date"
                                 valueFormat="DD-MM-YYYY"
                                 {...form.getInputProps('inspectionDate')}
+                                rightSection={<IconCalendar size={16} />}
                             />
                             <Select
                                 label="Inspector Name"
@@ -458,6 +461,7 @@ export default function SDLGStorageMaintenanceForm() {
                                 placeholder="Select Date"
                                 valueFormat="DD-MM-YYYY"
                                 {...form.getInputProps('signatureInspectorDate')}
+                                rightSection={<IconCalendar size={16} />}
                             />
                         </Group>
                         <Group grow>
@@ -474,6 +478,7 @@ export default function SDLGStorageMaintenanceForm() {
                                 placeholder="Select date"
                                 valueFormat="DD-MM-YYYY"
                                 {...form.getInputProps('supervisorDate')}
+                                rightSection={<IconCalendar size={16} />}
                             />
                         </Group>
                     </Box>
