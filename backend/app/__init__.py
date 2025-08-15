@@ -80,4 +80,7 @@ def create_app():
     from app.routes.package_routes import mst_packages_bp
     app.register_blueprint(mst_packages_bp)
     
+    from app.routes.ibc_routes import ibc_bp 
+    app.register_blueprint(ibc_bp)
+
     return app
