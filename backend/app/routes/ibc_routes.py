@@ -1,16 +1,13 @@
-from flask import Blueprint
-from app.controllers.ibc_controller import generate_ibc_number_and_save_header, update_ibc_form
+from flask import Blueprint, request, jsonify
+from app.controllers.ibc_controller import create_ibc_form
 
 ibc_bp = Blueprint('ibc', __name__, url_prefix='/api/ibc')
 
-@ibc_bp.route('/generate-ibc-number', methods=['POST'])
-def generate_ibc_number_route():
-    """Route to generate an IBC number and save header data."""
-    
-    return generate_ibc_number_and_save_header()
+@ibc_bp.route('/create-ibc-form', methods=['POST', 'OPTIONS'])
+def create_ibc_form_route():
+    """ Route to store ALL IBC form data (Header, Details, Accessories, Packages). Also handles preflight OPTIONS requests for CORS. """
 
-@ibc_bp.route('/update-ibc-form', methods=['PUT'])
-def update_ibc_form_route():
-    """Route to update the IBC form data (details, accessories, packages)."""
+    if request.method == 'OPTIONS':
+        return jsonify({}), 204
     
-    return update_ibc_form()
+    return create_ibc_form()

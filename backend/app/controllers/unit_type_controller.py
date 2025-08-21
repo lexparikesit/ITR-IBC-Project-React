@@ -28,6 +28,7 @@ def get_unit_types_by_brand(brand_id):
                 print(f"Warning: MstUnitType instance missing 'TypeID' or 'Type' attribute: {unit_type}")
         
         return jsonify(formatted_unit_types), 200
+    
     except Exception as e:
         # for debugging purposes, log the error
         print(f"Error fetching unit types for brand {brand_id}: {str(e)}")

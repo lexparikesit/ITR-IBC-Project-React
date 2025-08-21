@@ -55,7 +55,7 @@ export function MultiStepIbcForm() {
     const [submittedDetail, setSubmittedDetail] = useState(null);
 
     const [requestors, setRequestors] = useState([]);
-    const [poPJBs, setPoPJBs] = useState([]);
+    const [WoNumber, setWoNumber] = useState([]);
     const [customers, setCustomers] = useState([]);
     const [brands, setBrands] = useState([]);
     const [UnitTypes, setUnitTypes] = useState([]);
@@ -94,6 +94,28 @@ export function MultiStepIbcForm() {
     });
 
     useEffect(() => {
+        const fetchWONumber = async () => {
+            try {
+                const response = await fetch(`http://127.0.0.1:5000/api/work-orders`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                const formattedWONumbers = data.map(item => ({
+                    value: item.WONumber,
+                    label: item.WONumber,
+                }));
+                setWoNumber(formattedWONumbers);
+            } catch (error) {
+                notifications.show({
+                    title: "Error Loading Data",
+                    message: "Failed to load Work Orders. Please try again!",
+                    color: "red",
+                });
+                setWoNumber([]);
+            }
+        };
+
         const fetchCustomers = async () => {
             try {
                 const response = await fetch(`http://127.0.0.1:5000/api/customers`);
@@ -205,16 +227,11 @@ export function MultiStepIbcForm() {
         ];
         setRequestors(dummyRequestors);
 
-        const dummyPoPJBs = [
-            { value: 'PO-12345', label: 'PO-12345' },
-            { value: 'PO-67890', label: 'PO-67890' },
-        ];
-        setPoPJBs(dummyPoPJBs);
-
         fetchCustomers();
         fetchBrands();
         fetchPackageTypes();
         fetchAccessoryTypes();
+        fetchWONumber();
     }, []);
 
     useEffect(() => {
@@ -244,7 +261,34 @@ export function MultiStepIbcForm() {
                     setUnitTypes([]);
                 }
             };
+
+            const fetchWONumber = async () => {
+                try {
+                    const response = await fetch(`http://127.0.0.1:5000/api/work-orders?brandId=${brandID}`);
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    const data = await response.json();
+                    const formattedWONumbers = data.map(item => ({
+                        value: item.WONumber,
+                        label: item.WONumber,
+                    }));
+                    setWoNumber(formattedWONumbers);
+                } catch (error) {
+                    console.error("Failed to Fetch Work Orders:", error);
+                    notifications.show({
+                        title: "Error Loading Data",
+                        message: "Failed to load Work Orders. Please try again!",
+                        color: "red",
+                    });
+                    setWoNumber([]);
+                }
+            };
             fetchUnitTypes();
+            fetchWONumber();
+        } else {
+            setUnitTypes([]);
+            setWoNumber([]);
         }
     }, [headerForm.values.Brand_ID]);
 
@@ -253,76 +297,51 @@ export function MultiStepIbcForm() {
         headerForm.setFieldValue('UnitType', null); 
     }
 
-    const handleHeaderSubmit = async (values) => {
-        try {
-            const token = localStorage.getItem("access_token");
-            
-            if (!token) {
+    const handleHeaderSubmit = (values) => {
+        console.log("Nilai IBC_date sebelum konversi:", values.IBC_date);
+        
+        let ibcDateFormatted = null;
+        if (values.IBC_date) {
+            try {
+                let dateObj;
+                if (values.IBC_date instanceof Date) {
+                    dateObj = values.IBC_date;
+                } else if (typeof values.IBC_date === 'string') {
+                    dateObj = new Date(values.IBC_date);
+                }
+                if (dateObj && !isNaN(dateObj.getTime())) {
+                    ibcDateFormatted = dateObj.toISOString().split('T')[0];
+                }
+            } catch (e) {
+                console.error("Error parsing IBC_date:", e, values.IBC_date);
                 notifications.show({
-                    title: "Authentication Error",
-                    message: "Please log in again. Authentication token is missing.",
+                    title: "Input Error",
+                    message: "Invalid IBC Date format. Please select a valid date.",
                     color: "red",
                 });
                 return;
             }
+        }
 
-            const formattedHeader = {
-                ...values,
-                IBC_date:
-                values.IBC_date instanceof Date
-                    ? values.IBC_date.toISOString().split("T")[0]
-                    : null,
-            };
-
-            const payload = {
-                headerForm: formattedHeader,
-            };
-
-            const response = await fetch("http://127.0.0.1:5000/api/ibc/generate-ibc-number", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${token}`,
-                },
-                body: JSON.stringify(payload),
-                }
-            );
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
-            }
-
-            const result = await response.json();
-            const submittedHeaderWithNumber = {
-                ...formattedHeader,
-                IBC_No: result.ibc_number,
-            };
-
-            setSubmittedHeader(submittedHeaderWithNumber);
-
-            const initialVins = Array.from({ length: values.QTY }, (_, index) => ({ VIN: '' }));
-            detailForm.setFieldValue('vins', initialVins);
-
-            notifications.show({
-                title: "Header Saved",
-                message: `Header form has been saved. IBC Number: ${result.ibc_number}. Please continue to the next step.`,
-                color: "green",
-            });
-            setStep(2);
-            
-        } catch (error) {
-            console.error("Failed to submit header form:", error);
-            notifications.show({
-                title: "Submission Failed",
-                message:
-                error.message || "An unexpected error occurred while saving the header. Please try again.",
-                color: "red",
-            });
-        } 
+        const formattedHeader = {
+            ...values,
+            IBC_date: ibcDateFormatted,
+        };
+        
+        setSubmittedHeader(formattedHeader);
+        
+        const initialVins = Array.from({ length: values.QTY }, (_, index) => ({ VIN: '' }));
+        detailForm.setFieldValue('vins', initialVins);
+        notifications.show({
+            title: "Header Saved",
+            message: "Header form has been saved. Please continue to the next step.",
+            color: "green",
+        });
+        setStep(2);
     };
 
     const handleDetailSubmit = (values) => {
+        console.log('Fungsi handleDetailSubmit dipanggil.');
         const isValid = detailForm.validate();
         if (!isValid) {
             notifications.show({
@@ -401,7 +420,7 @@ export function MultiStepIbcForm() {
                 return;
             }
 
-            if (!submittedHeader || !submittedHeader.IBC_No || !submittedDetail) {
+            if (!submittedHeader || !submittedDetail) {
                 notifications.show({
                     title: "Error",
                     message: "Please complete the previous steps before final submission.",
@@ -427,7 +446,6 @@ export function MultiStepIbcForm() {
             }
 
             const finalPayload = {
-                IBC_No: submittedHeader.IBC_No,
                 headerForm: submittedHeader,
                 detailForm: submittedDetail,
                 accessoriesForm: {
@@ -443,11 +461,11 @@ export function MultiStepIbcForm() {
                     }))
                 }
             };
-
+            
             console.log("Final Payload to Backend: ", finalPayload);
 
-            const response = await fetch("http://127.0.0.1:5000/api/ibc/update-ibc-form", {
-                method: "PUT",
+            const response = await fetch("http://127.0.0.1:5000/api/ibc/create-ibc-form", {
+                method: "POST",
                 headers: {
                     "Content-Type": "application/json",
                     "Authorization": `Bearer ${token}`
@@ -640,12 +658,9 @@ export function MultiStepIbcForm() {
                     />
                 </Grid.Col>
                 <Grid.Col span={{ base: 12, md: 6 }}>
-                    <Select
-                        label="PO/PJB"
-                        placeholder="Select PO PJB"
-                        searchable
-                        clearable
-                        data={poPJBs}
+                    <TextInput
+                        label="PO/ PJB"
+                        placeholder="Input Your PO/ PJB"
                         {...headerForm.getInputProps("PO_PJB")}
                         disabled={step > 1}
                     />
@@ -691,10 +706,12 @@ export function MultiStepIbcForm() {
                         </Grid.Col>
                         {vinFields}
                         <Grid.Col span={{ base: 12, md: 6 }}>
-                            <TextInput
-                                label="Work Order"
-                                {...detailForm.getInputProps("WO")}
-                                disabled={step > 2}
+                            <Select
+                                label="WO Number"
+                                placeholder="Select WO Number"
+                                searchable
+                                data={WoNumber}
+                                {...detailForm.getInputProps('WO')}
                             />
                         </Grid.Col>
                         <Grid.Col span={{ base: 12, md: 6 }}>

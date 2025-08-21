@@ -83,4 +83,7 @@ def create_app():
     from app.routes.ibc_routes import ibc_bp 
     app.register_blueprint(ibc_bp)
 
+    from app.routes.wo_number_routes import wo_number_bp
+    app.register_blueprint(wo_number_bp)
+
     return app

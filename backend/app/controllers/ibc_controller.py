@@ -35,114 +35,82 @@ def generate_ibc_number():
     current_year = current_date.strftime('%Y')
     current_month_roman = to_roman(current_date.month)
 
-    # get the last IBC number from DB
     last_ibc = IBC_Table.query.filter(
-        IBC_Table.IBC_No.like(f"%/IBC/ITR/{current_month_roman}/{current_year}")
-    ).order_by(
-        IBC_Table.IBC_No.desc()
-    ).first()
+        db.extract('year', IBC_Table.createdon) == current_date.year,
+        db.extract('month', IBC_Table.createdon) == current_date.month
+    ).order_by(db.desc(IBC_Table.IBC_No)).first()
 
-    if last_ibc:
-        # if any, get last number before ('/') then adding +1
-        last_number = int(last_ibc.IBC_No.split('/')[0])
-        new_number = last_number + 1
-    else:
-        new_number = 1
-    
-    # Format the sequence number into 4 digits (e.g. 79 -> 0079)
-    new_number_str = f'{new_number:04d}'
+    last_sequence_number = 0
+    if last_ibc and last_ibc.IBC_No:
+        try:
+            last_number_str = last_ibc.IBC_No.split('/')[0]
+            if last_number_str.isdigit():
+                last_sequence_number = int(last_number_str)
+        except (ValueError, IndexError):
+            last_sequence_number = 0 
+            print(f"Warning: Could not parse sequence number from IBC_No: {last_ibc.IBC_No}")
 
-    # concatenate the number
-    ibc_number = f'{new_number_str}/IBC/ITR/{current_month_roman}/{current_year}'
+    new_sequence_number = last_sequence_number + 1
+    new_sequence_str = f'{new_sequence_number:04d}'
 
+    ibc_number = f'{new_sequence_str}/IBC/ITR/{current_month_roman}/{current_year}'
     return ibc_number
 
-@jwt_required
-def generate_ibc_number_and_save_header():
-
+@jwt_required 
+def create_ibc_form():
+    """Controller function to handle the full IBC form submission."""
+    
     try:
         data = request.json
         if not data:
-            return jsonify({"error": "invalid JSON data"}), 400
-        
-        header_data = data.get('headerForm', {})
+            return jsonify({"error": "Invalid JSON data"}), 400
 
-        if not header_data:
-            return jsonify({"error": "Header data is required"}), 400
+        header_form_data = data.get('headerForm', {})
+        detail_form_data = data.get('detailForm', {})
+        accessories_data = data.get('accessoriesForm', {}).get('accessories', [])
+        packages_data = data.get('packagesForm', {}).get('packages', [])
 
+        if not header_form_data or not detail_form_data:
+            return jsonify({"error": "Header and Detail form data are required"}), 400
+
+        # --- Processing of data IBC_Table (Header) ---
         ibc_number = generate_ibc_number()
+
+        ibc_date_str = header_form_data.get('IBC_date')
+        ibc_date_val = datetime.strptime(ibc_date_str, '%Y-%m-%d') if ibc_date_str else None
 
         new_ibc_table = IBC_Table(
             IBC_ID = str(uuid.uuid4()),
             IBC_No = ibc_number,
-            Requestor = header_data.get('Requestor'),
-            IBC_date = datetime.strptime(header_data.get('IBC_date'), '%Y-%m-%d') if header_data.get('IBC_date') else datetime.now(),
-            PO_PJB = header_data.get('PO_PJB'),
-            Cust_ID = header_data.get('Cust_ID'),
-            Brand_ID = header_data.get('Brand_ID'),
-            UnitType = header_data.get('UnitType'),
-            QTY = header_data.get('QTY'),
-            SiteOperation = header_data.get('SiteOperation')
+            Requestor = header_form_data.get('Requestor'),
+            IBC_date = ibc_date_val,
+            PO_PJB = header_form_data.get('PO_PJB'),
+            Cust_ID = header_form_data.get('Cust_ID'),
+            Brand_ID = header_form_data.get('Brand_ID'),
+            UnitType = header_form_data.get('UnitType'),
+            QTY = header_form_data.get('QTY'),
+            SiteOperation = header_form_data.get('SiteOperation'),
+            
+            createdby = g.user_name,
+            createdon = datetime.utcnow()
         )
-
-        new_ibc_table.createdby = g.user_name
-        new_ibc_table.createdon = datetime.utcnow()
-
         db.session.add(new_ibc_table)
-        db.session.commit()
 
-        return jsonify({
-            'message': 'IBC number generated and header saved successfully',
-            'ibc_number': ibc_number
-        }), 201
-
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'error': str(e)}), 500
-
-@jwt_required
-def update_ibc_form():
-    
-    try:
-        data = request.json
-        
-        if not data:
-            return jsonify({"error": "Invalid JSON data"}), 400
-
-        ibc_number = data.get('IBC_No') 
-        
-        if not ibc_number:
-            return jsonify({"error": "IBC Number is required for updating the form"}), 400
-
-        ibc_table = IBC_Table.query.filter_by(IBC_No=ibc_number).first()
-        
-        if not ibc_table:
-            return jsonify({"error": "IBC with the given number not found"}), 404
-        
-        detail_form_data = data.get('detailForm', {}) 
-        vins_data = detail_form_data.get('vins', []) 
-
-        IBC_Trans.query.filter_by(IBC_No=ibc_number).delete()
-        
+        # --- Processing of data IBC_Trans (Detail) ---
         wo_val = detail_form_data.get('WO')
         attachment_type_val = detail_form_data.get('AttachmentType')
         attachment_supplier_val = detail_form_data.get('AttachmentSupplier')
         delivery_address_val = detail_form_data.get('DeliveryAddress')
         delivery_cust_pic_val = detail_form_data.get('DeliveryCustPIC')
-        
-        delivery_plan_str = detail_form_data.get('DeliveryPlan')
-        delivery_plan_val = None
-
-        if delivery_plan_str:
-            
-            try:
-                date_only_str = delivery_plan_str.split('T')[0]
-                delivery_plan_val = datetime.strptime(date_only_str, '%Y-%m-%d')
-            except Exception as e:
-                print(f"Error converting DeliveryPlan date string: {e} for value: {delivery_plan_str}")
-                return jsonify({'error': 'Invalid date format for Delivery Plan'}), 400
-
         remarks_val = detail_form_data.get('Remarks')
+
+        delivery_plan_str = detail_form_data.get('DeliveryPlan')
+        delivery_plan_val = datetime.strptime(delivery_plan_str, '%Y-%m-%d') if delivery_plan_str else None
+        
+        vins_data = detail_form_data.get('vins', [])
+
+        if not vins_data:
+            return jsonify({'error': 'VIN data is required in detail form'}), 400
 
         for vin_entry in vins_data:
             if not vin_entry.get('VIN'):
@@ -162,10 +130,7 @@ def update_ibc_form():
             )
             db.session.add(new_ibc_trans)
 
-        accessories_data = data.get('accessoriesForm', {}).get('accessories', [])
-        
-        IBC_Accessories.query.filter_by(IBC_No=ibc_number).delete()
-
+        # --- Processing of data IBC_Accessories ---
         for acc_entry in accessories_data:
             if not acc_entry.get('AccessoriesName'):
                 return jsonify({'error': 'Accessories name is required'}), 400
@@ -178,10 +143,7 @@ def update_ibc_form():
             )
             db.session.add(new_ibc_acc)
         
-        packages_data = data.get('packagesForm', {}).get('packages', []) 
-        
-        IBC_Packages.query.filter_by(IBC_No=ibc_number).delete()
-
+        # --- Processing of data IBC_Packages ---
         for pkg_entry in packages_data:
             if not pkg_entry.get('PackagesType'):
                 return jsonify({'error': 'Package type is required'}), 400
@@ -196,8 +158,9 @@ def update_ibc_form():
         
         db.session.commit()
 
-        return jsonify({'message': 'Formulir IBC berhasil diperbarui.'}), 200
+        return jsonify({'message': 'Formulir IBC berhasil dibuat.', 'IBC_No': ibc_number}), 201
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({'error': str(e)}), 500
+        print(f"Error creating IBC form: {str(e)}")
+        return jsonify({'error': f'Internal server error: {str(e)}'}), 500
