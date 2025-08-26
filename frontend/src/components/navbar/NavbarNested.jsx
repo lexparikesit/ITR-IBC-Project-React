@@ -47,9 +47,9 @@ const mockdata = [
         label: 'Pre-Delivery Inspection', 
         icon: IconNotes,
         links: [
-            { label: 'Manitou', link: '/' },
-            { label: 'Renault Trucks', link: '/' },
-            { label: 'SDLG', link: '/' },
+            { label: 'Manitou', link: '/dashboard/pre-delivery/manitou' },
+            { label: 'Renault Trucks', link: '/dashboard/pre-delivery/renault-trucks' },
+            { label: 'SDLG', link: '/dashboard/pre-delivery/sdlg' },
         ],
     },
     { 

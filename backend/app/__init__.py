@@ -86,4 +86,7 @@ def create_app():
     from app.routes.wo_number_routes import wo_number_bp
     app.register_blueprint(wo_number_bp)
 
+    from app.routes.pdi_check_routes import pdi_bp
+    app.register_blueprint(pdi_bp)
+
     return app

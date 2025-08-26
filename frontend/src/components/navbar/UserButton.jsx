@@ -20,7 +20,6 @@ export function UserButton({ user }) {
 				<Text size="sm" fw={500} c="black">
 					{user?.username || "Guest"}
 				</Text>{" "}
-				{/* Teks gelap agar terlihat di header putih */}
 				<Text size="xs" c="dimmed">
 					{user?.email || "guest@example.com"}
 				</Text>

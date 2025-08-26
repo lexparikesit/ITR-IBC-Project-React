@@ -30,7 +30,6 @@ export function LinksGroup({ label, icon: Icon, initiallyOpened, links, link }) 
       />
   ));
 
-  // Jika menu memiliki sub-menu (Dropdown)
   if (hasLinks) {
     return (
       <>
@@ -62,7 +61,6 @@ export function LinksGroup({ label, icon: Icon, initiallyOpened, links, link }) 
     );
   }
 
-  // Jika menu adalah link langsung
   if (link) {
     return (
       <MantineNavLink

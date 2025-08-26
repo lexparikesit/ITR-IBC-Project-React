@@ -83,6 +83,10 @@ export default function DashboardLayout({ children }) {
             return `Maintenance List - ${capitalizedSegment}`
         } else if (path.startsWith('/dashboard/ibc')) {
             return "Indotraktor Business Case"
+        } else if (path.startsWith('/dashboard/pre-delivery/')) {
+            const segment = path.split('/').pop()
+            const capitalizedSegment = segment.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+            return `Pre-Delivery - ${capitalizedSegment}`
         }
         // to input another logic below this section
 

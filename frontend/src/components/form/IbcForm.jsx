@@ -710,6 +710,7 @@ export function MultiStepIbcForm() {
                                 label="WO Number"
                                 placeholder="Select WO Number"
                                 searchable
+                                clearable
                                 data={WoNumber}
                                 {...detailForm.getInputProps('WO')}
                             />

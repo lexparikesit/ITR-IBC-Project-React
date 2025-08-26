@@ -20,10 +20,17 @@ def get_all_customers_controller():
 
         customers = get_customers(connection_string)
 
-        if not customers:
+        unique_customers = {}
+        for cust in customers:
+            if cust['CustomerID'] not in unique_customers:
+                unique_customers[cust['CustomerID']] = cust
+
+        final_customers = list(unique_customers.values())
+
+        if not final_customers:
             return {"error": "Failed to retrieve customer data"}, 500
         
-        return customers, 200
+        return final_customers, 200
     
     except Exception as e:
         print(f"Error in controllers/customer_controller.py: {e}")
