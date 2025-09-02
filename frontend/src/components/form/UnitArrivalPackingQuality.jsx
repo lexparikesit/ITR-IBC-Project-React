@@ -24,55 +24,62 @@ import { notifications } from '@mantine/notifications';
 
 export function ArrivingPackingQuality() {
     const theme = useMantineTheme();
-    const [inspectorOptions, setInspectorOptions] = useState([]);
+    const [technicians, setTechnicians] = useState([]);
+    const [approvers, setApprovers] = useState([]);
+    const [woNumbers, setWoNumbers] = useState([]);
     
     useEffect(() => {
-        const fetchModels = async () => {
-            // set technician
-            // dummy models
-            const dummyInspector = [
-                { value: "tech1", label: "John Doe" },
-                { value: "tech2", label: "Jane Smith" },
-                { value: "tech3", label: "Peter Jones" }
-            ];
-            setInspectorOptions(dummyInspector);
+        const fetchData = async () => {
+            try {
+                // wo Number API
+				const woResponse = await fetch(`http://127.0.0.1:5000/api/work-orders`);
+				if (!woResponse.ok) throw new Error(`HTTP error! status: ${woResponse.status}`);
+				const woData = await woResponse.json();
+				const formattedWoData = woData.map(wo => ({ 
+					value: wo.WONumber, 
+					label: wo.WONumber 
+				}));
+				setWoNumbers(formattedWoData);
 
-            // later with API
-            /* try {
-                const response = await fetch('http://127.0.0.1:5000/api/technicians');
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                const data = await response.json();
-                const formattedTechnicians = data
-                    .filter(item => item.value !== null && item.value !== undefined && item.label !== null && item.label !== undefined)
-                    .map(item => ({
-                        value: item.value,
-                        label: item.label
-                    }));
-                setTechniciansData(formattedTechnicians);
+                // dummy Technicians API
+                const dummyTechniciansData = [
+                    { value: "tech1", label: "John Doe" },
+                    { value: "tech2", label: "Jane Smith" },
+                    { value: "tech3", label: "Peter Jones" }
+                ];
+                setTechnicians(dummyTechniciansData);
+
+                // dummy Approvers API
+                const dummyApproverData = [
+                    { value: "app1", label: "Alice Brown" },
+                    { value: "app2", label: "Bob White" },
+                    { value: "app3", label: "John Green" }
+                ];
+                setApprovers(dummyApproverData);
+
             } catch (error) {
-                console.error("Failed to fetch technicians:", error);
+                console.error("Failed to fetch models:", error);
                 notifications.show({
                     title: "Error Loading Data",
-                    message: "Failed to load technicians. Please try again!",
+                    message: "Failed to load models. Please try again!",
                     color: "red",
                 });
-                setTechniciansData([]);
-            } */
+            }
         };
-
-        fetchModels();
+        fetchData();
     }, []);
 
     const form = useForm({
         initialValues: {
+            // unit info
+            woNumber: null,
             distributionName: '',
             containerNo: '',
             leadSealingNo: '',
             vin: '',
             dateOfCheck: '',
-            inspectorSignature: '',
+            inspectorSignature: null,
+            approvers: null,
 
             // importation
             unitLanded: null,
@@ -95,12 +102,14 @@ export function ArrivingPackingQuality() {
             remarks: '',
         },
         validate: {
+            woNumber: (value) => (value ? null : 'Work Order Number is Required!'),
             distributionName: (value) => (value ? null : 'Distribution Name is Required!'),
             containerNo: (value) => (value ? null : 'Container Number is Required!'),
             leadSealingNo: (value) => (value ? null : 'Lead Sealing Number is Required!'),
             vin: (value) => (value ? null : 'Machine S/N is Required!'),
             dateOfCheck: (value) => (value ? null : "Date of Check is Required!"),
             inspectorSignature: (value) => (value ? null : 'Inpsector Signature is Required!'),
+            approvers: (value) => (value ? null : 'Approver is Required!'),
             unitLanded: (value) => (value ? null : 'Unit Landed Date is Required!'),
             unitStripping: (value) => (value ? null : 'Unit Stripping Date is Required!'),
         }
@@ -222,8 +231,6 @@ export function ArrivingPackingQuality() {
             })
             
             form.reset();
-            form.setFieldValue('inspectorSignature', '');
-            form.setFieldValue('clearanceCustom', '');
 
         } catch (error) {
             console.log('Error submitting form:', error);
@@ -251,7 +258,17 @@ export function ArrivingPackingQuality() {
                     <Title order={3} mb="md" style={{ color: '#000000 !important' }}> Unit Information </Title>
                     <Flex direction={{ base: 'column', md: 'row' }} justify="space-between" wrap="wrap" gap="md">
                         <Box style={{ flex: 1, minWidth: '300px' }}>
+                            <Select
+                                mt="md"
+                                label="WO Number"
+                                placeholder="Select WO Number"
+                                clearable
+                                searchable
+                                data={woNumbers}
+                                {...form.getInputProps('woNumber')}
+                            />
                             <TextInput
+                                mt="md"
                                 label='Distribution Name'
                                 placeholder='Input Distribution Name'
                                 {...form.getInputProps('distributionName')}
@@ -288,8 +305,17 @@ export function ArrivingPackingQuality() {
                                 placeholder="Select Inspector Signature"
                                 clearable
                                 searchable
-                                data={inspectorOptions}
+                                data={technicians}
                                 {...form.getInputProps('inspectorSignature')}
+                            />
+                            <Select
+                                mt="md"
+                                label="Approver Signature"
+                                placeholder="Select Approver"
+                                clearable
+                                searchable
+                                data={approvers}
+                                {...form.getInputProps('approver')}
                             />
                         </Box>
                     </Flex>

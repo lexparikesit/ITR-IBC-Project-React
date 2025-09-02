@@ -104,12 +104,14 @@ export function UnitArrivalChecklistForm() {
 	const [unitModels, setUnitModels] = useState([]);
 	const [technicians, setTechnicians] = useState([]);
 	const [approvers, setApprovers] = useState([]);
+	const [woNumbers, setWoNumbers] = useState([]);
 	const currentChecklistData = CHECKLIST_DATA_RENAULT;
 
 	const form = useForm({
 		initialValues: (() => {
 			const initial = {
 				brand: "renault",
+				woNumber: null,
 				typeModel: null,
 				vin: "",
 				noChassis: "",
@@ -130,7 +132,8 @@ export function UnitArrivalChecklistForm() {
 			return initial;
 		})(),
 		validate: {
-			typeModel: (value) => (value ? null : "Type/Model is Required!"),
+			typeModel: (value) => (value ? null : "Type/ Model is Required!"),
+			woNumber: (value) => (value ? null : "WO Number is Required!"),
 			vin: (value) => (value ? null : "VIN is Required!"),
 			noChassis: (value) => (value ? null : "No. Chassis is Required!"),
 			noEngine: (value) => (value ? null : "No. Engine is Required!"),
@@ -151,85 +154,49 @@ export function UnitArrivalChecklistForm() {
 	});
 
 	useEffect(() => {
-        console.log("DEBUG: form.values.dateOfCheck changed:", form.values.dateOfCheck);
-        console.log("DEBUG: Is it a Date object?", form.values.dateOfCheck instanceof Date);
-        console.log("DEBUG: Is it NaN?", isNaN(form.values.dateOfCheck));
-    }, [form.values.dateOfCheck]);
-
-	// effect to load data model from API
-	useEffect(() => {
-		const fetchDropdownData = async () => {
-			// data model units
+		const fetchData = async () => {
 			try {
-				const modelResponse = await fetch("http://127.0.0.1:5000/api/unit-types/RT");
-				if (!modelResponse.ok) {
-					throw new Error(`HTTP error! status: ${modelResponse.status}`);
-				}
+				// model/ type RT API
+				const modelResponse = await fetch(`http://127.0.0.1:5000/api/unit-types/RT`);
+				if (!modelResponse.ok) throw new Error(`HTTP error! status: ${modelResponse.status}`);
 				const modelData = await modelResponse.json();
 				setUnitModels(modelData);
+
+				// wo Number API
+				const woResponse = await fetch(`http://127.0.0.1:5000/api/work-orders`);
+				if (!woResponse.ok) throw new Error(`HTTP error! status: ${woResponse.status}`);
+				const woData = await woResponse.json();
+				const formattedWoData = woData.map(wo => ({ 
+					value: wo.WONumber, 
+					label: wo.WONumber 
+				}));
+				setWoNumbers(formattedWoData);
+				
+				// dummy Technicians API
+				const dummyTechnicians = [
+					{ value: "tech1", label: "John Doe" },
+					{ value: "tech2", label: "Jane Smith" },
+					{ value: "tech3", label: "Peter Jones" }
+				];
+				setTechnicians(dummyTechnicians);
+
+				// dummy Approvers API
+				const dummyApprovers = [
+					{ value: "app1", label: "Alice Brown" },
+					{ value: "app2", label: "Bob White" },
+					{ value: "app3", label: "John Green" }
+				];
+				setApprovers(dummyApprovers);
 			} catch (error) {
-				console.error("Error fetching unit models:", error);
+				console.error("Error fetching data:", error);
 				notifications.show({
 					title: "Error Loading Data",
-					message: "Failed to Load Unit Models. Please Try Again!",
+					message: `Failed to load data: ${error.message}. Please try again.`,
 					color: "red",
 				});
 			}
-
-			// set technician
-			// dummy models
-			const dummyTechnicians = [
-				{ value: "tech1", label: "John Doe" },
-                { value: "tech2", label: "Jane Smith" },
-                { value: "tech3", label: "Peter Jones" }
-			];
-			setTechnicians(dummyTechnicians);
-
-			// later with API
-			/* try {
-				const techResponse = await fetch("http://127.0.0.1:5000/api/technicians");
-				if (!techResponse.ok) {
-					throw new Error(`HTTP error status! ${techResponse.status}`)
-				}
-				const techData = await techResponse.json();
-				setTechnician(techData.map(item => ({ value: item.code, label: item.name })));
-			} catch (error) {
-				console.error("Error fetching technician:", error);
-				notifications.show({
-					title: "Error Loading Data",
-					message: "Failed to Load Technician Name. Please Try Again!",
-					color: "red",
-				});
-			} */
-
-			// set approval
-			// dummy models
-			const dummyApprover = [
-				{ value: "app1", label: "Alice Brown" },
-                { value: "app2", label: "Bob White" },
-                { value: "app3", label: "John Green" }
-			];
-			setApprovers(dummyApprover);
-
-			// later with API
-			/* try {
-				const appResponse = await fetch("http://127.0.0.1:5000/api/approvers");
-				if (!appResponse.ok) {
-					throw new Error(`HTTP error status! ${appResponse.status}`)
-				}
-				const appData = await appResponse.json();
-				setApprovers(appData.map(item => ({ value: item.code, label: item.name })));
-			} catch (error) {
-				console.error("Error fetching approver:", error);
-				notifications.show({
-					title: "Error Loading Data",
-					message: "Failed to Load Approver Name. Please Try Again!",
-					color: "red",
-				});
-			} */
 		};
-
-		fetchDropdownData();
+		fetchData();
 	}, []);
 
 	const checkVinExists = async (vin) => {
@@ -388,8 +355,19 @@ export function UnitArrivalChecklistForm() {
 					<Grid gutter="md">
 						<Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
 							<Select
-								label="Type/Model"
-								placeholder="Select a Model"
+								label="WO Number"
+								placeholder="Select WO Number"
+								data={woNumbers}
+								searchable
+								clearable
+								{...form.getInputProps("woNumber")}
+								renderOption={({ option }) => <Text>{option.label}</Text>}
+							/>
+						</Grid.Col>
+						<Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
+							<Select
+								label="Type/ Model"
+								placeholder="Select Model"
 								data={unitModels}
 								searchable
 								clearable
@@ -400,21 +378,21 @@ export function UnitArrivalChecklistForm() {
 						<Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
 							<TextInput
 								label="No. Chassis"
-								placeholder="Input a Chassis Number"
+								placeholder="Input Chassis Number"
 								{...form.getInputProps("noChassis")}
 							/>
 						</Grid.Col>
 						<Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
 							<TextInput
 								label="No. Engine"
-								placeholder="Input a Engine Number"
+								placeholder="Input Engine Number"
 								{...form.getInputProps("noEngine")}
 							/>
 						</Grid.Col>
 						<Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
 							<TextInput
 								label="VIN"
-								placeholder="Input a VIN Number"
+								placeholder="Input VIN Number"
 								{...form.getInputProps("vin")}
 							/>
 						</Grid.Col>

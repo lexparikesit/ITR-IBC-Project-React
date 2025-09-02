@@ -265,7 +265,7 @@ export default function SDLGStorageMaintenanceForm() {
                     });
                 })}>
                     <Box mb="xl">
-                        <Title order={4} mb="md"> Vehicle Information </Title>
+                        <Title order={4} mb="md"> Unit Information </Title>
                         <Group grow mb="md">
                             <Select
                                 label="Machine Model"

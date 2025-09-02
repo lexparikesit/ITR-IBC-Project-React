@@ -15,13 +15,13 @@ import {
     Box,
     Select,
     Radio,
+    FileInput,
 } from "@mantine/core";
 import { DateInput } from "@mantine/dates";
-import { IconCalendar } from "@tabler/icons-react";
+import { IconCalendar, IconCamera, IconPencil } from "@tabler/icons-react";
 import { useForm } from '@mantine/form';
 import { notifications } from "@mantine/notifications";
 
-// Definisi item checklist untuk Manitou (struktur data sesuai PDF)
 const manitouChecklistItemsDefinition = {
     engine: [
         { id: '01', label: 'Air Filter', itemKey: 'airFilter' },
@@ -97,7 +97,6 @@ const manitouChecklistItemsDefinition = {
         { id: '01', label: 'Rims', itemKey: 'rims' },
         { id: '02', label: 'Tires & Pressure', itemKey: 'tiresPressure' },
     ],
-    // Other items (flat structure in state, not nested)
     otherItems: [
         { id: '01', label: 'Screws and Nuts', itemKey: 'screwsNuts' },
         { id: '02', label: 'Frame and Body', itemKey: 'frameBody' },
@@ -110,33 +109,51 @@ const manitouChecklistItemsDefinition = {
 
 
 export function UnitArrivalInspectionForm() {
-    // State to store models fetched from API
-    const [modelsData, setModelsData] = useState([]);
-    const [technicians, setTechniciansData] = useState([]);
-    const [approvers, setApproversData] = useState([]);
+    const [unitModels, setUnitModels] = useState([]);
+    const [woNumbers, setWoNumbers] = useState([]);
+    const [technicians, setTechnicians] = useState([]);
+    const [approvers, setApprovers] = useState([]);
 
     const generateChecklistValidation = () => {
-        let validationRules =  {};
+        let validationRules = {};
         Object.keys(manitouChecklistItemsDefinition).forEach(sectionKey => {
             if (sectionKey === 'otherItems') {
                 manitouChecklistItemsDefinition[sectionKey].forEach(item => {
-                    validationRules[item.itemKey] = (value) => value ? null : 'Please Select an Option';
+                    const key = item.itemKey;
+                    validationRules[key] = (value) => {
+                        if ((value.status === 'Bad' || value.status === 'Missing') && !value.image) {
+                            return 'Image is Required for Bad/ Missing!';
+                        }
+                        if (!value.status) {
+                            return 'Item is Required!';
+                        }
+                        return null;
+                    };
                 });
             } else {
                 manitouChecklistItemsDefinition[sectionKey].forEach(item => {
-                    validationRules[`${sectionKey}.${item.itemKey}`] = (value) => value ? null : 'Please Select an Option';
+                    const key = `${sectionKey}.${item.itemKey}`;
+                    validationRules[key] = (value) => {
+                        if ((value.status === 'Bad' || value.status === 'Missing') && !value.image) {
+                            return 'Image is Required for Bad/ Missing!';
+                        }
+                        if (!value.status) {
+                            return 'Item is Required!';
+                        }
+                        return null;
+                    };
                 });
             }
         });
         return validationRules;
     };
 
-    // Initialize useForm with all fields
     const form = useForm({
         initialValues: (() => {
             const initialManitouValues = {
                 model: null,
-                serialNo: "", // VIN
+                woNumber: null,
+                serialNo: "",
                 hourMeter: "",
                 dateOfCheck: null,
                 technician: null,
@@ -144,16 +161,15 @@ export function UnitArrivalInspectionForm() {
                 generalRemarks: "",
             };
 
-            // Dynamically add checklist items to initial values
             Object.keys(manitouChecklistItemsDefinition).forEach(sectionKey => {
                 if (sectionKey === 'otherItems') {
                     manitouChecklistItemsDefinition[sectionKey].forEach(item => {
-                        initialManitouValues[item.itemKey] = ""; // Flat structure for otherItems
+                        initialManitouValues[item.itemKey] = { status: "", image: null, caption: "" };
                     });
                 } else {
-                    initialManitouValues[sectionKey] = {}; // Nested object for sections
+                    initialManitouValues[sectionKey] = {};
                     manitouChecklistItemsDefinition[sectionKey].forEach(item => {
-                        initialManitouValues[sectionKey][item.itemKey] = "";
+                        initialManitouValues[sectionKey][item.itemKey] = { status: "", image: null, caption: "" };
                     });
                 }
             });
@@ -161,6 +177,7 @@ export function UnitArrivalInspectionForm() {
         })(),
 
         validate: {
+            woNumber: (value) => (value ? null : 'WO Number is Required!'),
             model: (value) => (value ? null : 'Model is Required!'),
             serialNo: (value) => (value ? null : 'VIN is Required!'),
             hourMeter: (value) => {
@@ -172,27 +189,51 @@ export function UnitArrivalInspectionForm() {
             dateOfCheck: (value) => (value ? null : 'Date of Check is Required!'),
             technician: (value) => (value ? null : 'Technician is Required!'),
             approver: (value) => (value ? null : 'Approver is Required!'),
-            ...generateChecklistValidation(), //
+            ...generateChecklistValidation(),
         }
     });
 
-    // useEffect to fetch models from backend
     useEffect(() => {
-        const fetchModels = async () => {
+        const fetchData = async () => {
             try {
-                // API mstType
-                const response = await fetch('http://127.0.0.1:5000/api/unit-types/MA');
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                const data = await response.json();
-                const formattedModels = data
-                    .filter(item => item.value !== null && item.value !== undefined && item.label !== null && item.label !== undefined) // Filter berdasarkan 'value' dan 'label'
+                // model/ type MA API
+                const modelResponse = await fetch('http://127.0.0.1:5000/api/unit-types/MA');
+                if (!modelResponse.ok) throw new Error(`HTTP error! status: ${modelResponse.status}`);
+                const modelData = await modelResponse.json();
+                const formattedModels = modelData
+                    .filter(item => item.value !== null && item.value !== undefined && item.label !== null && item.label !== undefined)
                     .map(item => ({
                         value: item.value,
                         label: item.label
                     }));
-                setModelsData(formattedModels);
+                setUnitModels(formattedModels);
+                
+                // wo Number API
+				const woResponse = await fetch(`http://127.0.0.1:5000/api/work-orders`);
+				if (!woResponse.ok) throw new Error(`HTTP error! status: ${woResponse.status}`);
+				const woData = await woResponse.json();
+				const formattedWoData = woData.map(wo => ({ 
+					value: wo.WONumber, 
+					label: wo.WONumber 
+				}));
+				setWoNumbers(formattedWoData);
+
+                // dummy Technicians API
+                const dummyTechniciansData = [
+                    { value: "tech1", label: "John Doe" },
+                    { value: "tech2", label: "Jane Smith" },
+                    { value: "tech3", label: "Peter Jones" }
+                ];
+                setTechnicians(dummyTechniciansData);
+
+                // dummy Approvers API
+                const dummyApproverData = [
+                    { value: "app1", label: "Alice Brown" },
+                    { value: "app2", label: "Bob White" },
+                    { value: "app3", label: "John Green" }
+                ];
+                setApprovers(dummyApproverData);
+
             } catch (error) {
                 console.error("Failed to fetch models:", error);
                 notifications.show({
@@ -200,121 +241,53 @@ export function UnitArrivalInspectionForm() {
                     message: "Failed to load models. Please try again!",
                     color: "red",
                 });
-                setModelsData([]);
             }
-            // set technician
-			// dummy models
-			const dummyTechniciansData = [
-				{ value: "tech1", label: "John Doe" },
-                { value: "tech2", label: "Jane Smith" },
-                { value: "tech3", label: "Peter Jones" }
-			];
-			setTechniciansData(dummyTechniciansData);
-
-            // later with API
-            /* try {
-                const response = await fetch('http://127.0.0.1:5000/api/technicians');
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                const data = await response.json();
-                const formattedTechnicians = data
-                    .filter(item => item.value !== null && item.value !== undefined && item.label !== null && item.label !== undefined)
-                    .map(item => ({
-                        value: item.value,
-                        label: item.label
-                    }));
-                setTechniciansData(formattedTechnicians);
-            } catch (error) {
-                console.error("Failed to fetch technicians:", error);
-                notifications.show({
-                    title: "Error Loading Data",
-                    message: "Failed to load technicians. Please try again!",
-                    color: "red",
-                });
-                setTechniciansData([]);
-            } */
-
-            // set approval
-			// dummy models
-			const dummyApproverData = [
-				{ value: "app1", label: "Alice Brown" },
-                { value: "app2", label: "Bob White" },
-                { value: "app3", label: "John Green" }
-			];
-			setApproversData(dummyApproverData);
-
-            // later with API
-            /* try {
-                const response = await fetch('http://127.0.0.1:5000/api/approvers');
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                const data = await response.json();
-                const formattedApprovers = data
-                    .filter(item => item.value !== null && item.value !== undefined && item.label !== null && item.label !== undefined)
-                    .map(item => ({
-                        value: item.value,
-                        label: item.label
-                    }));
-                setApproversData(formattedApprovers);
-            } catch (error) {
-                console.error("Failed to fetch approvers:", error);
-                notifications.show({
-                    title: "Error Loading Data",
-                    message: "Failed to load approvers. Please try again!",
-                    color: "red",
-                });
-                setApproversData([]);
-            } */
         };
-
-        fetchModels();
+        fetchData();
     }, []);
 
     const checkVinExists = async (vin) => {
-		const token = localStorage.getItem('access_token');
-		
-		if (!token) {
-			console.warn("No authentication token found for VIN check.");
-			notifications.show({
-				title: "Authentication Required",
-				message: "Please log in to perform VIN check.",
-				color: "red",
-			});
-			return false; 
-		}
+        const token = localStorage.getItem('access_token');
+        if (!token) {
+            console.warn("No authentication token found for VIN check.");
+            notifications.show({
+                title: "Authentication Required",
+                message: "Please log in to perform VIN check.",
+                color: "red",
+            });
+            return false;
+        }
 
-		try {
-			const response = await fetch(`http://127.0.0.1:5000/api/arrival-check/check-vin/${vin}`, {
-				method: "GET",
-				headers: {
-					"Content-Type": "application/json",
-					"Authorization": `Bearer ${token}`
-				},
-			});
+        try {
+            const response = await fetch(`http://127.0.0.1:5000/api/arrival-check/check-vin/${vin}`, {
+                method: "GET",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${token}`
+                },
+            });
 
-			if (!response.ok) {
-				const errorText = await response.text();
-				notifications.show({
-					title: "VIN Check Failed",
-					message: `Server error during VIN verification. Please try again.`,
-					color: "red",
-				});
-				return true;
-			}
-			const data = await response.json();
-			return data.exists;
-		} catch (error) {
-			console.error("Network Error or Failed to Check VIN:", error);
-			notifications.show({
-				title: "Network Error",
+            if (!response.ok) {
+                const errorText = await response.text();
+                notifications.show({
+                    title: "VIN Check Failed",
+                    message: `Server error during VIN verification. Please try again.`,
+                    color: "red",
+                });
+                return true;
+            }
+            const data = await response.json();
+            return data.exists;
+        } catch (error) {
+            console.error("Network Error or Failed to Check VIN:", error);
+            notifications.show({
+                title: "Network Error",
                 message: "Failed to verify VIN. Check your internet connection.",
                 color: "red",
-			});
-			return true;
-		}
-	};
+            });
+            return true;
+        }
+    };
 
     const handleSubmit = async (values) => {
         console.log('Form Submitted (Frontend Data)', values);
@@ -340,51 +313,62 @@ export function UnitArrivalInspectionForm() {
                 return;
             }
         }
-
+        
         const payload = {
-            brand: 'manitou', // Hardcoded for Manitou
-            
+            brand: 'manitou',
             unitInfo: {
+                woNumber: values.woNumber,
                 model: values.model,
                 serialNo: values.serialNo,
                 hourMeter: values.hourMeter,
-                dateOfCheck: (values.dateOfCheck instanceof Date && !isNaN(values.dateOfCheck)) 
-                            ? values.dateOfCheck.toISOString() 
+                dateOfCheck: (values.dateOfCheck instanceof Date && !isNaN(values.dateOfCheck))
+                            ? values.dateOfCheck.toISOString()
                             : null,
             },
             technician: values.technician,
             approver: values.approver,
             generalRemarks: values.generalRemarks,
-            checklistItems: {}, // Initialize checklistItems object
+            checklistItems: {},
         };
 
-        // Populate checklistItems from form values
+        const formData = new FormData();
+        
         Object.keys(manitouChecklistItemsDefinition).forEach(sectionKey => {
-            if (sectionKey === 'otherItems') {
-                manitouChecklistItemsDefinition[sectionKey].forEach(item => {
-                    if (item.itemKey === 'namePlate') {
-                        payload.checklistItems['namePlate'] = values[item.itemKey];
-                    } else if (item.itemKey === 'generalOperation') {
-                        payload.checklistItems['general'] = values[item.itemKey];
+            const items = manitouChecklistItemsDefinition[sectionKey];
+            
+            items.forEach(item => {
+                const formKey = sectionKey === 'otherItems' ? item.itemKey : `${sectionKey}.${item.itemKey}`;
+                const itemData = form.values[formKey] || (form.values[sectionKey] ? form.values[sectionKey][item.itemKey] : null);
+                
+                if (itemData && itemData.status) {
+                    if (sectionKey === 'otherItems') {
+                        payload.checklistItems[item.itemKey] = { status: itemData.status, caption: itemData.caption || "" };
                     } else {
-                        payload.checklistItems[item.itemKey] = values[item.itemKey];
+                        if (!payload.checklistItems[sectionKey]) {
+                            payload.checklistItems[sectionKey] = {};
+                        }
+                        payload.checklistItems[sectionKey][item.itemKey] = { status: itemData.status, caption: itemData.caption || "" };
                     }
-                });
-            } else {
-                payload.checklistItems[sectionKey] = values[sectionKey];
-            }
+                    
+                    if (itemData.image) {
+                        const imageKey = `image-${sectionKey}-${item.itemKey}`;
+                        formData.append(imageKey, itemData.image);
+                    }
+                }
+            });
         });
 
-        console.log("Payload to Backend: ", payload);
+        console.log("Payload JSON to Backend: ", payload);
 
+        formData.append('data', JSON.stringify(payload));
+        
         try {
             const response = await fetch(`http://127.0.0.1:5000/api/arrival-check/manitou/submit`, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
                 },
-                body: JSON.stringify(payload),
+                body: formData,
             });
 
             if (!response.ok) {
@@ -398,8 +382,7 @@ export function UnitArrivalInspectionForm() {
                 message: result.message || 'Form submitted successfully!',
                 color: "green",
             });
-            form.reset(); // Reset form after successful submission
-
+            form.reset();
         } catch (error) {
             console.error('Error submitting form:', error);
             notifications.show({
@@ -410,14 +393,27 @@ export function UnitArrivalInspectionForm() {
         }
     };
 
-    const renderChecklistItem = (label, formProps, spanValue, key) => {
+    const renderChecklistItem = (label, formProps, sectionKey, itemKey, key) => {
+        const itemData = form.values[sectionKey] ? form.values[sectionKey][itemKey] : form.values[itemKey];
+        const showConditionalInputs = itemData && (itemData.status === 'Bad' || itemData.status === 'Missing');
+
         return (
-            <Grid.Col span={spanValue} key={key}>
+            <Grid.Col span={{ base: 12, sm: 6, md: 4 }} key={key}>
                 <Stack gap="xs">
                     <Text size="sm" style={{ color: '#000000 !important', fontWeight: 500 }}>{label}</Text>
-
+                    <Text size="xs" style={{ color: 'var(--mantine-color-gray-6)' }}>Select one option</Text>
+                    
                     <Radio.Group
-                        {...formProps}
+                        {...form.getInputProps(formProps)}
+                        value={itemData ? itemData.status : ""}
+                        onChange={(value) => {
+                            const newStatus = { status: value };
+                            if (value === "Good") {
+                                form.setFieldValue(formProps, { status: "Good", image: null, caption: "" });
+                            } else {
+                                form.setFieldValue(formProps, { ...itemData, status: value });
+                            }
+                        }}
                         orientation="horizontal"
                         spacing="xl"
                     >
@@ -427,42 +423,41 @@ export function UnitArrivalInspectionForm() {
                             <Radio value="Missing" label={<Text style={{ color: '#000000 !important' }}>Missing</Text>} />
                         </Group>
                     </Radio.Group>
+
+                    {showConditionalInputs && (
+                        <>
+                            <FileInput
+                                placeholder="Upload Image"
+                                accept="image/png,image/jpeg"
+                                mt="xs"
+                                leftSection={<IconCamera size={18} />}
+                                {...form.getInputProps(`${formProps}.image`)}
+                            />
+                            <TextInput
+                                placeholder="Add Image Caption"
+                                mt="xs"
+                                leftSection={<IconPencil size={18} />}
+                                {...form.getInputProps(`${formProps}.caption`)}
+                            />
+                        </>
+                    )}
                 </Stack>
             </Grid.Col>
         );
     };
 
-    // Helper for checklist Render
     const renderChecklistSection = (sectionTitle, sectionKey, items) => {
         return (
             <Card shadow="sm" p="xl" withBorder mb="lg">
                 <Title order={3} mb="md" style={{ color: '#000000 !important' }}>{sectionTitle}</Title>
                 <Grid gutter="xl">
-                    {items.map((item) => ( 
+                    {items.map((item) => (
                         renderChecklistItem(
-                            `${item.id}. ${item.label}`, 
-                            form.getInputProps(`${sectionKey}.${item.itemKey}`),
-                            { base: 12, sm: 6 },
+                            `${item.id}. ${item.label}`,
+                            sectionKey === 'otherItems' ? item.itemKey : `${sectionKey}.${item.itemKey}`,
+                            sectionKey,
+                            item.itemKey,
                             `${sectionKey}-${item.itemKey}`
-                        )
-                    ))}
-                </Grid>
-            </Card>
-        );
-    };
-
-    // Helper for other's checklist
-    const renderOtherItemsSection = (items) => {
-        return (
-            <Card shadow="sm" p="xl" withBorder mb="lg">
-                <Title order={3} mb="md" style={{ color: '#000000 !important' }}> 12. Other Item </Title>
-                <Grid gutter="xl">
-                    {items.map((item) => ( // Index dihapus
-                        renderChecklistItem(
-                            `${item.id} ${item.label}`,
-                            form.getInputProps(item.itemKey),
-                            { base: 12, sm: 6 },
-                            `other-${item.itemKey}`
                         )
                     ))}
                 </Grid>
@@ -482,14 +477,27 @@ export function UnitArrivalInspectionForm() {
             </Title>
 
             <form onSubmit={form.onSubmit(handleSubmit)}>
-                <Card shadow="sm" p="xl" withBorder mb="lg">
+                <Card shadow="sm" padding="lg" radius="md" withBorder mb="lg">
                     <Title order={3} mb="md" style={{ color: '#000000 !important' }}> Unit Information </Title>
                     <Grid gutter="xl">
-                        <Grid.Col span={{ base: 12, md: 6, lg: 4 }}>
+                        <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
                             <Select
-                                label={<Text style={{ color: '#000000 !important' }}> Type/ Model </Text>}
+                                label="WO Number"
+                                placeholder="Select WO Number"
+                                data={woNumbers}
+                                searchable
+                                clearable
+                                {...form.getInputProps('woNumber')}
+                                renderOption={({ option }) => (
+                                    <Text c='black'>{option.label}</Text>
+                                )}
+                            />
+                        </Grid.Col>
+                        <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
+                            <Select
+                                label="Type/ Model"
                                 placeholder="Select Model"
-                                data={modelsData}
+                                data={unitModels}
                                 searchable
                                 clearable
                                 {...form.getInputProps('model')}
@@ -498,56 +506,38 @@ export function UnitArrivalInspectionForm() {
                                 )}
                             />
                         </Grid.Col>
-                        <Grid.Col span={{ base: 12, md: 6, lg: 4 }}>
+                        <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
                             <TextInput
-                                label={<Text style={{ color: '#000000 !important' }}> VIN </Text>}
+                                label="VIN"
                                 placeholder="Input VIN Number"
                                 {...form.getInputProps('serialNo')}
                                 styles={{ input: { color: '#000000 !important' } }}
                             />
                         </Grid.Col>
-                        <Grid.Col span={{ base: 12, md: 6, lg: 4 }}>
+                        <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
                             <TextInput
-                                label={<Text style={{ color: '#000000 !important' }}> Hour Meter </Text>}
+                                label="Hour Meter"
                                 placeholder="Input Hour Meter"
                                 {...form.getInputProps('hourMeter')}
                                 styles={{ input: { color: '#000000 !important' } }}
                             />
                         </Grid.Col>
-                        <Grid.Col span={{ base: 12, md: 6, lg: 4 }}>
+                        <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
                             <DateInput
-                                label={<Text style={{ color: '#000000 !important' }}> Date of Check </Text>}
+                                label="Date of Check"
                                 placeholder="Select Date"
                                 valueFormat="DD-MM-YYYY"
                                 {...form.getInputProps('dateOfCheck')}
                                 onChange={(value) => {
-                                    console.log("DateInput onChange value:", value);
                                     const parsedDate = value ? new Date(value) : null;
-                                    console.log("DateInput onChange value (parsed):", parsedDate);
                                     form.setFieldValue('dateOfCheck', parsedDate);
                                 }}
                                 rightSection={<IconCalendar size={16} />}
-                                styles={{
-                                    input: { color: '#000000 !important' },
-                                    calendarHeaderControl: { color: '#000000 !important' },
-                                    calendarHeader: { color: '#000000 !important' },
-                                    weekday: { color: '#000000 !important' },
-                                    day: { color: '#000000 !important', fontSize: 'var(--mantine-font-size-sm)', padding: 'var(--mantine-spacing-xs)' },
-                                    month: { color: '#000000 !important', fontSize: 'var(--mantine-font-size-sm)' },
-                                    year: { color: '#000000 !important', fontSize: 'var(--mantine-font-size-sm)' },
-                                    pickerControl: { color: '#000000 !important' },
-                                    pickerControlActive: { color: '#000000 !important' },
-                                    monthPicker: { color: '#000000 !important' },
-                                    yearPicker: { color: '#000000 !important' },
-                                    dropdown: {
-                                        backgroundColor: 'white',
-                                    }
-                                }}
                             />
                         </Grid.Col>
-                        <Grid.Col span={{ base: 12, md: 6, lg: 4 }}>
+                        <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
                             <Select
-                                label={<Text style={{ color: '#000000 !important' }}> Technician </Text>}
+                                label="Technician"
                                 placeholder="Select Technician"
                                 data={technicians}
                                 searchable
@@ -558,9 +548,9 @@ export function UnitArrivalInspectionForm() {
                                 )}
                             />
                         </Grid.Col>
-                        <Grid.Col span={{ base: 12, md: 6, lg: 4 }}>
+                        <Grid.Col span={{ base: 12, md: 6, md: 3 }}>
                             <Select
-                                label={<Text style={{ color: '#000000 !important' }}> Approval By </Text>}
+                                label="Approval By"
                                 placeholder="Select Approver"
                                 data={approvers}
                                 searchable
@@ -575,18 +565,16 @@ export function UnitArrivalInspectionForm() {
                 </Card>
 
                 <Divider my="xl" label={<Text style={{ color: '#000000 !important' }}>Legend</Text>} labelPosition="center" />
-                    <Group justify="center" gap="xl" mb="lg">
-                        <Text style={{ color: '#000000 !important' }}> 1: Good </Text>
-                        <Text style={{ color: '#000000 !important' }}> 2: Bad </Text>
-                        <Text style={{ color: '#000000 !important' }}> 0: Missing </Text>
-                    </Group>
+                <Group justify="center" gap="xl" mb="lg">
+                    <Text style={{ color: '#000000 !important' }}> 1: Good </Text>
+                    <Text style={{ color: '#000000 !important' }}> 2: Bad </Text>
+                    <Text style={{ color: '#000000 !important' }}> 0: Missing </Text>
+                </Group>
                 <Divider my="xl" />
 
-                {/* Render sections based on manitouChecklistItemsDefinition */}
                 {Object.keys(manitouChecklistItemsDefinition).filter(key => key !== 'otherItems').map(sectionKey => (
                     <div key={sectionKey}>
                         {renderChecklistSection(
-                            // Map sectionKey to a readable title as per PDF
                             {
                                 engine: "01. Engine",
                                 transmission: "02. Transmission",
@@ -599,15 +587,14 @@ export function UnitArrivalInspectionForm() {
                                 accessories: "09. Accessories",
                                 cabProtectiveDeviceElectricCircuit: "10. Cab / Protective Device / Electric Circuit",
                                 wheels: "11. Wheels",
-                            }[sectionKey] || sectionKey, // Fallback to sectionKey if not found
+                            }[sectionKey] || sectionKey,
                             sectionKey,
                             manitouChecklistItemsDefinition[sectionKey]
                         )}
                     </div>
                 ))}
 
-                {/* Render other items section */}
-                {renderOtherItemsSection(manitouChecklistItemsDefinition.otherItems)}
+                {renderChecklistSection("12. Other Item", "otherItems", manitouChecklistItemsDefinition.otherItems)}
 
                 <Divider my="xl" />
                 <Title order={3} mb="md" style={{ color: '#000000 !important' }}> General Remarks </Title>
