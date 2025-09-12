@@ -23,11 +23,11 @@ import { useForm } from "@mantine/form";
 import { notifications } from "@mantine/notifications";
 
 const initialHeaderValues = {
-    Requestor: "",
+    Requestor: null,
     IBC_date: null,
     PO_PJB: "",
-    Cust_ID: "",
-    Brand_ID: "",
+    Cust_ID: null,
+    Brand_ID: null,
     UnitType: null,
     QTY: null,
     SiteOperation: "",
@@ -35,7 +35,6 @@ const initialHeaderValues = {
 
 const initialDetailValues = {
     vins: [],
-    WO: "",
     AttachmentType: "",
     AttachmentSupplier: "",
     DeliveryAddress: "",
@@ -53,14 +52,12 @@ export function MultiStepIbcForm() {
     const [step, setStep] = useState(1);
     const [submittedHeader, setSubmittedHeader] = useState(null);
     const [submittedDetail, setSubmittedDetail] = useState(null);
-
     const [requestors, setRequestors] = useState([]);
-    const [WoNumber, setWoNumber] = useState([]);
     const [customers, setCustomers] = useState([]);
     const [brands, setBrands] = useState([]);
-    const [UnitTypes, setUnitTypes] = useState([]);
-    const [packageType, setPackageType] = useState([]);
-    const [accessoryType, setAccessoryType] = useState([]);
+    const [UnitModels, setUnitModels] = useState([]);
+    const [packageTypes, setPackageTypes] = useState([]);
+    const [accessoryTypes, setAccessoryTypes] = useState([]);
 
     const headerForm = useForm({
         initialValues: initialHeaderValues,
@@ -83,7 +80,6 @@ export function MultiStepIbcForm() {
     const detailForm = useForm({
         initialValues: initialDetailValues,
         validate: {
-            WO: (value) => (value ? null : "WO Number is Required!"),
             DeliveryPlan: (value) => (value ? null : "Delivery Plan is Required!"),
         },
     });
@@ -94,40 +90,17 @@ export function MultiStepIbcForm() {
     });
 
     useEffect(() => {
-        const fetchWONumber = async () => {
+        const fetchData = async () => {
             try {
-                const response = await fetch(`http://127.0.0.1:5000/api/work-orders`);
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                const data = await response.json();
-                const formattedWONumbers = data.map(item => ({
-                    value: item.WONumber,
-                    label: item.WONumber,
-                }));
-                setWoNumber(formattedWONumbers);
-            } catch (error) {
-                notifications.show({
-                    title: "Error Loading Data",
-                    message: "Failed to load Work Orders. Please try again!",
-                    color: "red",
-                });
-                setWoNumber([]);
-            }
-        };
-
-        const fetchCustomers = async () => {
-            try {
-                const response = await fetch(`http://127.0.0.1:5000/api/customers`);
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                const data = await response.json();
-                const uniqueCustomersID = new Set();
-                const formattedCustomers = data
+                // customers
+                const customerResponse = await fetch(`http://127.0.0.1:5000/api/customers`);
+                if (!customerResponse.ok) throw new Error(`HTTP error! status: ${customerResponse.status}`);
+                const customerData = await customerResponse.json();
+                const uniqueCustomerID = new Set();
+                const formattedCustomers = customerData
                     .filter(item => {
-                        if (item.CustomerID && !uniqueCustomersID.has(item.CustomerID)) {
-                            uniqueCustomersID.add(item.CustomerID);
+                        if (item.CustomerID && !uniqueCustomerID.has(item.CustomerID)) {
+                            uniqueCustomerID.add(item.CustomerID);
                             return true;
                         }
                         return false;
@@ -137,120 +110,75 @@ export function MultiStepIbcForm() {
                         label: item.CustomerName,
                     }));
                 setCustomers(formattedCustomers);
-            } catch (error) {
-                console.error("Failed to Fetch Customers:", error);
-                notifications.show({
-                    title: "Error Loading Data",
-                    message: "Failed to load Customers. Please try again!",
-                    color: "red",
-                });
-                setCustomers([]);
-            }
-        };
-
-        const fetchBrands = async () => {
-            try {
-                const response = await fetch(`http://127.0.0.1:5000/api/unit-types/brands`);
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                const data = await response.json();
-                const formattedBrands = data
+                
+                // brands
+                const brandResponse = await fetch(`http://127.0.0.1:5000/api/unit-types/brands`);
+                if (!brandResponse.ok) throw new Error(`HTTP error! status: ${brandResponse.status}`);
+                const brandData = await brandResponse.json();
+                const formattedBrands = brandData
                     .filter(item => item.value !== null && item.value !== undefined)
                     .map(item => ({
                         value: item.value,
                         label: item.label,
                     }));
                 setBrands(formattedBrands);
-            } catch (error) {
-                console.error("Failed to Fetch Brands:", error);
-                notifications.show({
-                    title: "Error Loading Data",
-                    message: "Failed to load Brands. Please try again!",
-                    color: "red",
-                });
-                setBrands([]);
-            }
-        };
 
-        const fetchPackageTypes = async () => {
-            try {
-                const response = await fetch(`http://127.0.0.1:5000/api/mstPackages`);
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                const data = await response.json();
-                const formattedPackageTypes = data
+                // package type
+                const packageResponse = await fetch(`http://127.0.0.1:5000/api/mstPackages`);
+                if (!packageResponse.ok) throw new Error(`HTTP error! status: ${packageResponse.status}`);
+                const packageData = await packageResponse.json();
+                const formattedPackages = packageData
                     .map(item => ({
                         value: item.PackagesID,
                         label: item.PackagesType,
                     }));
-                setPackageType(formattedPackageTypes);
-            } catch (error) {
-                console.error("Failed to Fetch Package Types:", error);
-                notifications.show({
-                    title: "Error Loading Data",
-                    message: "Failed to load Package Types. Please try again!",
-                    color: "red",
-                });
-                setPackageType([]);
-            }
-        };
-
-        const fetchAccessoryTypes = async () => {
-            try {
-                const response = await fetch(`http://127.0.0.1:5000/api/mstAccesories`);
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                const data = await response.json();
-                const formattedAccessoryTypes = data
+                setPackageTypes(formattedPackages);
+                
+                // accessory types
+                const accessoryResponse = await fetch(`http://127.0.0.1:5000/api/mstAccesories`);
+                if (!accessoryResponse.ok) throw new Error(`HTTP error! status: ${accessoryResponse.status}`);
+                const accessoryData = await accessoryResponse.json();
+                const formattedAccessories = accessoryData
                     .map(item => ({
                         value: item.AccesoriesID,
                         label: item.AccesoriesName,
                     }));
-                setAccessoryType(formattedAccessoryTypes);
+                setAccessoryTypes(formattedAccessories);
+
+                // dummy for Requestors
+                const dummyRequestors = [
+                    { value: 'john_doe', label: 'John Doe' },
+                    { value: 'jane_smith', label: 'Jane Smith' },
+                ];
+                setRequestors(dummyRequestors);
+
             } catch (error) {
-                console.error("Failed to Fetch Accessory Types:", error);
+                console.error("Failed to fetch initial data:", error);
                 notifications.show({
                     title: "Error Loading Data",
-                    message: "Failed to load Accessory Types. Please try again!",
+                    message: "Failed to load initial data. Please try again!",
                     color: "red",
                 });
-                setAccessoryType([]);
             }
         };
-
-        const dummyRequestors = [
-            { value: 'john_doe', label: 'John Doe' },
-            { value: 'jane_smith', label: 'Jane Smith' },
-        ];
-        setRequestors(dummyRequestors);
-
-        fetchCustomers();
-        fetchBrands();
-        fetchPackageTypes();
-        fetchAccessoryTypes();
-        fetchWONumber();
+        fetchData();
     }, []);
 
     useEffect(() => {
         const brandID = headerForm.values.Brand_ID;
         if (brandID) {
-            const fetchUnitTypes = async () => {
+            const fetchModel = async () => {
                 try {
-                    const response = await fetch(`http://127.0.0.1:5000/api/unit-types/${brandID}`);
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
-                    }
-                    const data = await response.json();
-                    const formattedUnitTypes = data
+                    const modelResponse = await fetch(`http://127.0.0.1:5000/api/unit-types/${brandID}`);
+                    if (!modelResponse.ok) throw new Error(`HTTP error! status: ${modelResponse.status}`);
+                    const modelData = await modelResponse.json();
+                    const formattedModels = modelData
                         .filter(item => item.value !== null && item.value !== undefined)
                         .map(item => ({
                             value: item.value,
                             label: item.label,
                         }));
-                    setUnitTypes(formattedUnitTypes);
+                    setUnitModels(formattedModels);
                 } catch (error) {
                     console.error("Failed to Fetch Unit Types:", error);
                     notifications.show({
@@ -258,37 +186,12 @@ export function MultiStepIbcForm() {
                         message: "Failed to load Unit Types. Please try again!",
                         color: "red",
                     });
-                    setUnitTypes([]);
+                    setUnitModels([]);
                 }
             };
-
-            const fetchWONumber = async () => {
-                try {
-                    const response = await fetch(`http://127.0.0.1:5000/api/work-orders?brandId=${brandID}`);
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
-                    }
-                    const data = await response.json();
-                    const formattedWONumbers = data.map(item => ({
-                        value: item.WONumber,
-                        label: item.WONumber,
-                    }));
-                    setWoNumber(formattedWONumbers);
-                } catch (error) {
-                    console.error("Failed to Fetch Work Orders:", error);
-                    notifications.show({
-                        title: "Error Loading Data",
-                        message: "Failed to load Work Orders. Please try again!",
-                        color: "red",
-                    });
-                    setWoNumber([]);
-                }
-            };
-            fetchUnitTypes();
-            fetchWONumber();
+            fetchModel();
         } else {
-            setUnitTypes([]);
-            setWoNumber([]);
+            setUnitModels([]);
         }
     }, [headerForm.values.Brand_ID]);
 
@@ -298,8 +201,6 @@ export function MultiStepIbcForm() {
     }
 
     const handleHeaderSubmit = (values) => {
-        console.log("Nilai IBC_date sebelum konversi:", values.IBC_date);
-        
         let ibcDateFormatted = null;
         if (values.IBC_date) {
             try {
@@ -341,7 +242,6 @@ export function MultiStepIbcForm() {
     };
 
     const handleDetailSubmit = (values) => {
-        console.log('Fungsi handleDetailSubmit dipanggil.');
         const isValid = detailForm.validate();
         if (!isValid) {
             notifications.show({
@@ -505,7 +405,7 @@ export function MultiStepIbcForm() {
 
     const selectedPackageValues = accessoriesForm.values.packages.map(p => p.PackagesType);
     const packageFields = accessoriesForm.values.packages.map((_, index) => {
-        const availablePackageOptions = packageType.filter(option =>
+        const availablePackageOptions = packageTypes.filter(option =>
             !selectedPackageValues.includes(option.value) || option.value === accessoriesForm.values.packages[index].PackagesType
         );
         return (
@@ -540,7 +440,7 @@ export function MultiStepIbcForm() {
 
     const selectedAccessoryValues = accessoriesForm.values.accessories.map(a => a.IBC_Accesories);
     const accessoryFields = accessoriesForm.values.accessories.map((_, index) => {
-        const availableAccessoryOptions = accessoryType.filter(option =>
+        const availableAccessoryOptions = accessoryTypes.filter(option =>
             !selectedAccessoryValues.includes(option.value) || option.value === accessoriesForm.values.accessories[index].IBC_Accesories
         );
         return (
@@ -649,18 +549,18 @@ export function MultiStepIbcForm() {
                 </Grid.Col>
                 <Grid.Col span={{ base: 12, md: 6 }}>
                     <Select
-                        label="Unit Type"
+                        label="Unit Type/ Model"
                         placeholder="Select Unit Type"
                         searchable
-                        data={UnitTypes}
+                        data={UnitModels}
                         {...headerForm.getInputProps('UnitType')}
                         disabled={step > 1 || !headerForm.values.Brand_ID}
                     />
                 </Grid.Col>
                 <Grid.Col span={{ base: 12, md: 6 }}>
                     <TextInput
-                        label="PO/ PJB"
-                        placeholder="Input Your PO/ PJB"
+                        label="PO/ PJB No"
+                        placeholder="Input PO/ PJB No"
                         {...headerForm.getInputProps("PO_PJB")}
                         disabled={step > 1}
                     />
@@ -678,7 +578,7 @@ export function MultiStepIbcForm() {
                 <Grid.Col span={{ base: 12, md: 6 }}>
                     <TextInput
                         label="Site Operation"
-                        placeholder="Input Your Site Operation"
+                        placeholder="Input Site Operation"
                         {...headerForm.getInputProps("SiteOperation")}
                         disabled={step > 1}
                     />
@@ -705,16 +605,6 @@ export function MultiStepIbcForm() {
                             />
                         </Grid.Col>
                         {vinFields}
-                        <Grid.Col span={{ base: 12, md: 6 }}>
-                            <Select
-                                label="WO Number"
-                                placeholder="Select WO Number"
-                                searchable
-                                clearable
-                                data={WoNumber}
-                                {...detailForm.getInputProps('WO')}
-                            />
-                        </Grid.Col>
                         <Grid.Col span={{ base: 12, md: 6 }}>
                             <TextInput
                                 label="Attachment Type"

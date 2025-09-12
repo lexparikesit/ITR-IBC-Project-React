@@ -19,11 +19,24 @@ def submit_maintenance_checklist():
     print("DEBUG (ARRIVAL CHECK): Headers received:")
     print(request.headers)
 
-    data = request.get_json()
-    brand = data.get("brand")
+    if request.content_type and 'multipart/form-data' in request.content_type:
+        data_string = request.form.get('data')
+    
+        if not data_string:
+            return jsonify({"error": "Missing 'data' part in form"}), 400
 
-    print(f"DEBUG: Data received from frontend: {data}")
-    print(f"DEBUG: Brand received from frontend: {brand}")
+        try:
+            data = json.loads(data_string)
+        except json.JSONDecodeError:
+            return jsonify({"error": "Invalid JSON data in 'data' part"}), 400
+        
+        uploaded_files = request.files
+        print(f"DEBUG: Files received: {list(uploaded_files.keys())}")
+    
+    else:
+        data = request.get_json()
+
+    brand = data.get("brand")
 
     if not brand or brand.lower() not in BRAND_MODELS:
         return jsonify({"error": "Invalid Brand"}), 400
@@ -61,6 +74,7 @@ def submit_maintenance_checklist():
                     return 2
             return None
 
+        # logic for Renault
         if brand.lower() == 'renault':
             unit_info = data.get('unitInfo', {})
             checklist_items = data.get('checklistItems', {})
@@ -152,21 +166,32 @@ def submit_maintenance_checklist():
                 'dynamicTesting.roadTestFunctions': 'ops52',
             }
 
-            # loop through checklist_mapping for fulfill ops column
             for frontend_path, db_column in renault_mapping.items():
                 section, item_key = frontend_path.split('.')
-                status_value = checklist_items.get(section, {}).get(item_key)
-                
+                section_data = checklist_items.get(section, {})
+
+                status_value = section_data.get(item_key)
+                caption_value = section_data.get(f'caption_{item_key}')
+                image_value = section_data.get(f'img_{item_key}')
+
                 converted_value = converted_renault_status_to_int(status_value)
                 
                 if converted_value is not None and hasattr(new_checklist_entry, db_column):
                     setattr(new_checklist_entry, db_column, converted_value)
 
-            # mapping battery
+                caption_db_column = f'caption_{db_column}'
+                
+                if caption_value is not None and hasattr(new_checklist_entry, caption_db_column):
+                    setattr(new_checklist_entry, caption_db_column, caption_value)
+
+                img_db_column = f'img_{db_column}'
+                
+                if image_value is not None and hasattr(new_checklist_entry, img_db_column):
+                    setattr(new_checklist_entry, img_db_column, image_value)
+
             if len(battery_inspection) > 0:
                 new_checklist_entry.FRBattery_electrolyte_level = battery_inspection[0].get('electrolyteLevel')
                 new_checklist_entry.FRBattery_statusOn = battery_inspection[0].get('statusOnBatteryAnalyzer')
-            
                 voltage_str = battery_inspection[0].get('voltage')
                 
                 if voltage_str is not None:
@@ -175,23 +200,22 @@ def submit_maintenance_checklist():
             if len(battery_inspection) > 1:
                 new_checklist_entry.RRBattery_electrolyte_level = battery_inspection[1].get('electrolyteLevel')
                 new_checklist_entry.RRBattery_statusOn = battery_inspection[1].get('statusOnBatteryAnalyzer')
-
                 voltage_str = battery_inspection[1].get('voltage')
                 
                 if voltage_str is not None:
                     new_checklist_entry.RRBattery_voltage = int(voltage_str)
 
-            # mapping Fault Codes
             for i, fault in enumerate(fault_codes):
                 if i < 5:
                     setattr(new_checklist_entry, f'FaultCode{i+1}', fault.get('faultCode'))
                     setattr(new_checklist_entry, f'status{i+1}', fault.get('status'))
             
-            # Mapping Repair Notes
             new_checklist_entry.generalRemarks = repair_notes
 
+        # logic for Manitou
         elif brand.lower() == 'manitou':
             unit_info = data.get("unitInfo", {})
+            new_checklist_entry.woNumber = unit_info.get('woNumber')
             new_checklist_entry.model = unit_info.get('model')
             new_checklist_entry.VIN = unit_info.get('serialNo')
             new_checklist_entry.HM = unit_info.get('hourMeter')
@@ -273,23 +297,37 @@ def submit_maintenance_checklist():
             }
             
             for (section, item), db_column in manitou_mapping.items():
-                if section:
-                    status_value_str = checklist_data.get(section, {}).get(item)
-                    converted_value = converted_manitou_status_to_tinyint(status_value_str)
-                else:
-                    status_value_str = checklist_data.get(item)
-                    converted_value = converted_manitou_status_to_tinyint(status_value_str)
+                section_data = checklist_data.get(section, {})
+                status_value_str = section_data.get(item)
 
+                caption_value = section_data.get(f'caption_{item}')
+                image_value = section_data.get(f'img_{item}')
+
+                converted_value = converted_manitou_status_to_tinyint(status_value_str)
+                
                 if converted_value is not None and hasattr(new_checklist_entry, db_column):
                     setattr(new_checklist_entry, db_column, converted_value)
+            
+                caption_db_column = f'caption_{db_column}'
+                
+                if caption_value is not None and hasattr(new_checklist_entry, caption_db_column):
+                    setattr(new_checklist_entry, caption_db_column, caption_value)
+                
+                img_db_column = f'img_{db_column}'
+
+                if image_value is not None and hasattr(new_checklist_entry, img_db_column):
+                    setattr(new_checklist_entry, img_db_column, image_value)
+        
                 elif not hasattr(new_checklist_entry, db_column):
                     print(f"WARNING: DB column '{db_column}' not found in model.")
-            
+
+        # logic for SDLG
         elif brand.lower() == 'sdlg':
             unit_info = data.get("unitInfo", {})
             checklist_items = data.get("checklistItems", {})
             defect = data.get("defect", [])
             
+            new_checklist_entry.woNumber = data.get("woNumber")
             new_checklist_entry.model = data.get("model")
             new_checklist_entry.vehicleNumber = data.get("vehicleNumber")
             new_checklist_entry.workingHour = data.get("workingHour")

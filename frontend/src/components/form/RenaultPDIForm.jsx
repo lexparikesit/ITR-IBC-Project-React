@@ -16,63 +16,69 @@ import {
     Radio,  
     Table,
     Select,
+    rem,
 } from "@mantine/core";
 import { DateInput } from "@mantine/dates";
-import { IconCalendar } from "@tabler/icons-react";
+import { IconCalendar, IconPencil, IconUpload, IconX, IconFile } from "@tabler/icons-react";
 import { useForm } from "@mantine/form";
 import { notifications } from "@mantine/notifications";
+import { Dropzone, MIME_TYPES } from "@mantine/dropzone";
 
 const renaultPdiChecklistItemDefinition = {
     lubricationOilAndFluidLevels: [
-        { id: '1', label: 'Charge battery', itemKey: 'chargeBattery' },
-        { id: '2', label: 'Check battery charge and fluid level', itemKey: 'batteryChargeFluidLevel' },
-        { id: '3', label: 'Lubricate leaf suspension bushings', itemKey: 'lubricateLeafSuspensionBushings' },
-        { id: '4', label: 'Check fluid levels in windscreen and headlamp washer reservoirs', itemKey: 'fluidLevelsWindscreenHeadlamp' },
-        { id: '5', label: 'Check coolant level', itemKey: 'coolantLevel' },
-        { id: '6', label: 'Check engine oil level', itemKey: 'engineOilLevel' },
-        { id: '7', label: 'Check AdBlue level', itemKey: 'adBlueLevel' },
-        { id: '8', label: 'Replace battery cable', itemKey: 'replaceBatteryCable' },
-        { id: '9', label: 'Install chocks', itemKey: 'installChocks' },
-        { id: '10', label: 'Activate and lubricate fifth wheel', itemKey: 'activateLubricateFifthWheel' },
+        { id: '1', label: 'Charge Battery', itemKey: 'chargeBattery' },
+        { id: '2', label: 'Check Battery Charge and Fluid Level', itemKey: 'batteryChargeFluidLevel' },
+        { id: '3', label: 'Lubricate Leaf Suspension Bushings', itemKey: 'lubricateLeafSuspensionBushings' },
+        { id: '4', label: 'Check Fluid Levels in Windscreen and Headlamp Washer Reservoirs', itemKey: 'fluidLevelsWindscreenHeadlamp' },
+        { id: '5', label: 'Check Coolant Level', itemKey: 'coolantLevel' },
+        { id: '6', label: 'Check Engine Oil Level', itemKey: 'engineOilLevel' },
+        { id: '7', label: 'Check AdBlue Level', itemKey: 'adBlueLevel' },
+        { id: '8', label: 'Replace Battery Cable', itemKey: 'replaceBatteryCable' },
+        { id: '9', label: 'Install Chocks', itemKey: 'installChocks' },
+        { id: '10', label: 'Activate and Lubricate Fifth Wheel', itemKey: 'activateLubricateFifthWheel' },
     ],
     cab: [
-        { id: '11', label: 'Connect-disconnect diagnostic tool', itemKey: 'connectDisconnectDiagnosticTool' },
-        { id: '12', label: 'Activate vehicle electrical system', itemKey: 'activateElectricalSystem' },
-        { id: '13', label: 'Connectivity, check', itemKey: 'connectivityCheck' },
-        { id: '14', label: 'Activate radio', itemKey: 'activateRadio' },
-        { id: '15', label: 'Activate anti-theft alarm', itemKey: 'activateAntiTheftAlarm' },
-        { id: '16', label: 'Check warning and control lamps', itemKey: 'checkWarningControlLamps' },
-        { id: '17', label: 'Function check of parking heater', itemKey: 'functionCheckParkingHeater' },
+        { id: '11', label: 'Connect-Disconnect Diagnostic tool', itemKey: 'connectDisconnectDiagnosticTool' },
+        { id: '12', label: 'Activate Vehicle Electrical System', itemKey: 'activateElectricalSystem' },
+        { id: '13', label: 'Connectivity, Check', itemKey: 'connectivityCheck' },
+        { id: '14', label: 'Activate Radio', itemKey: 'activateRadio' },
+        { id: '15', label: 'Activate Anti-theft Alarm', itemKey: 'activateAntiTheftAlarm' },
+        { id: '16', label: 'Check Warning and Control Lamps', itemKey: 'checkWarningControlLamps' },
+        { id: '17', label: 'Function Check of Parking Heater', itemKey: 'functionCheckParkingHeater' },
     ],
     exterior: [
-        { id: '18', label: 'Attach exhaust tail pipe', itemKey: 'attachExhaustTailPipe' },
-        { id: '19', label: 'Check cab and chassis', itemKey: 'checkCabChassis' },
-        { id: '20', label: 'Check tightening of wheel nuts and attachment of protecting rings', itemKey: 'checkWheelNuts' },
-        { id: '21', label: 'Check tyre pressure', itemKey: 'checkTyrePressure' },
-        { id: '22', label: 'Install license plate', itemKey: 'installLicensePlate' },
-        { id: '23', label: 'Install air deflector', itemKey: 'installAirDeflector' },
-        { id: '24', label: 'Remove spare wheel', itemKey: 'removeSpareWheel' },
+        { id: '18', label: 'Attach Exhaust Tail Pipe', itemKey: 'attachExhaustTailPipe' },
+        { id: '19', label: 'Check Cab and Chassis', itemKey: 'checkCabChassis' },
+        { id: '20', label: 'Check Tightening of Wheel Nuts and Attachment of Protecting Rings', itemKey: 'checkWheelNuts' },
+        { id: '21', label: 'Check Tyre Pressure', itemKey: 'checkTyrePressure' },
+        { id: '22', label: 'Install License Plate', itemKey: 'installLicensePlate' },
+        { id: '23', label: 'Install Air Deflector', itemKey: 'installAirDeflector' },
+        { id: '24', label: 'Remove Spare Wheel', itemKey: 'removeSpareWheel' },
     ],
     underVehicle: [
-        { id: '25', label: 'Remove screw in charge air cooler. Only on markets where there is a risk of freezing', itemKey: 'removeScrewChargeAirCooler' },
-        { id: '26', label: 'Check load sensing valve setting', itemKey: 'checkLoadSensingValve' },
-        { id: '27', label: 'Check superstructure', itemKey: 'checkSuperstructure' },
+        { id: '25', label: 'Remove Screw in Charge Air Cooler (only on markets where there is a risk of freezing)', itemKey: 'removeScrewChargeAirCooler' },
+        { id: '26', label: 'Check Load Sensing Valve Setting', itemKey: 'checkLoadSensingValve' },
+        { id: '27', label: 'Check Superstructure', itemKey: 'checkSuperstructure' },
     ],
     testDrive: [
-        { id: '28', label: 'Check after start', itemKey: 'checkAfterStart' },
-        { id: '29', label: 'Check during road test', itemKey: 'checkDuringRoadTest' },
-        { id: '30', label: 'Check after road test', itemKey: 'checkAfterRoadTest' },
+        { id: '28', label: 'Check After Start', itemKey: 'checkAfterStart' },
+        { id: '29', label: 'Check During Road Test', itemKey: 'checkDuringRoadTest' },
+        { id: '30', label: 'Check After Road Test', itemKey: 'checkAfterRoadTest' },
     ],
     finish: [
-        { id: '31', label: 'Remove protective film', itemKey: 'removeProtectiveFilm' },
+        { id: '31', label: 'Remove Protective Film', itemKey: 'removeProtectiveFilm' },
         { id: '32', label: 'Finish', itemKey: 'finish' },
-        { id: '33', label: 'Brake adaptation, information to customer', itemKey: 'brakeAdaptation' },
+        { id: '33', label: 'Brake Adaptation, Information to Customer', itemKey: 'brakeAdaptation' },
     ],
 };
 
 const initialChecklistValues = Object.keys(renaultPdiChecklistItemDefinition).reduce((acc, sectionKey) => {
     acc[sectionKey] = renaultPdiChecklistItemDefinition[sectionKey].reduce((itemAcc, item) => {
-        itemAcc[item.itemKey] = '';
+        itemAcc[item.itemKey] = {
+            value: '',
+            notes: '',
+            image: null,
+        };
         return itemAcc;
     }, {});
     return acc;
@@ -80,20 +86,20 @@ const initialChecklistValues = Object.keys(renaultPdiChecklistItemDefinition).re
 
 const initialRenaultPdiValues = {
     date: null,
-    repairOrderNo: '',
+    repairOrderNo: null,
     mileageHourMeter: '',
     chassisId: '',
     registrationNo: '',
     vinNo: '',
     customer: '',
     city: '',
-    model: '',
+    model: null,
     engine: '',
     axle: '',
 
     // property for technician
-    technician: '',
-    approvalBy: '',
+    technician: null,
+    approvalBy: null,
 
     // checklist items
     checklistItems: initialChecklistValues,
@@ -109,18 +115,22 @@ const initialRenaultPdiValues = {
 };
 
 export function RenaultPDIForm() {
-    const [technician, setTechnician] = useState([]);
-    const [approval, setApproval] = useState([]);
-    const [WoNumber, setWoNumber] = useState([]);
-    const [customers, setCustomers] = useState('');
     const [unitModels, setUnitModels] = useState([]);
+    const [customers, setCustomers] = useState('');
+    const [WoNumbers, setWoNumbers] = useState([]);
+    const [technicians, setTechnicians] = useState([]);
+    const [approvers, setApprovers] = useState([]);
 
     const buildChecklistValidation = () => {
         const checklistValidation = {};
         Object.keys(renaultPdiChecklistItemDefinition).forEach(sectionKey => {
             renaultPdiChecklistItemDefinition[sectionKey].forEach(item => {
-                const fieldKey = `checklistItems.${sectionKey}.${item.itemKey}`;
-                checklistValidation[fieldKey] = (value) => (value ? null :  "This Field is Required!");
+                checklistValidation[`checklistItems.${sectionKey}.${item.itemKey}.value`] = (value) => (
+                    value ? null : "This Field is Required!"
+                );
+                checklistValidation[`checklistItems.${sectionKey}.${item.itemKey}.image`] = (value) => (
+                    value ? null : "An Image is Required for This Item!"
+                );
             });
         });
         return checklistValidation;
@@ -146,93 +156,69 @@ export function RenaultPDIForm() {
     });
 
     useEffect(() => {
-        const fetchWONumber = async () => {
+        const fetchData = async () => {
             try {
-                const response = await fetch(`http://127.0.0.1:5000/api/work-orders`);
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                const data = await response.json();
-                const formattedWONumbers = data.map(item => ({
-                    value: item.WONumber,
-                    label: item.WONumber,
-                }));
-                setWoNumber(formattedWONumbers);
-            } catch (error) {
-                notifications.show({
-                    title: "Error Loading Data",
-                    message: "Failed to load Work Orders. Please try again!",
-                    color: "red",
-                });
-                setWoNumber([]);
-            }
-        };
+                const brandId = "RT"; // 'RT' for Renault
+                const groupId = "DPDPI"; // 'DPDPI' for PDI
 
-        const fetchCustomers = async () => {
-            try {
-                const response = await fetch(`http://127.0.0.1:5000/api/customers`);
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                const customersData = await response.json();
-                const formattedCustomers = customersData.map(customer => ({
+                // model/ Type RT API
+                const modelResponse = await fetch(`http://127.0.0.1:5000/api/unit-types/RT`);
+                if (!modelResponse.ok) throw new Error(`HTTP error! status: ${modelResponse.status}`);
+                const modelData = await modelResponse.json();
+                setUnitModels(modelData);
+
+                // wo Number API
+                const woResponse = await fetch(`http://127.0.0.1:5000/api/work-orders?brand_id=${brandId}&group_id=${groupId}`);
+                if (!woResponse.ok) throw new Error(`HTTP error! status: ${woResponse.status}`);
+                const woData = await woResponse.json();
+                const formattedWoData = woData.map(wo => ({ 
+                    value: wo.WONumber, 
+                    label: wo.WONumber 
+                }));
+                setWoNumbers(formattedWoData);
+
+                // customers API
+                const customerResponse = await fetch(`http://127.0.0.1:5000/api/customers`);
+                if (!customerResponse.ok) throw new Error(`HTTP error! status: ${customerResponse.status}`);
+                const customerData = await customerResponse.json();
+                const formattedCustomers = customerData.map(customer => ({
                     value: customer.CustomerID,
                     label: customer.CustomerName
                 }));
                 setCustomers(formattedCustomers);
+
+                 // dummy Technicians API
+                const dummyTechniciansData = [
+                    { value: "tech1", label: "John Doe" },
+                    { value: "tech2", label: "Jane Smith" },
+                    { value: "tech3", label: "Peter Jones" }
+                ];
+                setTechnicians(dummyTechniciansData);
+
+                // dummy Approvers API
+                const dummyApproverData = [
+                    { value: "app1", label: "Alice Brown" },
+                    { value: "app2", label: "Bob White" },
+                    { value: "app3", label: "John Green" }
+                ];
+                setApprovers(dummyApproverData);
+                
             } catch (error) {
+                console.error("Failed to fetch models:", error);
                 notifications.show({
                     title: "Error Loading Data",
-                    message: "Failed to load Customers. Please try again!",
+                    message: "Failed to load models. Please try again!",
                     color: "red",
                 });
-                setCustomers([]);
             }
         };
-
-        const fetchUnitTypes = async () => {
-            try {
-                const modelResponse = await fetch("http://127.0.0.1:5000/api/unit-types/RT");
-				if (!modelResponse.ok) {
-					throw new Error(`HTTP error! status: ${modelResponse.status}`);
-				}
-				const modelData = await modelResponse.json();
-				setUnitModels(modelData);
-            } catch (error) {
-                notifications.show({
-                    title: "Error Loading Data",
-                    message: "Failed to load Unit Models. Please try again!",
-                    color: "red",
-                });
-                setUnitModels([]);
-            }
-        };
-
-        const dummyTechnicians = [
-            { value: "tech1", label: "John Doe" },
-            { value: "tech2", label: "Jane Smith" },
-            { value: "tech3", label: "Peter Jones" }
-        ];
-        setTechnician(dummyTechnicians);
-
-        const dummyApprover = [
-            { value: "app1", label: "Alice Brown" },
-            { value: "app2", label: "Bob White" },
-            { value: "app3", label: "John Green" }
-        ];
-        setApproval(dummyApprover);
-
-        fetchWONumber();
-        fetchCustomers();
-        fetchUnitTypes();
+        fetchData();
     }, []);
 
     const handleSubmit = async (values) => {
         const token = localStorage.getItem('access_token');
-        
-        console.log("DEBUG: Token from localStorage:", token); // --> DEBUG
 
-        if(!token) {
+        if (!token) {
             notifications.show({
                 title: "Authentication Error",
                 message: "Please log in again. Authentication token is missing.",
@@ -245,6 +231,7 @@ export function RenaultPDIForm() {
         console.log("Form Submitted with Values:", values);
 
         const checklistPayload = {};
+        const formData = new FormData();
 
         const {
             cab,
@@ -255,29 +242,22 @@ export function RenaultPDIForm() {
             finish,
         } = values.checklistItems;
         
-        Object.entries(cab).forEach(([key, value]) => {
-            checklistPayload[`cab.${key}`] = value;
-        });
-
-        Object.entries(exterior).forEach(([key, value]) => {
-            checklistPayload[`exterior.${key}`] = value;
-        });
-
-        Object.entries(lubricationOilAndFluidLevels).forEach(([key, value]) => {
-            checklistPayload[`lubricationOilAndFluidLevels.${key}`] = value;
-        });
-
-        Object.entries(testDrive).forEach(([key, value]) => {
-            checklistPayload[`testDrive.${key}`] = value;
-        });
-
-        Object.entries(underVehicle).forEach(([key, value]) => {
-            checklistPayload[`underVehicle.${key}`] = value;
-        });
-
-        Object.entries(finish).forEach(([key, value]) => {
-            checklistPayload[`finish.${key}`] = value;
-        });
+        const processChecklistItems = (section, sectionKey) => {
+            Object.entries(section).forEach(([itemKey, itemValue]) => {
+                checklistPayload[`${sectionKey}.${itemKey}.value`] = itemValue.value;
+                checklistPayload[`${sectionKey}.${itemKey}.notes`] = itemValue.notes;
+                if (itemValue.image) {
+                    formData.append(`${sectionKey}.${itemKey}.image`, itemValue.image);
+                }
+            });
+        };
+        
+        processChecklistItems(cab, 'cab');
+        processChecklistItems(exterior, 'exterior');
+        processChecklistItems(lubricationOilAndFluidLevels, 'lubricationOilAndFluidLevels');
+        processChecklistItems(testDrive, 'testDrive');
+        processChecklistItems(underVehicle, 'underVehicle');
+        processChecklistItems(finish, 'finish');
 
         const payload = {
             brand: 'renault',
@@ -308,6 +288,7 @@ export function RenaultPDIForm() {
             vehicle_innspection: values.vehicleDamageNotes,
         };
 
+        formData.append('json_payload', JSON.stringify(payload));
         console.log("Payload to backend: ", payload)
 
         try {
@@ -317,7 +298,7 @@ export function RenaultPDIForm() {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
                 },
-                body: JSON.stringify(payload),
+                body: formData,
             });
 
             if (!response.ok) {
@@ -342,23 +323,89 @@ export function RenaultPDIForm() {
             });
         }
     };
+    
+    const renderChecklistItem = (label, sectionKey, itemKey) => {
+        const itemData = form.getInputProps(`checklistItems.${sectionKey}.${itemKey}`);
+        const hasImage = itemData.value.image instanceof File;
+        const imageError = form.errors[`checklistItems.${sectionKey}.${itemKey}.image`];
+        const notesError = form.errors[`checklistItems.${sectionKey}.${itemKey}.notes`];
 
-    const renderChecklistItem = (label, formProps, key) => {
         return (
-            <Grid.Col span={{ base: 12 }} key={key}>
+            <Grid.Col span={{ base: 12 }} key={itemKey}>
                 <Stack gap="xs">
+                    {/* Text label */}
                     <Text size="sm" style={{ color: '#000000 !important', fontWeight: 500 }}>{label}</Text>
+                    <Text size="xs" style={{ color: 'var(--mantine-color-gray-6)' }}>Select one option</Text>
+
+                    {/* Radio of Button Group */}
                     <Radio.Group
-                        {...formProps}
+                        value={itemData.value.value}
+                        onChange={(statusValue) => form.setFieldValue(`checklistItems.${sectionKey}.${itemKey}.value`, statusValue)}
                         orientation="horizontal"
+                        error={form.errors[`checklistItems.${sectionKey}.${itemKey}`]}
                     >
                         <Group mt="xs" justify="space-between" style={{ width: '100%' }}>
-                                <Radio value="repaired" label={<Text style={{ color: '#000000 !important' }}> Repaired, Without Notes </Text>} />
-                                <Radio value="recommended_repair" label={<Text style={{ color: '#000000 !important' }}> Repair Recommended </Text>} />
-                                <Radio value="immediately_repair" label={<Text style={{ color: '#000000 !important' }}> Repair Immediately </Text>} />
-                                <Radio value="not_applicable" label={<Text style={{ color: '#000000 !important' }}> Not Applicable </Text>} />
+                            <Radio value="repaired" label={<Text style={{ color: '#000000 !important' }}> Repaired, Without Notes </Text>} />
+                            <Radio value="recommended_repair" label={<Text style={{ color: '#000000 !important' }}> Repair Recommended </Text>} />
+                            <Radio value="immediately_repair" label={<Text style={{ color: '#000000 !important' }}> Repair Immediately </Text>} />
+                            <Radio value="not_applicable" label={<Text style={{ color: '#000000 !important' }}> Not Applicable </Text>} />
                         </Group>
                     </Radio.Group>
+                    
+                    {/* Dropzone of images */}
+                    <Dropzone
+                        onDrop={(files) => {
+                            if (files.length > 0) {
+                                form.setFieldValue(`checklistItems.${sectionKey}.${itemKey}.image`, files[0]);
+                            }
+                        }}
+                        onReject={(files) => {
+                            notifications.show({
+                                title: 'File Rejected',
+                                message: `${files[0].errors[0].message}`,
+                                color: 'red',
+                            });
+                        }}
+                        maxFiles={1}
+                        accept={[MIME_TYPES.jpeg, MIME_TYPES.png]}
+                        mt="xs"
+                        error={imageError}
+                        style={{ borderColor: imageError ? 'red' : undefined }}
+                    >
+                        <Group justify="center" gap="xs" style={{ minHeight: rem(80), pointerEvents: 'none' }}>
+                            <Dropzone.Accept>
+                                <IconUpload style={{ width: rem(40), height: rem(40), color: 'var(--mantine-color-blue-6)' }} stroke={1.5} />
+                            </Dropzone.Accept>
+                            <Dropzone.Reject>
+                                <IconX style={{ width: rem(40), height: rem(40), color: 'var(--mantine-color-red-6)' }} stroke={1.5} />
+                            </Dropzone.Reject>
+                            <Dropzone.Idle>
+                                {hasImage ? (
+                                    <IconFile style={{ width: rem(40), height: rem(40), color: 'var(--mantine-color-dimmed)' }} stroke={1.5} />
+                                ) : (
+                                    <IconFile style={{ width: rem(40), height: rem(40), color: 'var(--mantine-color-dimmed)' }} stroke={1.5} />
+                                )}
+                            </Dropzone.Idle>
+                            <Stack align="center" gap={4}>
+                                <Text size="xs" c="dimmed"> {hasImage ? itemData.value.image.name : 'Drag and drop an image here or click to select'} </Text>
+                                <Text size="xs" c="dimmed"> Accepted formats: JPG, PNG </Text>
+                            </Stack>
+                        </Group>
+                    </Dropzone>
+                    {imageError && (
+                        <Text size="sm" c="red" mt={5}>
+                            {imageError}
+                        </Text>
+                    )}
+                    
+                    <TextInput
+                        placeholder="Add Image Caption"
+                        mt="xs"
+                        value={itemData.value.notes}
+                        leftSection={<IconPencil size={20}/>}
+                        onChange={(event) => form.setFieldValue(`checklistItems.${sectionKey}.${itemKey}.notes`, event.target.value)}
+                        error={notesError}
+                    />
                 </Stack>
             </Grid.Col>
         );
@@ -369,15 +416,15 @@ export function RenaultPDIForm() {
             <Card shadow="sm" p="xl" withBorder mb="lg">
                 <Title order={3} mb="md" style={{ color: '#000000 !important' }}>{sectionTitle}</Title>
                 <Grid gutter="xl">
-                    {items.map((item) => {
-                        const fieldName = `checklistItems.${sectionKey}.${item.itemKey}`;
-                        console.log('Rendering field:', fieldName);
-                        return renderChecklistItem(
-                            `${item.id}. ${item.label}`,
-                                form.getInputProps(`checklistItems.${sectionKey}.${item.itemKey}`),
-                            `${sectionKey}-${item.itemKey}`,
-                        );
-                    })}
+                    {items.map((item) => (
+                        <React.Fragment key={item.itemKey}>
+                            {renderChecklistItem(
+                                `${item.id}. ${item.label}`,
+                                sectionKey,
+                                item.itemKey
+                            )}
+                        </React.Fragment>
+                    ))}
                 </Grid>
             </Card>
         );
@@ -396,11 +443,21 @@ export function RenaultPDIForm() {
             <form onSubmit={form.onSubmit(handleSubmit)}>
                 {/* Header Information */}
                 <Card shadow="sm" p="xl" withBorder mb="lg">
-                    <Title order={3} mb="md" style={{ color: '#000000 !important' }}> Required Information </Title>
+                    <Title order={3} mb="md" style={{ color: '#000000 !important' }}> Unit Information </Title>
                     <Grid gutter="xl">
                         <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
+                            <Select
+                                label="WO Number"
+                                placeholder="Select WO Number"
+                                searchable
+                                clearable
+                                data={WoNumbers}
+                                {...form.getInputProps('repairOrderNo')}
+                            />
+                        </Grid.Col>
+                        <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
                             <DateInput
-                                label={<Text style={{ color: '#000000 !important' }}> Date </Text>}
+                                label="Date"
                                 placeholder="Select Date"
                                 valueFormat="DD-MM-YYYY"
                                 {...form.getInputProps('date')}
@@ -418,18 +475,8 @@ export function RenaultPDIForm() {
                             />
                         </Grid.Col>
                         <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
-                            <Select
-                                label="WO Number"
-                                placeholder="Select WO Number"
-                                searchable
-                                clearable
-                                data={WoNumber}
-                                {...form.getInputProps('repairOrderNo')}
-                            />
-                        </Grid.Col>
-                        <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
                             <TextInput
-                                label={<Text style={{ color: '#000000 !important' }}> Mileage/ Hour Meter </Text>}
+                                label="Mileage/ Hour Meter"
                                 placeholder="Input Mileage/ Hour Meter"
                                 {...form.getInputProps('mileageHourMeter')}
                                 styles={{ input: { color: '#000000 !important' } }}
@@ -437,7 +484,7 @@ export function RenaultPDIForm() {
                         </Grid.Col>
                         <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
                             <TextInput
-                                label={<Text style={{ color: '#000000 !important' }}> Chassis ID </Text>}
+                                label="Chassis ID"
                                 placeholder="Input Chassis ID"
                                 {...form.getInputProps('chassisId')}
                                 styles={{ input: { color: '#000000 !important' } }}
@@ -445,7 +492,7 @@ export function RenaultPDIForm() {
                         </Grid.Col>
                         <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
                             <TextInput
-                                label={<Text style={{ color: '#000000 !important' }}> Registration No </Text>}
+                                label="Registration Number"
                                 placeholder="Input Registration Number"
                                 {...form.getInputProps('registrationNo')}
                                 styles={{ input: { color: '#000000 !important' } }}
@@ -453,7 +500,7 @@ export function RenaultPDIForm() {
                         </Grid.Col>
                         <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
                             <TextInput
-                                label={<Text style={{ color: '#000000 !important' }}> City </Text>}
+                                label="City"
                                 placeholder="Input City"
                                 {...form.getInputProps('city')}
                                 styles={{ input: { color: '#000000 !important' } }}
@@ -461,8 +508,8 @@ export function RenaultPDIForm() {
                         </Grid.Col>
                         <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
                             <Select
-                                label="Type/Model"
-                                placeholder="Select a Type/Model"
+                                label="Type/ Model"
+                                placeholder="Select a Type/ Model"
                                 data={unitModels}
                                 searchable
                                 clearable
@@ -472,15 +519,15 @@ export function RenaultPDIForm() {
                         </Grid.Col>
                         <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
                             <TextInput
-                                label={<Text style={{ color: '#000000 !important' }}> Engine </Text>}
-                                placeholder="Input Engine No"
+                                label="Engine"
+                                placeholder="Input Engine Number"
                                 {...form.getInputProps('engine')}
                             />
                         </Grid.Col>
                         <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
                             <TextInput
-                                label={<Text style={{ color: '#000000 !important' }}> Axle </Text>}
-                                placeholder="Input Axle"
+                                label="Axle"
+                                placeholder="Input Axle Number"
                                 {...form.getInputProps('axle')}
                             />
                         </Grid.Col>
@@ -488,7 +535,7 @@ export function RenaultPDIForm() {
                             <Select
                                 label="Technician"
                                 placeholder="Select Technician"
-                                data={technician}
+                                data={technicians}
                                 searchable
                                 clearable
                                 {...form.getInputProps("technician")}
@@ -499,7 +546,7 @@ export function RenaultPDIForm() {
                             <Select
                                 label="Approval By"
                                 placeholder="Select Approver"
-                                data={approval}
+                                data={approvers}
                                 searchable
                                 clearable
                                 {...form.getInputProps("approvalBy")}
@@ -508,13 +555,14 @@ export function RenaultPDIForm() {
                         </Grid.Col>
                         <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
                             <TextInput
-                                label={<Text style={{ color: '#000000 !important' }}> VIN </Text>}
+                                label="VIN"
                                 placeholder="Input VIN Number"
                                 {...form.getInputProps('vinNo')}
                             />
                         </Grid.Col>
                     </Grid>
                 </Card>
+
                 <Divider my="xl" label={<Text style={{ color: '#000000 !important' }}>Legend</Text>} labelPosition="center" />
                     <Group justify="center" gap="xl" mb="lg">
                         <Text style={{ color: '#000000 !important' }}> 1: Repaired, Without Notes </Text>
@@ -526,7 +574,7 @@ export function RenaultPDIForm() {
 
                 {/* Checklist Sections */}
                 {renderChecklistSection(
-                    "Lubrication, oil and fluid levels",
+                    "Lubrication, Oil and Fluid Levels",
                     "lubricationOilAndFluidLevels",
                     renaultPdiChecklistItemDefinition.lubricationOilAndFluidLevels
                 )}
@@ -541,12 +589,12 @@ export function RenaultPDIForm() {
                     renaultPdiChecklistItemDefinition.exterior
                 )}
                 {renderChecklistSection(
-                    "Under vehicle",
+                    "Under Vehicle",
                     "underVehicle",
                     renaultPdiChecklistItemDefinition.underVehicle
                 )}
                 {renderChecklistSection(
-                    "Test drive",
+                    "Test Drive",
                     "testDrive",
                     renaultPdiChecklistItemDefinition.testDrive
                 )}

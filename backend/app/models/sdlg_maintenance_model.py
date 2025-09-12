@@ -10,6 +10,7 @@ class SDLGMaintenanceModel(db.Model):
 
     # main column
     storageID = db.Column(UNIQUEIDENTIFIER, primary_key=True, default=uuid.uuid4)
+    woNumber = db.Column(db.String(50), nullable=False)
     model = db.Column(db.String(50), nullable=False)
     vehicleNumber = db.Column(db.String(50), nullable=False)
     workingHour = db.Column(db.Float, nullable=False)
@@ -70,5 +71,5 @@ class SDLGDefectsAndRemarksModel(db.Model):
         db.ForeignKey('Storage_SDLG.storageID', ondelete='CASCADE'), 
         nullable=False
     )
-    description = db.Column(db.String(500), nullable=False)
-    remarks = db.Column(db.String(500), nullable=True)    
+    description = db.Column(db.Text(), nullable=False)
+    remarks = db.Column(db.Text(), nullable=True)    

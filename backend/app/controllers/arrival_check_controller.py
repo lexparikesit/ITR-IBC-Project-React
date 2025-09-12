@@ -3,9 +3,8 @@ from app import db
 from app.models.renault_checklist_model import RenaultChecklistModel
 from app.models.manitou_checklist_model import ManitouChecklistModel
 from app.models.sdlg_checklist_model import SDLGChecklistModels
-from datetime import datetime, time, date
+from datetime import datetime, time
 from app.controllers.auth_controller import jwt_required
-import uuid
 
 # mapping brand to model database
 BRAND_MODELS = {
@@ -28,7 +27,6 @@ def submit_arrival_checklist():
         
         try:
             data = json.loads(data_string)
-        
         except json.JSONDecodeError:
             return jsonify({"error": "Invalid JSON data in 'data' part"}), 400
         
@@ -79,6 +77,7 @@ def submit_arrival_checklist():
         
         # Logic for Renault
         if brand.lower() == 'renault':
+            new_checklist_entry.woNumber = data.get("woNumber")
             new_checklist_entry.UnitType = data.get("typeModel")
             new_checklist_entry.VIN = data.get("vin")
             new_checklist_entry.EngineNo = data.get("noEngine")
@@ -143,6 +142,7 @@ def submit_arrival_checklist():
         # Logic for Manitou
         elif brand.lower() == 'manitou':
             unit_info = data.get("unitInfo", {})
+            new_checklist_entry.woNumber = unit_info.get('woNumber')
             new_checklist_entry.UnitType = unit_info.get('model')
             new_checklist_entry.VIN = unit_info.get('serialNo')
             new_checklist_entry.HourMeter = unit_info.get('hourMeter')
@@ -165,206 +165,124 @@ def submit_arrival_checklist():
             
             def get_item_data(section_key, item_key):
                 item_obj = checklist_data.get(section_key, {}).get(item_key, {})
-                return item_obj.get('status'), item_obj.get('caption')
+                return item_obj.get('status'), item_obj.get('caption'), item_obj.get('image')
+            
+            FRONTEND_TO_DB_MAPPING = {
+                'engine': {
+                    'airFilter': 'engine1',
+                    'fuelFilter': 'engine2',
+                    'fuelPipeFilters': 'engine3',
+                    'injectionCarburationSystem': 'engine4',
+                    'radiatorCoolingSystems': 'engine5',
+                    'belts': 'engine6',
+                    'hosesEngine': 'engine7',
+                },
+                'transmission': {
+                    'reversingSystem': 'transmission1',
+                    'gearOilLeaks': 'transmission2',
+                    'directionDisconnectPedal': 'transmission3',
+                    'clutch': 'transmission4',
+                },
+                'axleTransferBox': {
+                    'operationTightness': 'axle1',
+                    'adjustmentStops': 'axle2',
+                },
+                'hydraulicHydrostaticCircuits': {
+                    'oilTank': 'hydraulic1',
+                    'pumpsCoupling': 'hydraulic2',
+                    'tightnessOfUnions': 'hydraulic3',
+                    'liftingRams': 'hydraulic4',
+                    'tiltingRams': 'hydraulic5',
+                    'accessoryRams': 'hydraulic6',
+                    'telescopeRams': 'hydraulic7',
+                    'compensatingRams': 'hydraulic8',
+                    'steeringRams': 'hydraulic9',
+                    'controlValves': 'hydraulic10',
+                    'counterBalanceValve': 'hydraulic11',
+                },
+                'brakingCircuits': {
+                    'serviceBrakeParkingBrakeOperation': 'brake1',
+                    'brakeFluidLevel': 'brake2',
+                },
+                'lubrication': {
+                    'lubrication': 'lub',
+                },
+                'boomMastManiscopicManicess': {
+                    'boomTelescopes': 'boom1',
+                    'wearPads': 'boom2',
+                    'linkage': 'boom3',
+                    'carriageBooms': 'boom4',
+                    'forksBooms': 'boom5',
+                },
+                'mastUnit': {
+                    'fixedMovableMast': 'mast1',
+                    'carriageMast': 'mast2',
+                    'chains': 'mast3',
+                    'rollers': 'mast4',
+                    'forksMastUnit': 'mast5',
+                },
+                'accessories': {
+                    'adaptationToMachine': 'acc1',
+                    'hydraulicConnections': 'acc2',
+                },
+                'cabProtectiveDeviceElectricCircuit': {
+                    'seat': 'cab1',
+                    'controlPanelRadio': 'cab2',
+                    'hornWarningLightSafetyDevice': 'cab3',
+                    'heatingAirConditioning': 'cab4',
+                    'windscreenWiperWasher': 'cab5',
+                    'horns': 'cab6',
+                    'backupAlarm': 'cab7',
+                    'lighting': 'cab8',
+                    'additionalLighting': 'cab9',
+                    'rotatingBeacon': 'cab10',
+                    'battery': 'cab11',
+                },
+                'wheels': {
+                    'rims': 'wheels1',
+                    'tiresPressure': 'wheels2',
+                },
+                'otherItems': {
+                    'screwsNuts': 'nuts',
+                    'frameBody': 'body',
+                    'namePlate': 'paint',
+                    'generalOperation': 'general',
+                    'operatorsManual': 'op_manual',
+                    'instructionsForCustomer': 'instruction',
+                }
+            }
 
-            # Engine
-            status, caption = get_item_data('engine', 'airFilter')
-            new_checklist_entry.engine1 = convert_manitou_status_to_tinyint(status)
-            
-            status, caption = get_item_data('engine', 'fuelFilter')
-            new_checklist_entry.engine2 = convert_manitou_status_to_tinyint(status)
-            
-            status, caption = get_item_data('engine', 'fuelPipeFilters')
-            new_checklist_entry.engine3 = convert_manitou_status_to_tinyint(status)
-            
-            status, caption = get_item_data('engine', 'injectionCarburationSystem')
-            new_checklist_entry.engine4 = convert_manitou_status_to_tinyint(status)
-            
-            status, caption = get_item_data('engine', 'radiatorCoolingSystems')
-            new_checklist_entry.engine5 = convert_manitou_status_to_tinyint(status)
-            
-            status, caption = get_item_data('engine', 'belts')
-            new_checklist_entry.engine6 = convert_manitou_status_to_tinyint(status)
-            
-            status, caption = get_item_data('engine', 'hosesEngine')
-            new_checklist_entry.engine7 = convert_manitou_status_to_tinyint(status)
+            for section_key, items in FRONTEND_TO_DB_MAPPING.items():
+                for item_key, db_column_prefix in items.items():
+                    status, caption, image = get_item_data(section_key, item_key)
 
-            # Transmission
-            status, caption = get_item_data('transmission', 'reversingSystem')
-            new_checklist_entry.transmission1 = convert_manitou_status_to_tinyint(status)
-            
-            status, caption = get_item_data('transmission', 'gearOilLeaks')
-            new_checklist_entry.transmission2 = convert_manitou_status_to_tinyint(status)
-            
-            status, caption = get_item_data('transmission', 'directionDisconnectPedal')
-            new_checklist_entry.transmission3 = convert_manitou_status_to_tinyint(status)
-            
-            status, caption = get_item_data('transmission', 'clutch')
-            new_checklist_entry.transmission4 = convert_manitou_status_to_tinyint(status)
+                    # Set status
+                    status_column = db_column_prefix
+                    if hasattr(new_checklist_entry, status_column):
+                        setattr(new_checklist_entry, status_column, convert_manitou_status_to_tinyint(status))
 
-            # Axle/Transfer Box
-            status, caption = get_item_data('axleTransferBox', 'operationTightness')
-            new_checklist_entry.axle1 = convert_manitou_status_to_tinyint(status)
-            
-            status, caption = get_item_data('axleTransferBox', 'adjustmentStops')
-            new_checklist_entry.axle2 = convert_manitou_status_to_tinyint(status)
+                    caption_column = f'caption_{db_column_prefix}' if not db_column_prefix.startswith(('nuts', 'body', 'paint', 'general', 'op_manual', 'instruction')) else f'caption_{db_column_prefix}'
+                    if hasattr(new_checklist_entry, caption_column):
+                        setattr(new_checklist_entry, caption_column, caption)
 
-            # Hydraulic/Hydrostatic Circuits
-            status, caption = get_item_data('hydraulicHydrostaticCircuits', 'oilTank')
-            new_checklist_entry.hydraulic1 = convert_manitou_status_to_tinyint(status)
-            
-            status, caption = get_item_data('hydraulicHydrostaticCircuits', 'pumpsCoupling')
-            new_checklist_entry.hydraulic2 = convert_manitou_status_to_tinyint(status)
-            
-            status, caption = get_item_data('hydraulicHydrostaticCircuits', 'tightnessOfUnions')
-            new_checklist_entry.hydraulic3 = convert_manitou_status_to_tinyint(status)
-            
-            status, caption = get_item_data('hydraulicHydrostaticCircuits', 'liftingRams')
-            new_checklist_entry.hydraulic4 = convert_manitou_status_to_tinyint(status)
-            
-            status, caption = get_item_data('hydraulicHydrostaticCircuits', 'tiltingRams')
-            new_checklist_entry.hydraulic5 = convert_manitou_status_to_tinyint(status)
-            
-            status, caption = get_item_data('hydraulicHydrostaticCircuits', 'accessoryRams')
-            new_checklist_entry.hydraulic6 = convert_manitou_status_to_tinyint(status)
-            
-            status, caption = get_item_data('hydraulicHydrostaticCircuits', 'telescopeRams')
-            new_checklist_entry.hydraulic7 = convert_manitou_status_to_tinyint(status)
-            
-            status, caption = get_item_data('hydraulicHydrostaticCircuits', 'compensatingRams')
-            new_checklist_entry.hydraulic8 = convert_manitou_status_to_tinyint(status)
-            
-            status, caption = get_item_data('hydraulicHydrostaticCircuits', 'steeringRams')
-            new_checklist_entry.hydraulic9 = convert_manitou_status_to_tinyint(status)
-            
-            status, caption = get_item_data('hydraulicHydrostaticCircuits', 'controlValves')
-            new_checklist_entry.hydraulic10 = convert_manitou_status_to_tinyint(status)
-            
-            status, caption = get_item_data('hydraulicHydrostaticCircuits', 'counterBalanceValve')
-            new_checklist_entry.hydraulic11 = convert_manitou_status_to_tinyint(status)
-
-            # Braking Circuits
-            status, caption = get_item_data('brakingCircuits', 'serviceBrakeParkingBrakeOperation')
-            new_checklist_entry.brake1 = convert_manitou_status_to_tinyint(status)
-            
-            status, caption = get_item_data('brakingCircuits', 'brakeFluidLevel')
-            new_checklist_entry.brake2 = convert_manitou_status_to_tinyint(status)
-
-            # Lubrication
-            status, caption = get_item_data('lubrication', 'lubrication')
-            new_checklist_entry.lub1 = convert_manitou_status_to_tinyint(status)
-
-            # Boom/Mast Maniscopic/Manicess
-            status, caption = get_item_data('boomMastManiscopicManicess', 'boomTelescopes')
-            new_checklist_entry.boom1 = convert_manitou_status_to_tinyint(status)
-            
-            status, caption = get_item_data('boomMastManiscopicManicess', 'wearPads')
-            new_checklist_entry.boom2 = convert_manitou_status_to_tinyint(status)
-            
-            status, caption = get_item_data('boomMastManiscopicManicess', 'linkage')
-            new_checklist_entry.boom3 = convert_manitou_status_to_tinyint(status)
-            
-            status, caption = get_item_data('boomMastManiscopicManicess', 'carriageBooms')
-            new_checklist_entry.boom4 = convert_manitou_status_to_tinyint(status)
-            
-            status, caption = get_item_data('boomMastManiscopicManicess', 'forksBooms')
-            new_checklist_entry.boom5 = convert_manitou_status_to_tinyint(status)
-
-            # Mast Unit
-            status, caption = get_item_data('mastUnit', 'fixedMovableMast')
-            new_checklist_entry.mast1 = convert_manitou_status_to_tinyint(status)
-            
-            status, caption = get_item_data('mastUnit', 'carriageMast')
-            new_checklist_entry.mast2 = convert_manitou_status_to_tinyint(status)
-            
-            status, caption = get_item_data('mastUnit', 'chains')
-            new_checklist_entry.mast3 = convert_manitou_status_to_tinyint(status)
-            
-            status, caption = get_item_data('mastUnit', 'rollers')
-            new_checklist_entry.mast4 = convert_manitou_status_to_tinyint(status)
-            
-            status, caption = get_item_data('mastUnit', 'forksMastUnit')
-            new_checklist_entry.mast5 = convert_manitou_status_to_tinyint(status)
-
-            # Accessories
-            status, caption = get_item_data('accessories', 'adaptationToMachine')
-            new_checklist_entry.acc1 = convert_manitou_status_to_tinyint(status)
-            
-            status, caption = get_item_data('accessories', 'hydraulicConnections')
-            new_checklist_entry.acc2 = convert_manitou_status_to_tinyint(status)
-
-            # Cab Protective Device Electric Circuit
-            status, caption = get_item_data('cabProtectiveDeviceElectricCircuit', 'seat')
-            new_checklist_entry.cab1 = convert_manitou_status_to_tinyint(status)
-            
-            status, caption = get_item_data('cabProtectiveDeviceElectricCircuit', 'controlPanelRadio')
-            new_checklist_entry.cab2 = convert_manitou_status_to_tinyint(status)
-            
-            status, caption = get_item_data('cabProtectiveDeviceElectricCircuit', 'hornWarningLightSafetyDevice')
-            new_checklist_entry.cab3 = convert_manitou_status_to_tinyint(status)
-            
-            status, caption = get_item_data('cabProtectiveDeviceElectricCircuit', 'heatingAirConditioning')
-            new_checklist_entry.cab4 = convert_manitou_status_to_tinyint(status)
-            
-            status, caption = get_item_data('cabProtectiveDeviceElectricCircuit', 'windscreenWiperWasher')
-            new_checklist_entry.cab5 = convert_manitou_status_to_tinyint(status)
-            
-            status, caption = get_item_data('cabProtectiveDeviceElectricCircuit', 'horns')
-            new_checklist_entry.cab6 = convert_manitou_status_to_tinyint(status)
-            
-            status, caption = get_item_data('cabProtectiveDeviceElectricCircuit', 'backupAlarm')
-            new_checklist_entry.cab7 = convert_manitou_status_to_tinyint(status)
-            
-            status, caption = get_item_data('cabProtectiveDeviceElectricCircuit', 'lighting')
-            new_checklist_entry.cab8 = convert_manitou_status_to_tinyint(status)
-            
-            status, caption = get_item_data('cabProtectiveDeviceElectricCircuit', 'additionalLighting')
-            new_checklist_entry.cab9 = convert_manitou_status_to_tinyint(status)
-            
-            status, caption = get_item_data('cabProtectiveDeviceElectricCircuit', 'rotatingBeacon')
-            new_checklist_entry.cab10 = convert_manitou_status_to_tinyint(status)
-            
-            status, caption = get_item_data('cabProtectiveDeviceElectricCircuit', 'battery')
-            new_checklist_entry.cab11 = convert_manitou_status_to_tinyint(status)
-
-            # Wheels
-            status, caption = get_item_data('wheels', 'rims')
-            new_checklist_entry.wheels1 = convert_manitou_status_to_tinyint(status)
-            
-            status, caption = get_item_data('wheels', 'tiresPressure')
-            new_checklist_entry.wheels2 = convert_manitou_status_to_tinyint(status)
-
-            # Other Items (flat in frontend state)
-            # Ini juga harus disesuaikan, karena strukturnya berbeda.
-            status_nuts = checklist_data.get('screwsNuts', {}).get('status')
-            new_checklist_entry.nuts = convert_manitou_status_to_tinyint(status_nuts)
-            
-            status_body = checklist_data.get('frameBody', {}).get('status')
-            new_checklist_entry.body = convert_manitou_status_to_tinyint(status_body)
-
-            status_paint = checklist_data.get('namePlate', {}).get('status')
-            new_checklist_entry.paint = convert_manitou_status_to_tinyint(status_paint)
-            
-            status_general = checklist_data.get('generalOperation', {}).get('status')
-            new_checklist_entry.general = convert_manitou_status_to_tinyint(status_general)
-            
-            status_op_manual = checklist_data.get('operatorsManual', {}).get('status')
-            new_checklist_entry.op_manual = convert_manitou_status_to_tinyint(status_op_manual)
-            
-            status_instruction = checklist_data.get('instructionsForCustomer', {}).get('status')
-            new_checklist_entry.instruction = convert_manitou_status_to_tinyint(status_instruction)
+                    img_column = f'img_{db_column_prefix}' if not db_column_prefix.startswith(('nuts', 'body', 'paint', 'general', 'op_manual', 'instruction')) else f'img_{db_column_prefix}'
+                    if hasattr(new_checklist_entry, img_column):
+                        setattr(new_checklist_entry, img_column, image)
 
         # Logic for sdlg
         elif brand.lower() == 'sdlg':
             print("DEBUG: Processing SDLG brand data...")
 
-            # Mapping kolom informasi unit
+            # Mapping of unit information
+            new_checklist_entry.woNumber = data.get("woNumber")
             new_checklist_entry.distributionName = data.get("distributionName")
             new_checklist_entry.containerNo = data.get("containerNo")
             new_checklist_entry.leadSealingNo = data.get("leadSealingNo")
             new_checklist_entry.VIN = data.get("vin")
             new_checklist_entry.dateOfCheck = data.get("dateOfCheck")
             new_checklist_entry.inspectorSignature = data.get("inspectorSignature")
+            new_checklist_entry.approvalBy = data.get("approverSignature")
+
             new_checklist_entry.unitLanded = datetime.fromisoformat(data.get("unitLanded")) if data.get("unitLanded") else None
             new_checklist_entry.clearanceCustom = convert_sdlg_status_to_boolean(data.get("clearanceCustom"))
             new_checklist_entry.unitStripping = datetime.fromisoformat(data.get("unitStripping")) if data.get("unitStripping") else None

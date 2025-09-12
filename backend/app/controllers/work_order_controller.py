@@ -1,19 +1,35 @@
 from flask import jsonify, request
 from app import db
 from app.models.work_order_model import WorkOrderView
-from app.models.IBC_Trans import IBC_Trans
+from app.models.renault_checklist_model import RenaultChecklistModel
+from app.models.manitou_checklist_model import ManitouChecklistModel
+from app.models.sdlg_checklist_model import SDLGChecklistModels
 
 def get_all_work_orders_data():
 
     try:
         brand_id = request.args.get('brand_id')
-        query = db.session.query(WorkOrderView)
+        group_id = request.args.get('group_id')
 
-        used_wo_subquery = db.session.query(IBC_Trans.WO).subquery()
-        query = query.filter(~WorkOrderView.CASEID.in_(used_wo_subquery))
+        # get allowed status
+        allowed_statuses = ["CREATED", "IN PROCESS"]
+
+        # subquery for fetch all WO data from each Table
+        used_wo_subquery = db.session.query(ManitouChecklistModel.woNumber).union_all(
+            db.session.query(RenaultChecklistModel.woNumber)
+        ).union_all(
+            db.session.query(SDLGChecklistModels.woNumber)
+        ).subquery()
+
+        query = db.session.query(WorkOrderView).filter(~WorkOrderView.CASEID.in_(used_wo_subquery))
+
+        if group_id:
+            query = query.filter(WorkOrderView.GROUPID == group_id)
 
         if brand_id:
             query = query.filter(WorkOrderView.DISPLAYVALUE == brand_id)
+
+        query = query.filter(WorkOrderView.StatusWO.in_(allowed_statuses))
 
         work_orders = query.all()
 

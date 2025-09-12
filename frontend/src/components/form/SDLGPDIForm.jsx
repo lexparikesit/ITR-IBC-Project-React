@@ -34,15 +34,17 @@ const inspectionItemsDefinition = [
 ]
 
 export function SdlgPDIForm() {
-    const [machineData, setMachineData] = useState([]);
-    const [inspectorData, setInspectorData] = useState([]);
-    const [supervisorData, setSupervisorData] = useState([]);
+    const [unitModels, setUnitModels] = useState([]);
+    const [WoNumbers, setWoNumbers] = useState([]);
+    const [technicians, setTechnicians] = useState([]);
+    const [approvers, setApprovers] = useState([]);
 
     const form = useForm({
         initialValues: {
-            machineModel: '',
+            woNumber: null,
+            machineModel: null,
             vehicleNumber: '',
-            preInspectionPersonnel: '',
+            preInspectionPersonnel: null,
 
             inspectionChecklist: inspectionItemsDefinition.reduce((acc, item) => {
                 acc[item.id] = false;
@@ -58,6 +60,7 @@ export function SdlgPDIForm() {
         },
 
         validate: {
+            woNumber: (value) => (value ? null : 'WO Number is Required!'),
             machineModel: (value) => (value ? null : 'Machine Model is Required!'),
             vehicleNumber: (value) => (value ? null : 'Vehicle Number is Required!'),
             preInspectionPersonnel: (value) => (value ? null : 'Personnel Name is Required!'),
@@ -71,42 +74,55 @@ export function SdlgPDIForm() {
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const response = await fetch('http://127.0.0.1:5000/api/unit-types/SDLG');
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                const data = await response.json();
-                const formattedModels = data
-                    .filter(item => item.value !== null && item.value !== undefined && item.label !== null && item.label !== undefined) // Filter berdasarkan 'value' dan 'label'
+                const brandId = "SDLG"; // 'SDLG' for SDLG
+                const groupId = "DPDPI"; // 'DPDPI' for PDI
+                
+                // model/ Type SDLG API
+                const modelResponse = await fetch(`http://127.0.0.1:5000/api/unit-types/${brandId}`);
+                if (!modelResponse.ok) throw new Error(`HTTP error! status: ${modelResponse.status}`);
+                const modelData = await modelResponse.json();
+                const formattedModels = modelData
+                    .filter(item => item.value !== null && item.value !== undefined && item.label !== null && item.label !== undefined)
                     .map(item => ({
                         value: item.value,
                         label: item.label
                     }));
-                setMachineData(formattedModels);
+                setUnitModels(formattedModels);
+
+                // wo Number API
+                const woResponse = await fetch(`http://127.0.0.1:5000/api/work-orders?brand_id=${brandId}&group_id=${groupId}`);
+                if (!woResponse.ok) throw new Error(`HTTP error! status: ${woResponse.status}`);
+                const woData = await woResponse.json();
+                const formattedWoData = woData.map(wo => ({
+                    value: wo.WONumber,
+                    label: wo.WONumber
+                }));
+                setWoNumbers(formattedWoData);
+
+                // dummy Technicians API
+                const dummyTechnicians = [
+                    { value: "tech1", label: "John Doe" },
+                    { value: "tech2", label: "Jane Smith" },
+                    { value: "tech3", label: "Peter Jones" }
+                ];
+                setTechnicians(dummyTechnicians);
+
+                // dummy Approvers API
+                const dummyApprover = [
+                    { value: "app1", label: "Alice Brown" },
+                    { value: "app2", label: "Bob White" },
+                    { value: "app3", label: "John Green" }
+                ];
+                setApprovers(dummyApprover);
+
             } catch (error) {
-                console.error("Failed to fetch machine models:", error);
+                console.error("Failed to fetch data:", error);
                 notifications.show({
                     title: "Error Loading Data",
-                    message: "Failed to load machine models. Please try again!",
+                    message: "Failed to load form data. Please try again!",
                     color: "red",
                 });
             }
-
-             // Set dummy data for inspectors
-            const dummyInspectorData = [
-                { value: "tech1", label: "John Doe" },
-                { value: "tech2", label: "Jane Smith" },
-                { value: "tech3", label: "Peter Jones" }
-            ];
-            setInspectorData(dummyInspectorData);
-
-            // Set dummy data for approvers
-            const dummySupervisorData = [
-                { value: "app1", label: "Alice Brown" },
-                { value: "app2", label: "Bob White" },
-                { value: "app3", label: "John Green" }
-            ];
-            setSupervisorData(dummySupervisorData);
         };
         fetchData();
     }, []);
@@ -149,6 +165,7 @@ export function SdlgPDIForm() {
         const payload = {
             brand: 'SDLG',
             unitInfo: {
+                woNumber: values.woNumber,
                 machineModel: values.machineModel,
                 vehicleNumber: values.vehicleNumber,
                 preInspectionPersonnel: values.preInspectionPersonnel,
@@ -213,28 +230,38 @@ export function SdlgPDIForm() {
                     <Card shadow="sm" p="lg" withBorder mb="lg">
                         <Title order={3} mb="md" style={{ color: '#000000 !important' }}> Unit Information </Title>
                         <Grid gutter="xl">
-                            <Grid.Col span={{ base: 12, md: 4 }}>
+                            <Grid.Col span={{ base: 12, md: 6, md: 3 }}>
+                                <Select
+                                    label="WO Number"
+                                    placeholder="Select WO Number"
+                                    data={WoNumbers}
+                                    searchable
+                                    clearable
+                                    {...form.getInputProps('woNumber')}
+                                />
+                            </Grid.Col>
+                            <Grid.Col span={{ base: 12, md: 6, md: 3 }}>
                                 <Select
                                     label="Machine Model"
-                                    placeholder="Select a Machine Model"
-                                    data={machineData}
+                                    placeholder="Select Machine Model"
+                                    data={unitModels}
                                     searchable
                                     clearable
                                     {...form.getInputProps('machineModel')}
                                 />
                             </Grid.Col>
-                            <Grid.Col span={{ base: 12, md: 4 }}>
+                            <Grid.Col span={{ base: 12, md: 6, md: 3 }}>
                                 <TextInput
-                                    label="Vehicle number"
-                                    placeholder="Input Vehicle Number"
+                                    label="Vehicle Number"
+                                    placeholder="Input Vehicle Number/ VIN"
                                     {...form.getInputProps('vehicleNumber')}
                                 />
                             </Grid.Col>
-                            <Grid.Col span={{ base: 12, md: 4 }}>
+                            <Grid.Col span={{ base: 12, md: 6, md: 3 }}>
                                 <Select
                                     label="Inspection Personnel"
                                     placeholder="Select Inspector"
-                                    data={inspectorData}
+                                    data={technicians}
                                     searchable
                                     clearable
                                     {...form.getInputProps('preInspectionPersonnel')}
@@ -296,7 +323,7 @@ export function SdlgPDIForm() {
                                         <Table.Td>{index + 1}</Table.Td>
                                         <Table.Td>
                                             <Textarea
-                                                placeholder="Description"
+                                                placeholder="Enter the Description of defects or failures"
                                                 autosize
                                                 minRows={1}
                                                 {...form.getInputProps(`defects.${index}.description`)}
@@ -304,7 +331,7 @@ export function SdlgPDIForm() {
                                         </Table.Td>
                                         <Table.Td>
                                             <Textarea
-                                                placeholder="Remarks"
+                                                placeholder="Enter Remarks of the Description"
                                                 autosize
                                                 minRows={1}
                                                 {...form.getInputProps(`defects.${index}.remarks`)}
@@ -344,7 +371,7 @@ export function SdlgPDIForm() {
                                     placeholder="Select Inspector"
                                     clearable
                                     searchable
-                                    data={inspectorData}
+                                    data={approvers}
                                     {...form.getInputProps('inspectorSignature')}
                                 />
                                 <DateInput
@@ -362,7 +389,7 @@ export function SdlgPDIForm() {
                                     placeholder="Select Supervisor"
                                     clearable
                                     searchable
-                                    data={supervisorData}
+                                    data={approvers}
                                     {...form.getInputProps('supervisorSignature')}
                                 />
                                 <DateInput

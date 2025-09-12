@@ -156,6 +156,9 @@ export function UnitArrivalChecklistForm() {
 	useEffect(() => {
 		const fetchData = async () => {
 			try {
+				const brandId = "RT"; // 'RT' for Renault Trucks
+                const groupId = "AI"; // 'AI' for Arrival Inspection
+
 				// model/ type RT API
 				const modelResponse = await fetch(`http://127.0.0.1:5000/api/unit-types/RT`);
 				if (!modelResponse.ok) throw new Error(`HTTP error! status: ${modelResponse.status}`);
@@ -163,7 +166,7 @@ export function UnitArrivalChecklistForm() {
 				setUnitModels(modelData);
 
 				// wo Number API
-				const woResponse = await fetch(`http://127.0.0.1:5000/api/work-orders`);
+				const woResponse = await fetch(`http://127.0.0.1:5000/api/work-orders?brand_id=${brandId}&group_id=${groupId}`);
 				if (!woResponse.ok) throw new Error(`HTTP error! status: ${woResponse.status}`);
 				const woData = await woResponse.json();
 				const formattedWoData = woData.map(wo => ({ 

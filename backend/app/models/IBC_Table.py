@@ -19,7 +19,7 @@ class IBC_Table(db.Model):
     Brand_ID = db.Column(db.String(10), nullable=False)
     UnitType = db.Column(db.String(50), nullable=False)
     QTY = db.Column(db.Integer, nullable=False)
-    SiteOperation = db.Column(db.String(50), nullable=False)
+    SiteOperation = db.Column(db.String(255), nullable=False)
 
     createdon = db.Column(db.DateTime, default=datetime.utcnow)
     createdby = db.Column(db.String(100), nullable=False)

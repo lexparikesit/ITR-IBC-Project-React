@@ -15,12 +15,13 @@ import {
     Box,
     Select,
     Radio,
-    FileInput,
 } from "@mantine/core";
 import { DateInput } from "@mantine/dates";
-import { IconCalendar, IconCamera, IconPencil } from "@tabler/icons-react";
-import { useForm } from '@mantine/form';
+import { IconCalendar, IconUpload, IconX, IconFile, IconPencil } from "@tabler/icons-react";
+import { useForm } from "@mantine/form";
 import { notifications } from "@mantine/notifications";
+import { Dropzone, MIME_TYPES } from "@mantine/dropzone";
+import { rem } from "@mantine/core";
 
 const manitouChecklistItemsDefinition = {
     engine: [
@@ -107,7 +108,6 @@ const manitouChecklistItemsDefinition = {
     ],
 };
 
-
 export function UnitArrivalInspectionForm() {
     const [unitModels, setUnitModels] = useState([]);
     const [woNumbers, setWoNumbers] = useState([]);
@@ -180,12 +180,7 @@ export function UnitArrivalInspectionForm() {
             woNumber: (value) => (value ? null : 'WO Number is Required!'),
             model: (value) => (value ? null : 'Model is Required!'),
             serialNo: (value) => (value ? null : 'VIN is Required!'),
-            hourMeter: (value) => {
-                if (!value) return 'Hour Meter is Required!';
-                if (isNaN(Number(value))) return 'Hour Meter Must be a Number!';
-                if (Number(value) < 0) return 'Hour Meter Cannot be Negative!';
-                return null;
-            },
+            hourMeter: (value) => (value ? null : 'Hour Meter is Required!'),
             dateOfCheck: (value) => (value ? null : 'Date of Check is Required!'),
             technician: (value) => (value ? null : 'Technician is Required!'),
             approver: (value) => (value ? null : 'Approver is Required!'),
@@ -196,6 +191,9 @@ export function UnitArrivalInspectionForm() {
     useEffect(() => {
         const fetchData = async () => {
             try {
+                const brandId = "MA"; // 'MA' for Manitou
+                const groupId = "AI"; // 'AI' for Arrival Inspection
+
                 // model/ type MA API
                 const modelResponse = await fetch('http://127.0.0.1:5000/api/unit-types/MA');
                 if (!modelResponse.ok) throw new Error(`HTTP error! status: ${modelResponse.status}`);
@@ -209,7 +207,7 @@ export function UnitArrivalInspectionForm() {
                 setUnitModels(formattedModels);
                 
                 // wo Number API
-				const woResponse = await fetch(`http://127.0.0.1:5000/api/work-orders`);
+				const woResponse = await fetch(`http://127.0.0.1:5000/api/work-orders?brand_id=${brandId}&group_id=${groupId}`);
 				if (!woResponse.ok) throw new Error(`HTTP error! status: ${woResponse.status}`);
 				const woData = await woResponse.json();
 				const formattedWoData = woData.map(wo => ({ 
@@ -378,7 +376,7 @@ export function UnitArrivalInspectionForm() {
 
             const result = await response.json();
             notifications.show({
-                title: "Success",
+                title: "Submission Successful!",
                 message: result.message || 'Form submitted successfully!',
                 color: "green",
             });
@@ -396,6 +394,7 @@ export function UnitArrivalInspectionForm() {
     const renderChecklistItem = (label, formProps, sectionKey, itemKey, key) => {
         const itemData = form.values[sectionKey] ? form.values[sectionKey][itemKey] : form.values[itemKey];
         const showConditionalInputs = itemData && (itemData.status === 'Bad' || itemData.status === 'Missing');
+        const dropzoneProps = form.getInputProps(`${formProps}.image`);
 
         return (
             <Grid.Col span={{ base: 12, sm: 6, md: 4 }} key={key}>
@@ -426,13 +425,48 @@ export function UnitArrivalInspectionForm() {
 
                     {showConditionalInputs && (
                         <>
-                            <FileInput
-                                placeholder="Upload Image"
-                                accept="image/png,image/jpeg"
-                                mt="xs"
-                                leftSection={<IconCamera size={18} />}
-                                {...form.getInputProps(`${formProps}.image`)}
-                            />
+                            <Dropzone
+                                onDrop={(files) => {
+                                    if (files.length > 0) {
+                                        form.setFieldValue(`${formProps}.image`, files[0]);
+                                    }
+                                }}
+                                onReject={(files) => {
+                                notifications.show({
+                                    title: 'File Rejected',
+                                    message: `${files[0].errors[0].message}`,
+                                    color: 'red',
+                                });
+                            }}
+                            maxFiles={1}
+                            accept={[MIME_TYPES.jpeg, MIME_TYPES.png]}
+                            {...dropzoneProps}
+                            >
+                                <Group justify="center" gap="xs" style={{ minHeight: rem(80), pointerEvents: 'none' }}>
+                                    <Dropzone.Accept>
+                                        <IconUpload
+                                            style={{ width: rem(30), height: rem(30) }}
+                                            stroke={1.5}
+                                        />
+                                    </Dropzone.Accept>
+                                    <Dropzone.Reject>
+                                        <IconX
+                                            style={{ width: rem(30), height: rem(30) }}
+                                            stroke={1.5}
+                                        />
+                                    </Dropzone.Reject>
+                                    <Dropzone.Idle>
+                                        <IconFile
+                                            style={{ width: rem(30), height: rem(30) }}
+                                            stroke={1.5}
+                                        />
+                                    </Dropzone.Idle>
+                                    <Stack align="center" gap={4}>
+                                        <Text size="xs" c="dimmed"> {itemData.image ? itemData.image.name : 'Drag and drop an image here or click to select'} </Text>
+                                        <Text size="xs" c="dimmed"> Accepted formats: JPG, PNG </Text>
+                                    </Stack>
+                                </Group>
+                            </Dropzone>
                             <TextInput
                                 placeholder="Add Image Caption"
                                 mt="xs"
@@ -488,9 +522,6 @@ export function UnitArrivalInspectionForm() {
                                 searchable
                                 clearable
                                 {...form.getInputProps('woNumber')}
-                                renderOption={({ option }) => (
-                                    <Text c='black'>{option.label}</Text>
-                                )}
                             />
                         </Grid.Col>
                         <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
@@ -501,9 +532,6 @@ export function UnitArrivalInspectionForm() {
                                 searchable
                                 clearable
                                 {...form.getInputProps('model')}
-                                renderOption={({ option }) => (
-                                    <Text c='black'>{option.label}</Text>
-                                )}
                             />
                         </Grid.Col>
                         <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
@@ -543,9 +571,6 @@ export function UnitArrivalInspectionForm() {
                                 searchable
                                 clearable
                                 {...form.getInputProps('technician')}
-                                renderOption={({ option }) => (
-                                    <Text c='black'>{option.label}</Text>
-                                )}
                             />
                         </Grid.Col>
                         <Grid.Col span={{ base: 12, md: 6, md: 3 }}>
@@ -556,9 +581,6 @@ export function UnitArrivalInspectionForm() {
                                 searchable
                                 clearable
                                 {...form.getInputProps('approver')}
-                                renderOption={({ option }) => (
-                                    <Text c='black'>{option.label}</Text>
-                                )}
                             />
                         </Grid.Col>
                     </Grid>

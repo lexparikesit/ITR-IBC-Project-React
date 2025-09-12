@@ -73,7 +73,7 @@ def create_ibc_form():
         if not header_form_data or not detail_form_data:
             return jsonify({"error": "Header and Detail form data are required"}), 400
 
-        # --- Processing of data IBC_Table (Header) ---
+        # processing of data IBC_Table (Header)
         ibc_number = generate_ibc_number()
 
         ibc_date_str = header_form_data.get('IBC_date')
@@ -96,8 +96,7 @@ def create_ibc_form():
         )
         db.session.add(new_ibc_table)
 
-        # --- Processing of data IBC_Trans (Detail) ---
-        wo_val = detail_form_data.get('WO')
+        # processing of data IBC_Trans (Detail)
         attachment_type_val = detail_form_data.get('AttachmentType')
         attachment_supplier_val = detail_form_data.get('AttachmentSupplier')
         delivery_address_val = detail_form_data.get('DeliveryAddress')
@@ -120,7 +119,6 @@ def create_ibc_form():
                 IBC_TransID = str(uuid.uuid4()),
                 IBC_No = ibc_number,
                 VIN = vin_entry.get('VIN'),
-                WO = wo_val,
                 AttachmentType = attachment_type_val,
                 AttachmentSupplier = attachment_supplier_val,
                 DeliveryAddress = delivery_address_val,
@@ -130,7 +128,7 @@ def create_ibc_form():
             )
             db.session.add(new_ibc_trans)
 
-        # --- Processing of data IBC_Accessories ---
+        # processing of data IBC_Accessories
         for acc_entry in accessories_data:
             if not acc_entry.get('AccessoriesName'):
                 return jsonify({'error': 'Accessories name is required'}), 400
@@ -143,7 +141,7 @@ def create_ibc_form():
             )
             db.session.add(new_ibc_acc)
         
-        # --- Processing of data IBC_Packages ---
+        # processing of data IBC_Packages
         for pkg_entry in packages_data:
             if not pkg_entry.get('PackagesType'):
                 return jsonify({'error': 'Package type is required'}), 400

@@ -15,13 +15,12 @@ class IBC_Trans(db.Model):
 
     # Fields for transaction data
     VIN = db.Column(db.String(50), nullable=False)
-    WO = db.Column(db.String(50), nullable=False)
     AttachmentType = db.Column(db.String(200), nullable=False)
     AttachmentSupplier = db.Column(db.String(150), nullable=False)
     DeliveryAddress = db.Column(db.String(150), nullable=False)
     DeliveryCustPIC = db.Column(db.String(100), nullable=False)
     DeliveryPlan = db.Column(db.DateTime, nullable=False)
-    Remarks = db.Column(db.String(500), nullable=True)
+    Remarks = db.Column(db.Text(), nullable=True)
 
     def __repr__(self):
         

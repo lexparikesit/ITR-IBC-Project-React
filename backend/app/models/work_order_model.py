@@ -11,3 +11,4 @@ class WorkOrderView(db.Model):
     DEVICEID = db.Column(db.String(255))
     CUSTACCOUNT = db.Column(db.String(255))
     DISPLAYVALUE = db.Column(db.String(255))
+    StatusWO = db.Column('STATUS WO', db.String(255))

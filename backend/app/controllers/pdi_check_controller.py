@@ -2,6 +2,7 @@ from flask import json, jsonify, request, g
 from app import db
 from app.models.renault_pdi_model import RenaultPDIModel
 from app.models.manitou_pdi_model import ManitouPDI
+from app.models.sdlg_pdi_model import SdlgPDIModel, SDLGDefectsAndRemarksPDI
 from datetime import datetime
 from app.controllers.auth_controller import jwt_required
 import uuid
@@ -9,7 +10,8 @@ import uuid
 # mapping for brand Models
 BRAND_MODELS = {
     'renault': RenaultPDIModel,
-    'manitou': ManitouPDI
+    'manitou': ManitouPDI,
+    'sdlg': SdlgPDIModel,
 }
 
 @jwt_required
@@ -18,11 +20,24 @@ def submit_pdi_form():
     print("DEBUG (PDI CHECK): Headers received:")
     print(request.headers)
 
-    data = request.get_json()
-    brand = data.get("brand")
+    if request.content_type and 'multipart/form-data' in request.content_type:
+        data_string = request.form.get('data')
 
-    print(f"DEBUG: Data received from frontend: {data}")
-    print(f"DEBUG: Brand received from frontend: {brand}")
+        if not data_string:
+            return jsonify({"error": "Missing 'data' part in form"}), 400
+
+        try:
+            data = json.loads(data_string)
+        except json.JSONDecodeError:
+            return jsonify({"error": "Invalid JSON data in 'data' part"}), 400
+    
+        uploaded_files = request.files
+        print(f"DEBUG: Files received: {list(uploaded_files.keys())}")
+
+    else:
+        data = request.get_json()
+
+    brand = data.get("brand")
 
     if not brand or brand.lower() not in BRAND_MODELS:
         return jsonify({"error": "Invalid Brand"}), 400
@@ -48,7 +63,6 @@ def submit_pdi_form():
             return None
         
         def converted_manitou_status_to_int(status_str):
-
             if status_str and isinstance(status_str, str):
                 status_lower = status_str.lower()  
                 if status_lower == "missing":
@@ -59,6 +73,7 @@ def submit_pdi_form():
                     return 2
             return None
         
+        # logic for Renault
         if brand.lower() == 'renault':
             unit_info = data.get('unitInfo', {})
             checklist_items = data.get('checklistItems', {})
@@ -90,56 +105,74 @@ def submit_pdi_form():
                     return jsonify({"message": "Invalid date format"}), 400
 
             # Mapping checklist items (payload sudah flattened)
-            for frontend_key, status_value in checklist_items.items():
+            renault_mapping = {
+                'lubricationOilAndFluidLevels.chargeBattery': 'lub1',
+                'lubricationOilAndFluidLevels.batteryChargeFluidLevel': 'lub2',
+                'lubricationOilAndFluidLevels.lubricateLeafSuspensionBushings': 'lub3',
+                'lubricationOilAndFluidLevels.fluidLevelsWindscreenHeadlamp': 'lub4',
+                'lubricationOilAndFluidLevels.coolantLevel': 'lub5',
+                'lubricationOilAndFluidLevels.engineOilLevel': 'lub6',
+                'lubricationOilAndFluidLevels.adBlueLevel': 'lub7',
+                'lubricationOilAndFluidLevels.replaceBatteryCable': 'lub8',
+                'lubricationOilAndFluidLevels.installChocks': 'lub9',
+                'lubricationOilAndFluidLevels.activateLubricateFifthWheel': 'lub10',
+
+                'cab.connectDisconnectDiagnosticTool': 'cab1',
+                'cab.activateElectricalSystem': 'cab2',
+                'cab.connectivityCheck': 'cab3',
+                'cab.activateRadio': 'cab4',
+                'cab.activateAntiTheftAlarm': 'cab5',
+                'cab.checkWarningControlLamps': 'cab6',
+                'cab.functionCheckParkingHeater': 'cab7',
+
+                'exterior.attachExhaustTailPipe': 'ext1',
+                'exterior.checkCabChassis': 'ext2',
+                'exterior.checkWheelNuts': 'ext3',
+                'exterior.checkTyrePressure': 'ext4',
+                'exterior.installLicensePlate': 'ext5',
+                'exterior.installAirDeflector': 'ext6',
+                'exterior.removeSpareWheel': 'ext7',
+
+                'underVehicle.removeScrewChargeAirCooler': 'under1',
+                'underVehicle.checkLoadSensingValve': 'under2',
+                'underVehicle.checkSuperstructure': 'under3',
+
+                'testDrive.checkAfterStart': 'test_drive1',
+                'testDrive.checkDuringRoadTest': 'test_drive2',
+                'testDrive.checkAfterRoadTest': 'test_drive3',
+                
+                'finish.removeProtectiveFilm': 'finish1',
+                'finish.finish': 'finish2',
+                'finish.brakeAdaptation': 'finish3',
+            }
+
+            for frontend_path, db_column in renault_mapping.items():
+                sections = frontend_path.split('.')
+                current_data = checklist_items
+
+                for section in sections[:-1]:
+                    current_data = current_data.get(section, {})
+                
+                item_key = sections[-1]
+
+                status_value = current_data.get(item_key)
+                caption_value = current_data.get(f'caption_{item_key}')
+                image_value = current_data.get(f'img_{item_key}')
+
                 converted_value = converted_renault_status_to_int(status_value)
 
-                db_column_name = frontend_key.replace('.', '_')
-
-                checklist_mapping = {
-                    'lubricationOilAndFluidLevels.chargeBattery': 'lub1',
-                    'lubricationOilAndFluidLevels.batteryChargeFluidLevel': 'lub2',
-                    'lubricationOilAndFluidLevels.lubricateLeafSuspensionBushings': 'lub3',
-                    'lubricationOilAndFluidLevels.fluidLevelsWindscreenHeadlamp': 'lub4',
-                    'lubricationOilAndFluidLevels.coolantLevel': 'lub5',
-                    'lubricationOilAndFluidLevels.engineOilLevel': 'lub6',
-                    'lubricationOilAndFluidLevels.adBlueLevel': 'lub7',
-                    'lubricationOilAndFluidLevels.replaceBatteryCable': 'lub8',
-                    'lubricationOilAndFluidLevels.installChocks': 'lub9',
-                    'lubricationOilAndFluidLevels.activateLubricateFifthWheel': 'lub10',
-
-                    'cab.connectDisconnectDiagnosticTool': 'cab1',
-                    'cab.activateElectricalSystem': 'cab2',
-                    'cab.connectivityCheck': 'cab3',
-                    'cab.activateRadio': 'cab4',
-                    'cab.activateAntiTheftAlarm': 'cab5',
-                    'cab.checkWarningControlLamps': 'cab6',
-                    'cab.functionCheckParkingHeater': 'cab7',
-
-                    'exterior.attachExhaustTailPipe': 'ext1',
-                    'exterior.checkCabChassis': 'ext2',
-                    'exterior.checkWheelNuts': 'ext3',
-                    'exterior.checkTyrePressure': 'ext4',
-                    'exterior.installLicensePlate': 'ext5',
-                    'exterior.installAirDeflector': 'ext6',
-                    'exterior.removeSpareWheel': 'ext7',
-
-                    'underVehicle.removeScrewChargeAirCooler': 'under1',
-                    'underVehicle.checkLoadSensingValve': 'under2',
-                    'underVehicle.checkSuperstructure': 'under3',
-
-                    'testDrive.checkAfterStart': 'test_drive1',
-                    'testDrive.checkDuringRoadTest': 'test_drive2',
-                    'testDrive.checkAfterRoadTest': 'test_drive3',
-                    
-                    'finish.removeProtectiveFilm': 'finish1',
-                    'finish.finish': 'finish2',
-                    'finish.brakeAdaptation': 'finish3',
-                }
-
-                db_column = checklist_mapping.get(frontend_key)
-                
-                if db_column and hasattr(new_pdi_entry, db_column):
+                if converted_value is not None and hasattr(new_pdi_entry, db_column):
                     setattr(new_pdi_entry, db_column, converted_value)
+                
+                caption_db_column = f'caption_{db_column}'
+
+                if caption_value is not None and hasattr(new_pdi_entry, caption_db_column):
+                    setattr(new_pdi_entry, caption_db_column, caption_value)
+                
+                img_db_column = f'img_{db_column}'
+                
+                if image_value and hasattr(new_pdi_entry, img_db_column):
+                    setattr(new_pdi_entry, img_db_column, image_value)
 
                 # Mapping status battery
                 if battery_status:
@@ -151,9 +184,10 @@ def submit_pdi_form():
                 # Mapping vehicle inspection
                 new_pdi_entry.vehicle_inspection = vehicle_inspection_notes
         
+        # logic for Manitou
         elif brand.lower() == 'manitou':
             unit_info = data.get('unitInfo', {})
-            checklist_items = data.get('checklistItems', {}) # Correctly get checklistItems
+            checklist_items = data.get('checklistItems', {})
             general_remarks = data.get('generalRemarks', '')
             remarks_transport = data.get('remarksTransport', '')
 
@@ -190,63 +224,108 @@ def submit_pdi_form():
                 new_pdi_entry.checkingDate = None
 
             # Mapping checklist items
-            # Create a flat mapping from frontend keys to database column names
             manitou_mapping = {
-                'engineOil': 'levels1',
-                'transmissionOil': 'levels2',
-                'hydraulicOil': 'levels3',
-                'brakeFluid': 'levels4',
-                'coolant': 'levels5',
-                'frontAxleRearAxleTransferBoxOil': 'levels6',
-                'windscreenWasherFluid': 'levels7',
-                'batteryLevel': 'levels8',
-                'heatingSystemTank': 'levels9',
+                ('levels', 'engineOil'): 'levels1',
+                ('levels', 'transmissionOil'): 'levels2',
+                ('levels', 'hydraulicOil'): 'levels3',
+                ('levels', 'brakeFluid'): 'levels4',
+                ('levels', 'coolant'): 'levels5',
+                ('levels', 'frontAxleRearAxleTransferBoxOil'): 'levels6',
+                ('levels', 'windscreenWasherFluid'): 'levels7',
+                ('levels', 'batteryLevel'): 'levels8',
+                ('levels', 'heatingSystemTank'): 'levels9',
 
-                'electricConnections': 'vis_inspection1',
-                'hydraulicConnections': 'vis_inspection2',
-                'screwAndNuts': 'vis_inspection3',
-                'lubrication': 'vis_inspection4',
-                'tyresAspect': 'vis_inspection5',
+                ('visualInspection', 'electricConnections'): 'vis_inspection1',
+                ('visualInspection', 'hydraulicConnections'): 'vis_inspection2',
+                ('visualInspection', 'screwAndNuts'): 'vis_inspection3',
+                ('visualInspection', 'lubrication'): 'vis_inspection4',
+                ('visualInspection', 'tyresAspect'): 'vis_inspection5',
 
-                'instrumentationIndicatorsHeadlightsRearLights': 'ops1',
-                'windscreenWiperHeatingAirConditioning': 'ops2',
-                'safetyAndEmergencyRecoverySystem': 'ops3',
+                ('operation', 'instrumentationIndicatorsHeadlightsRearLights'): 'ops1',
+                ('operation', 'windscreenWiperHeatingAirConditioning'): 'ops2',
+                ('operation', 'safetyAndEmergencyRecoverySystem'): 'ops3',
 
-                'lifting': 'test1',
-                'tilting': 'test2',
-                'telescopes': 'test3',
-                'accessory': 'test4',
-                'fanOperation': 'test5',
-                'steering': 'test6',
-                'swing': 'test7',
-                'stabiliserAndChassisLevelling': 'test8',
-                'platform': 'test9',
-                'brakeParkingBrake': 'test10',
+                ('tests', 'lifting'): 'test1',
+                ('tests', 'tilting'): 'test2',
+                ('tests', 'telescopes'): 'test3',
+                ('tests', 'accessory'): 'test4',
+                ('tests', 'fanOperation'): 'test5',
+                ('tests', 'steering'): 'test6',
+                ('tests', 'swing'): 'test7',
+                ('tests', 'stabiliserAndChassisLevelling'): 'test8',
+                ('tests', 'platform'): 'test9',
+                ('tests', 'brakeParkingBrake'): 'test10',
 
-                'paintFrameCab': 'general1',
-                'decals': 'general2',
-                'instructionsManual': 'general3',
-                'wheelsNutTorque': 'general4',
-                'typePressures': 'general5',
+                ('general', 'paintFrameCab'): 'general1',
+                ('general', 'decals'): 'general2',
+                ('general', 'instructionsManual'): 'general3',
+                ('general', 'wheelsNutTorque'): 'general4',
+                ('general', 'typePressures'): 'general5',
 
-                'transportEquipment': 'transport1',
-                'complianceInstructions': 'transport2',
-                'theDriverServices': 'transport3',
+                ('transport', 'transportEquipment'): 'transport1', # Perbaikan disini
+                ('transport', 'complianceInstructions'): 'transport2',
+                ('transport', 'theDriverServices'): 'transport3',
             }
             
             # iterate through the nested checklist items
-            for section, items in checklist_items.items():
-                if isinstance(items, dict):
-                    for item_key, status_value in items.items():
-                        # Find the database column name from our mapping
-                        db_column = manitou_mapping.get(item_key)
-                        if db_column:
-                            converted_value = converted_manitou_status_to_int(status_value)
-                            setattr(new_pdi_entry, db_column, converted_value)
+            for (section, item), db_column in manitou_mapping.items():
+                section_data = checklist_items.get(section, {})
+                item_details = section_data.get(item, {})
+
+                if isinstance(item_details, dict):
+                    status_value_str = item_details.get('status')
+                    caption_value = item_details.get('caption')
+                    image_value = item_details.get('image') # Perbaikan disini
+
+                    converted_value = converted_manitou_status_to_int(status_value_str)
+
+                    if converted_value is not None and hasattr(new_pdi_entry, db_column):
+                        setattr(new_pdi_entry, db_column, converted_value)
+
+                    caption_db_column = f'caption_{db_column}'
+
+                    if caption_value is not None and hasattr(new_pdi_entry, caption_db_column):
+                        setattr(new_pdi_entry, caption_db_column, caption_value)
+                    
+                    img_db_column = f'img_{db_column}'
+
+                    if image_value is not None and hasattr(new_pdi_entry, img_db_column):
+                        setattr(new_pdi_entry, img_db_column, image_value)
             
             # Mapping remarks
             new_pdi_entry.remarksTransport = remarks_transport
             new_pdi_entry.generalRemarks = general_remarks
+
+        # logic for SDLG
+        elif brand.lower() == 'sdlg':
+            unit_info = data.get('unitInfo', {})
+            checklist_items = data.get('checklistItems', {})
+            defects_and_remarks = data.get('defectsAndRemarks', [])
+
+            # Mapping unit information from the payload
+            new_pdi_entry.woNumber = unit_info.get('woNumber')
+            new_pdi_entry.machineModel = unit_info.get('machineModel')
+            new_pdi_entry.VIN = unit_info.get('VIN')
+            new_pdi_entry.pdiInspector = unit_info.get('pdiInspector')
+
+            # Mapping boolean checklist items (sn1 to sn7)
+            for i in range(1, 8):
+                sn_key = f'sn{i}'
+                status_value = checklist_items.get(sn_key, False) 
+                setattr(new_pdi_entry, sn_key, status_value)
+
+            # Mapping signatures
+            new_pdi_entry.inspectorSignature = data.get('inspectorSignature')
+            new_pdi_entry.supervisorSignature = data.get('supervisorSignature')
+
+            # remarks and defects relationship
+            for defect_item in defects_and_remarks:
+                defect_entry = SDLGDefectsAndRemarksPDI(
+                    description=defect_item.get('description'),
+                    remarks=defect_item.get('remarks'),
+                )
+
+                new_pdi_entry.defect.append(defect_entry)
 
         if new_pdi_entry:
             db.session.add(new_pdi_entry)

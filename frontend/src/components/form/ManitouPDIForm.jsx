@@ -17,9 +17,11 @@ import {
     Radio,
 } from "@mantine/core";
 import { DateInput } from "@mantine/dates";
-import { IconCalendar } from "@tabler/icons-react";
+import { IconCalendar, IconUpload, IconX, IconFile, IconPencil } from "@tabler/icons-react";
 import { useForm } from '@mantine/form';
 import { notifications } from "@mantine/notifications";
+import { Dropzone, MIME_TYPES } from "@mantine/dropzone";
+import { rem } from "@mantine/core";
 
 const manitouPdiChecklistItemDefinition = {
     levels: [
@@ -71,61 +73,64 @@ const manitouPdiChecklistItemDefinition = {
     ],
 };
 
-// Initialize useForm with all fields
-const initializeFormValues = () => {
-    const initialValues = {
-        // unit type info
-        dealerCode: '',
-        machineType: '',
-        serialNumber: '',
-        deliveryDate: null,
-        checkingDate: null,
-        HourMeter: '',
-        inspectorSignature: '',
-        approvalBy: '',
-        customer: '',
-        woNumber: '',
-        
-        // after unit type
-        deliveryRemarks: '',
-        generalRemarks: '',
-        checklistItems: {},
-    };
-
-    Object.keys(manitouPdiChecklistItemDefinition).forEach(sectionKey => {
-        initialValues.checklistItems[sectionKey] = {};
-        manitouPdiChecklistItemDefinition[sectionKey].forEach(item => {
-            initialValues.checklistItems[sectionKey][item.itemKey] = '';
-        });
-    });
-
-    return initialValues;
-};
-
 export function ManitouPDIForm() {
-    const [technician, setTechnician] = useState([]);
-    const [modelsData, setModelsData] = useState([]);
-    const [WoNumber, setWoNumber] = useState([]);
+    const [unitModels, setUnitModels] = useState([]);
+    const [WoNumbers, setWoNumbers] = useState([]);
+    const [technicians, setTechnicians] = useState([]);
     const [approvers, setApprovers] = useState([]);
     const [customers, setCustomers] = useState([]);
     const [dealerCode, setDealerCode] = useState('');
 
-    const createChecklistValidation = () => {
-        const checklistValidation = {};
+    const generateChecklistValidation = () => {
+        let validationRules = {};
         Object.keys(manitouPdiChecklistItemDefinition).forEach(sectionKey => {
             manitouPdiChecklistItemDefinition[sectionKey].forEach(item => {
-                const fieldKey = `checklistItems.${sectionKey}.${item.itemKey}`;
-                checklistValidation[fieldKey] = (value) => (value ? null : "This field is Required!");
+                const itemKey = item.itemKey;
+                validationRules[`checklistItems.${sectionKey}.${itemKey}.value`] = (value) => (
+                    value ? null : 'Status is Required!'
+                );
+                validationRules[`checklistItems.${sectionKey}.${itemKey}.image`] = (value) => (
+                    value ? null : 'An Image is Required for This Item!'
+                );
             });
         });
-        return checklistValidation;
+        return validationRules;
     };
 
     const form = useForm({
-        initialValues: initializeFormValues(),
+        initialValues: (() => {
+            const initialChecklist = {};
+            Object.keys(manitouPdiChecklistItemDefinition).forEach(sectionKey => {
+                initialChecklist[sectionKey] = {};
+                manitouPdiChecklistItemDefinition[sectionKey].forEach(item => {
+                    initialChecklist[sectionKey][item.itemKey] = {
+                        value: '', // Status: Good, Bad, Missing
+                        notes: '', // Caption
+                        image: null, // Image File
+                    };
+                });
+            });
+
+            return {
+                dealerCode: null,
+                machineType: null,
+                serialNumber: '',
+                deliveryDate: null,
+                checkingDate: null,
+                HourMeter: '',
+                inspectorSignature: null,
+                approvalBy: null,
+                customer: null,
+                woNumber: null,
+                deliveryRemarks: '',
+                generalRemarks: '',
+                checklistItems: initialChecklist,
+            };
+        })(),
+
         validate: {
             dealerCode: (value) => (value ? null : "Dealer Code is Required!"),
-            machineType: (value) => (value ? null: "Model Type is Required!"),
+            machineType: (value) => (value ? null : "Model Type is Required!"),
             serialNumber: (value) => (value ? null : "Serial Number is Required!"),
             deliveryDate: (value) => (value ? null : "Delivery Date is Required!"),
             checkingDate: (value) => (value ? null : "Checking Date is Required!"),
@@ -134,123 +139,115 @@ export function ManitouPDIForm() {
             approvalBy: (value) => (value ? null : "Approval By is Required!"),
             customer: (value) => (value ? null : "Customer is Required!"),
             woNumber: (value) => (value ? null : "WO Number is Required!"),
-            ...createChecklistValidation(),
+            ...generateChecklistValidation(),
         },
     });
 
     useEffect(() => {
-        const fetchWONumber = async () => {
+        const fetchData = async () => {
             try {
-                const response = await fetch(`http://127.0.0.1:5000/api/work-orders`);
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                const data = await response.json();
-                const formattedWONumbers = data.map(item => ({
-                    value: item.WONumber,
-                    label: item.WONumber,
-                }));
-                setWoNumber(formattedWONumbers);
-            } catch (error) {
-                notifications.show({
-                    title: "Error Loading Data",
-                    message: "Failed to load Work Orders. Please try again!",
-                    color: "red",
-                });
-                setWoNumber([]);
-            }
-        };
-        
-        const fetchCustomers = async () => {
-            try {
-                const response = await fetch(`http://127.0.0.1:5000/api/customers`);
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                const customersData = await response.json();
-                const formattedCustomers = customersData.map(customer => ({
-                    value: customer.CustomerID,
-                    label: customer.CustomerName
-                }));
-                setCustomers(formattedCustomers);
-            } catch (error) {
-                notifications.show({
-                    title: "Error Loading Data",
-                    message: "Failed to load Customers. Please try again!",
-                    color: "red",
-                });
-                setCustomers([]);
-            }
-        };
+                const brandId = "MA"; // 'MA' for Manitou
+                const groupId = "DPDPI"; // 'DPDPI' for PDI
 
-        const fetchModels = async () => {
-            try {
-                // API mstType
-                const response = await fetch('http://127.0.0.1:5000/api/unit-types/MA');
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                const data = await response.json();
-                
-                const formattedModels = data
+                // model/ Type MA API
+                const modelResponse = await fetch(`http://127.0.0.1:5000/api/unit-types/${brandId}`);
+                if (!modelResponse.ok) throw new Error(`HTTP error! status: ${modelResponse.status}`);
+                const modelData = await modelResponse.json();
+                const formattedModels = modelData
                     .filter(item => item.value !== null && item.value !== undefined && item.label !== null && item.label !== undefined)
                     .map(item => ({
                         value: item.value,
                         label: item.label
                     }));
-                setModelsData(formattedModels);
+                setUnitModels(formattedModels);
+
+                // wo Number API
+                const woResponse = await fetch(`http://127.0.0.1:5000/api/work-orders?brand_id=${brandId}&group_id=${groupId}`);
+                if (!woResponse.ok) throw new Error(`HTTP error! status: ${woResponse.status}`);
+                const woData = await woResponse.json();
+                const formattedWoData = woData.map(wo => ({
+                    value: wo.WONumber,
+                    label: wo.WONumber
+                }));
+                setWoNumbers(formattedWoData);
+
+                // customers API
+                const customerResponse = await fetch(`http://127.0.0.1:5000/api/customers`);
+                if (!customerResponse.ok) throw new Error(`HTTP error! status: ${customerResponse.status}`);
+                const customerData = await customerResponse.json();
+                const formattedCustomers = customerData.map(customer => ({
+                    value: customer.CustomerID,
+                    label: customer.CustomerName
+                }));
+                setCustomers(formattedCustomers);
+
+                // dummy Technicians API
+                const dummyTechnicians = [
+                    { value: "tech1", label: "John Doe" },
+                    { value: "tech2", label: "Jane Smith" },
+                    { value: "tech3", label: "Peter Jones" }
+                ];
+                setTechnicians(dummyTechnicians);
+
+                // dummy Approvers API
+                const dummyApprover = [
+                    { value: "app1", label: "Alice Brown" },
+                    { value: "app2", label: "Bob White" },
+                    { value: "app3", label: "John Green" }
+                ];
+                setApprovers(dummyApprover);
+
+                // delaer Code
+                setDealerCode([{ value: "30479", label: "30479" }]);
+
             } catch (error) {
-                console.error("Failed to fetch models:", error);
+                console.error("Failed to fetch data:", error);
                 notifications.show({
                     title: "Error Loading Data",
-                    message: "Failed to Load Unit Models. Please Try Again!",
+                    message: "Failed to load form data. Please try again!",
                     color: "red",
                 });
             }
         };
-        
-        const dummyTechnicians = [
-            { value: "tech1", label: "John Doe" },
-            { value: "tech2", label: "Jane Smith" },
-            { value: "tech3", label: "Peter Jones" }
-        ];
-        setTechnician(dummyTechnicians);
-
-        const dummyApprover = [
-            { value: "app1", label: "Alice Brown" },
-            { value: "app2", label: "Bob White" },
-            { value: "app3", label: "John Green" }
-        ];
-        setApprovers(dummyApprover);
-
-        setDealerCode([{ value: "30479", label: "30479" }]);
-
-        fetchWONumber();
-        fetchCustomers();
-        fetchModels();
+        fetchData();
     }, []);
-    
+
     const handleSubmit = async (values) => {
-        console.log("DEBUG FRONTEND: Values before API call:", values);
-        console.log("DEBUG FRONTEND: deliveryDate type:", typeof values.deliveryDate, "value:", values.deliveryDate);
-        console.log("DEBUG FRONTEND: checkingDate type:", typeof values.checkingDate, "value:", values.checkingDate);
-
         const token = localStorage.getItem('access_token');
-
-            console.log("DEBUG: Token from localStorage:", token); // --> DEBUG
-
-            if (!token) {
+        if (!token) {
             notifications.show({
                 title: "Authentication Error",
                 message: "Please log in again. Authentication token is missing.",
                 color: "red",
             });
-                console.log("Authentication token is missing.");
-                return;
-            }
-    
-        console.log("Form Submitted", values);
-        
+            return;
+        }
+
+        const formData = new FormData();
+        const checklistItemsPayload = {};
+
+        Object.keys(manitouPdiChecklistItemDefinition).forEach(sectionKey => {
+            const items = manitouPdiChecklistItemDefinition[sectionKey];
+            items.forEach(item => {
+                const itemData = values.checklistItems[sectionKey]?.[item.itemKey];
+                
+                if (itemData && itemData.value) {
+                    if (!checklistItemsPayload[sectionKey]) {
+                        checklistItemsPayload[sectionKey] = {};
+                    }
+                    checklistItemsPayload[sectionKey][item.itemKey] = {
+                        status: itemData.value,
+                        notes: itemData.notes || "",
+                    };
+
+                    if (itemData.image) {
+                        const imageKey = `${sectionKey}.${item.itemKey}.image`;
+                        formData.append(imageKey, itemData.image);
+                    }
+                }
+            });
+        });
+
         const payload = {
             brand: 'manitou',
             unitInfo: {
@@ -258,8 +255,8 @@ export function ManitouPDIForm() {
                 customers: values.customer,
                 machineType: values.machineType,
                 serialNumber: values.serialNumber,
-                deliveryDate: values.deliveryDate || null,
-                checkingDate: values.checkingDate || null,
+                deliveryDate: values.deliveryDate,
+                checkingDate: values.checkingDate,
                 HourMeter: values.HourMeter,
                 inspectorSignature: values.inspectorSignature,
                 approvalBy: values.approvalBy,
@@ -267,24 +264,23 @@ export function ManitouPDIForm() {
             },
             remarksTransport: values.deliveryRemarks,
             generalRemarks: values.generalRemarks,
-            checklistItems: values.checklistItems,
+            checklistItems: checklistItemsPayload,
         };
 
-        console.log("Payload to Backend: ", payload);
+        formData.append('data', JSON.stringify(payload));
 
         try {
             const response = await fetch(`http://localhost:5000/api/pre-delivery-inspection/manitou/submit`, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
                 },
-                body: JSON.stringify(payload),
+                body: formData,
             });
 
             if (!response.ok) {
                 const errorData = await response.json();
-                throw new Error(errorData.message || "Failed to submit Renault Pre-Delivery Inspection");
+                throw new Error(errorData.message || "Failed to submit Manitou Pre-Delivery Inspection");
             }
 
             const result = await response.json();
@@ -294,8 +290,9 @@ export function ManitouPDIForm() {
                 color: "green",
             })
             form.reset();
+
         } catch (error) {
-            console.log('Error submitting form:', error);
+            console.error('Error submitting form:', error);
             notifications.show({
                 title: "Submission Error",
                 message: `Failed to submit form: ${error.message}`,
@@ -304,14 +301,25 @@ export function ManitouPDIForm() {
         }
     };
 
-    const renderChecklistItem = (label, formProps, key) => {
+    const renderChecklistItem = (label, sectionKey, itemKey) => {
+        const path = `checklistItems.${sectionKey}.${itemKey}`;
+        const itemData = form.values.checklistItems[sectionKey]?.[itemKey];
+        const hasImage = itemData?.image instanceof File;
+        const imageError = form.errors[`${path}.image`];
+        const notesError = form.errors[`${path}.notes`];
+    
         return (
-            <Grid.Col span={{ base: 12, sm: 6 }} key={key}>
+            <Grid.Col span={{ base: 12, sm: 6, md: 4 }} key={`${sectionKey}-${itemKey}`}>
                 <Stack gap="xs">
                     <Text size="sm" style={{ color: '#000000 !important', fontWeight: 500 }}>{label}</Text>
+                    <Text size="xs" style={{ color: 'var(--mantine-color-gray-6)' }}>Select one option</Text>
+
                     <Radio.Group
-                        {...formProps}
+                        value={itemData?.value || ''}
+                        onChange={(statusValue) => form.setFieldValue(`${path}.value`, statusValue)}
                         orientation="horizontal"
+                        error={form.errors[`${path}.value`]}
+                        spacing="xl"
                     >
                         <Group mt="xs">
                             <Radio value="Good" label={<Text style={{ color: '#000000 !important' }}>Good</Text>} />
@@ -319,6 +327,55 @@ export function ManitouPDIForm() {
                             <Radio value="Missing" label={<Text style={{ color: '#000000 !important' }}>Missing</Text>} />
                         </Group>
                     </Radio.Group>
+                    
+                    <Dropzone
+                        onDrop={(files) => {
+                            if (files.length > 0) {
+                                form.setFieldValue(`${path}.image`, files[0]);
+                            }
+                        }}
+                        onReject={(files) => {
+                            notifications.show({
+                                title: 'File Rejected',
+                                message: files[0].errors[0].message,
+                                color: 'red',
+                            });
+                        }}
+                        maxFiles={1}
+                        accept={[MIME_TYPES.jpeg, MIME_TYPES.png]}
+                        mt="xs"
+                        error={imageError}
+                        style={{ borderColor: imageError ? 'red' : undefined }}
+                    >
+                        <Group justify="center" gap="xs" style={{ minHeight: rem(80), pointerEvents: 'none' }}>
+                            <Dropzone.Accept>
+                                <IconUpload style={{ width: rem(40), height: rem(40), color: 'var(--mantine-color-blue-6)' }} stroke={1.5} />
+                            </Dropzone.Accept>
+                            <Dropzone.Reject>
+                                <IconX style={{ width: rem(40), height: rem(40), color: 'var(--mantine-color-red-6)' }} stroke={1.5} />
+                            </Dropzone.Reject>
+                            <Dropzone.Idle>
+                                <IconFile style={{ width: rem(40), height: rem(40), color: 'var(--mantine-color-dimmed)' }} stroke={1.5} />
+                            </Dropzone.Idle>
+                            <Stack align="center" gap={4}>
+                                <Text size="xs" c="dimmed"> {hasImage ? itemData.image.name : 'Drag and drop an image here or click to select'} </Text>
+                                <Text size="xs" c="dimmed"> Accepted formats: JPG, PNG </Text>
+                            </Stack>
+                        </Group>
+                    </Dropzone>
+                    {imageError && (
+                        <Text size="sm" c="red" mt={5}>
+                            {imageError}
+                        </Text>
+                    )}
+                    <TextInput
+                        placeholder="Add Image Caption"
+                        mt="xs"
+                        value={itemData?.notes || ''}
+                        leftSection={<IconPencil size={20}/>}
+                        onChange={(event) => form.setFieldValue(`${path}.notes`, event.target.value)}
+                        error={notesError}
+                    />
                 </Stack>
             </Grid.Col>
         );
@@ -326,21 +383,21 @@ export function ManitouPDIForm() {
 
     const renderChecklistSection = (sectionTitle, sectionKey, items) => {
         return (
-            <Card shadow="sm" p="xl" withBorder mb="lg">
+            <Card shadow="sm" p="xl" withBorder mb="lg" key={sectionKey}>
                 <Title order={3} mb="md" style={{ color: '#000000 !important' }}>{sectionTitle}</Title>
                 <Grid gutter="xl">
                     {items.map((item) => ( 
                         renderChecklistItem(
-                            `${item.id}. ${item.label}`, 
-                            form.getInputProps(`checklistItems.${sectionKey}.${item.itemKey}`),
-                            `${sectionKey}-${item.itemKey}`
+                            `${item.id}. ${item.label}`,
+                            sectionKey,
+                            item.itemKey
                         )
                     ))}
                 </Grid>
             </Card>
         );
     };
-
+    
     return (
         <Box maw="100%" mx="auto" px="md">
             <Title
@@ -355,155 +412,142 @@ export function ManitouPDIForm() {
                 <Card shadow="sm" p="xl" withBorder mb="lg">
                     <Title order={3} mb="md" style={{ color: '#000000 !important' }}> Unit Information </Title>
                     <Grid gutter="xl">
-                        <Grid.Col span={{ base: 12, md: 6, lg: 4 }}>
+                        <Grid.Col span={{ base: 12, md: 6, md: 3 }}>
                             <Select 
-                                label={<Text style={{ color: '#000000 !important' }}> Dealer Code </Text>}
+                                label="Dealer Code"
                                 placeholder="Select Dealer Code"
                                 data={dealerCode}
                                 searchable
                                 clearable
                                 {...form.getInputProps('dealerCode')}
-                                renderOption={({ option }) => (
-                                    <Text c='black'>{option.label}</Text>
-                                )}
                             />
                         </Grid.Col>
-                        <Grid.Col span={{ base: 12, md: 6, lg: 4 }}>
+                        <Grid.Col span={{ base: 12, md: 6, md: 3 }}>
                             <Select 
-                                label={<Text style={{ color: '#000000 !important' }}> WO Number </Text>}
+                                label="WO Number"
                                 placeholder="Select WO Number"
-                                data={WoNumber}
+                                data={WoNumbers}
                                 searchable
                                 clearable
                                 {...form.getInputProps('woNumber')}
-                                renderOption={({ option }) => (
-                                    <Text c='black'>{option.label}</Text>
-                                )}
                             />
                         </Grid.Col>
-                        <Grid.Col span={{ base: 12, md: 6, lg: 4 }}>
+                        <Grid.Col span={{ base: 12, md: 6, md: 3 }}>
                             <Select
-                                label={<Text style={{ color: '#000000 !important' }}> Type/ Model </Text>}
+                                label="Type/ Model"
                                 placeholder="Select Model"
-                                data={modelsData}
+                                data={unitModels}
                                 searchable
                                 clearable
                                 {...form.getInputProps('machineType')}
-                                renderOption={({ option }) => (
-                                    <Text c='black'>{option.label}</Text>
-                                )}
                             />
                         </Grid.Col>
-                        <Grid.Col span={{ base: 12, md: 6, lg: 4 }}>
+                        <Grid.Col span={{ base: 12, md: 6, md: 3 }}>
                             <TextInput
-                                label={<Text style={{ color: '#000000 !important' }}> Serial Number </Text>}
+                                label="Serial Number"
                                 placeholder="Input Serial Number"
                                 {...form.getInputProps('serialNumber')}
-                                    styles={{ input: { color: '#000000 !important' } }}
-                                />
+                            />
                         </Grid.Col>
-                        <Grid.Col span={{ base: 12, md: 6, lg: 4 }}>
+                        <Grid.Col span={{ base: 12, md: 6, md: 3 }}>
                             <DateInput
-                                label={<Text style={{ color: '#000000 !important' }}> Delivery Date </Text>}
+                                label="Delivery Date"
                                 placeholder="Select Date"
                                 valueFormat="DD-MM-YYYY"
                                 {...form.getInputProps('deliveryDate')}
                                 rightSection={<IconCalendar size={16} />}
                             />
                         </Grid.Col>
-                        <Grid.Col span={{ base: 12, md: 6, lg: 4 }}>
+                        <Grid.Col span={{ base: 12, md: 6, md: 3 }}>
                             <DateInput
-                                label={<Text style={{ color: '#000000 !important' }}> Checking Date </Text>}
+                                label="Checking Date"
                                 placeholder="Select Date"
                                 valueFormat="DD-MM-YYYY"
                                 {...form.getInputProps('checkingDate')}
                                 rightSection={<IconCalendar size={16} />}
                             />
                         </Grid.Col>
-                        <Grid.Col span={{ base: 12, md: 6, lg: 4 }}>
+                        <Grid.Col span={{ base: 12, md: 6, md: 3 }}>
                             <TextInput
-                                label={<Text style={{ color: '#000000 !important' }}> Hour Meter </Text>}
+                                label="Hour Meter"
                                 placeholder="Input Hour Meter"
                                 {...form.getInputProps('HourMeter')}
-                                styles={{ input: { color: '#000000 !important' } }}
                             />
                         </Grid.Col>
-                        <Grid.Col span={{ base: 12, md: 6, lg: 4 }}>
+                        <Grid.Col span={{ base: 12, md: 6, md: 3 }}>
                             <Select
-                                label={<Text style={{ color: '#000000 !important' }}> Customer </Text>}
+                                label="Customer"
                                 placeholder="Select Customer"
                                 data={customers}
                                 searchable
                                 clearable
                                 {...form.getInputProps('customer')}
-                                renderOption={({ option }) => (
-                                    <Text c='black'>{option.label}</Text>
-                                )}
                             />
                         </Grid.Col>
-                        <Grid.Col span={{ base: 12, md: 6, lg: 4 }}>
+                        <Grid.Col span={{ base: 12, md: 6, md: 3 }}>
                             <Select
-                                label={<Text style={{ color: '#000000 !important' }}> Inspector Signature </Text>}
+                                label="Inspector Signature"
                                 placeholder="Select Inspector"
-                                data={technician}
+                                data={technicians}
                                 searchable
                                 clearable
                                 {...form.getInputProps('inspectorSignature')}
-                                renderOption={({ option }) => (
-                                    <Text c='black'>{option.label}</Text>
-                                )}
                             />
                         </Grid.Col>
-                        <Grid.Col span={{ base: 12, md: 6, lg: 4 }}>
+                        <Grid.Col span={{ base: 12, md: 6, md: 3 }}>
                             <Select
-                                label={<Text style={{ color: '#000000 !important' }}> Approval By </Text>}
+                                label="Approval By"
                                 placeholder="Select Approver"
                                 data={approvers}
                                 searchable
                                 clearable
                                 {...form.getInputProps('approvalBy')}
-                                renderOption={({ option }) => (
-                                    <Text c='black'>{option.label}</Text>
-                                )}
                             />
                         </Grid.Col>
                     </Grid>
                 </Card>
                 
                 <Divider my="xl" label={<Text style={{ color: '#000000 !important' }}>Legend</Text>} labelPosition="center" />
-                    <Group justify="center" gap="xl" mb="lg">
-                        <Text style={{ color: '#000000 !important' }}> 1: Good </Text>
-                        <Text style={{ color: '#000000 !important' }}> 2: Bad </Text>
-                        <Text style={{ color: '#000000 !important' }}> 0: Missing </Text>
-                    </Group>
+                <Group justify="center" gap="xl" mb="lg">
+                    <Text style={{ color: '#000000 !important' }}> 1: Good </Text>
+                    <Text style={{ color: '#000000 !important' }}> 2: Bad </Text>
+                    <Text style={{ color: '#000000 !important' }}> 0: Missing </Text>
+                </Group>
                 <Divider my="xl" />
 
-                {/* Render sections based on manitouPdiChecklistItemDefinition */}
-                {renderChecklistSection("01. Levels", "levels", manitouPdiChecklistItemDefinition.levels)}
-                {renderChecklistSection("02. Visual Inspection", "visualInspection", manitouPdiChecklistItemDefinition.visualInspection)}
-                {renderChecklistSection("03. Operation", "operation", manitouPdiChecklistItemDefinition.operation)}
-                {renderChecklistSection("04. Tests", "tests", manitouPdiChecklistItemDefinition.tests)}
-                {renderChecklistSection("05. Checking of General Machine Condition", "checkingOfGeneralMachineCondition", manitouPdiChecklistItemDefinition.checkingOfGeneralMachineCondition)}
-                {renderChecklistSection("06. Transport/Delivery - Remarks Regarding", "transportationDelivery", manitouPdiChecklistItemDefinition.transportationDelivery)}
+                {Object.keys(manitouPdiChecklistItemDefinition).map(sectionKey => (
+                    <div key={sectionKey}>
+                        {renderChecklistSection(
+                            {
+                                levels: "01. Levels",
+                                visualInspection: "02. Visual Inspection",
+                                operation: "03. Operation",
+                                tests: "04. Test",
+                                checkingOfGeneralMachineCondition: "05. Checking of General Machine Condition",
+                                transportationDelivery: "06. Transport/Delivery - Remarks Regarding",
+                            }[sectionKey] || sectionKey,
+                            sectionKey,
+                            manitouPdiChecklistItemDefinition[sectionKey]
+                        )}
+                    </div>
+                ))}
             
                 <Divider my="xl" />
-                <Title order={3} mb="md" style={{ color: '#000000 !important' }}> Possible Remarks on Transport and Delivery  </Title>
+                <Title order={3} mb="md" style={{ color: '#000000 !important' }}> Possible Remarks on Transport and Delivery </Title>
                 <Textarea
                     placeholder="Add Any Comments Here..."
                     minRows={10}
                     mb="xl"
                     {...form.getInputProps('deliveryRemarks')}
-                    styles={{ input: { color: '#000000 !important' } }}
                 />
 
                 <Divider my="xl" />
-                <Title order={3} mb="md" style={{ color: '#000000 !important' }}> Comments Regarding Technical Problems  </Title>
+                <Title order={3} mb="md" style={{ color: '#000000 !important' }}> Comments Regarding Technical Problems </Title>
                 <Textarea
                     placeholder="Add Any Comments Here..."
                     minRows={10}
                     mb="xl"
                     {...form.getInputProps('generalRemarks')}
-                    styles={{ input: { color: '#000000 !important' } }}
                 />
                 <Group justify="flex-end" mt="md">
                     <Button type="submit">Submit</Button>

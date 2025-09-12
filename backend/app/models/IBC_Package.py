@@ -15,7 +15,7 @@ class IBC_Packages(db.Model):
     
     # Fields for package data
     PackagesType = db.Column(db.String(50), nullable=False)
-    PackageDesc = db.Column(db.String(255))
+    PackageDesc = db.Column(db.String(500))
     
     def __repr__(self):
         

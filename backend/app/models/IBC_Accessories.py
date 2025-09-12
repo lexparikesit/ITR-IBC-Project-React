@@ -15,7 +15,7 @@ class IBC_Accessories(db.Model):
 
     # Fields for accessories data
     IBC_Accessories = db.Column(db.String(50), nullable=False)
-    Remarks = db.Column(db.String(150))
+    Remarks = db.Column(db.Text())
 
     def __repr__(self):
         

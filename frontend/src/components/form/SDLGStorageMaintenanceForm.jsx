@@ -14,6 +14,7 @@ import {
     Divider,
     Table,
     ActionIcon,
+    Grid,
     Select,
 } from '@mantine/core';
 import { DateInput } from '@mantine/dates';
@@ -23,18 +24,20 @@ import { IconCalendar } from "@tabler/icons-react";
 import { IconPlus, IconTrash } from '@tabler/icons-react';
 
 export default function SDLGStorageMaintenanceForm() {
-    const [machineModelsData, setMachineModelsData] = useState([]);
-    const [inspectorData, setInspectorData] = useState([]);
-    const [supervisorData, setSupervisorData] = useState([]);
+    const [unitModels, setUnitModels] = useState([]);
+    const [woNumbers, setWoNumbers] = useState([]);
+    const [technicians, setTechnicians] = useState([]);
+    const [approvers, setApprovers] = useState([]);
     
     const form = useForm({
         initialValues: {
-            machineModel: '',
-            vehicleNumber: '',
-            workingHours: '',
+            machineModel: null,
+            vehicleNumber: "",
+            workingHours: "",
+            woNumber: null,
             vehicleArrivalDate: null,
             inspectionDate: null,
-            inspector: '',
+            inspector: null,
 
             // first part - Inspection
             inspectionItems: {
@@ -56,13 +59,14 @@ export default function SDLGStorageMaintenanceForm() {
             observedConditions: [{ sn: 1, description: '', remarks: '' }],
 
             // supervisor part
-            signatureInspectorName: '',
+            signatureInspectorName: null,
             signatureInspectorDate: null,
-            supervisorName: '',
+            supervisorName: null,
             supervisorDate: null,
         },
 
         validate: {
+            woNumber: (value) => (value ? null: 'WO Number is Required'),
             machineModel: (value) => (value ? null: 'Machine Model is Required!'),
             vehicleNumber: (value) => (value ? null: 'Vehicle Number/ VIN is Required!'),
             workingHours: (value) => (value ? null: 'Working Hours are Required!'),
@@ -79,44 +83,56 @@ export default function SDLGStorageMaintenanceForm() {
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const response = await fetch('http://127.0.0.1:5000/api/unit-types/SDLG');
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                const data = await response.json();
-                const formattedModels = data
-                    .filter(item => item.value !== null && item.value !== undefined && item.label !== null && item.label !== undefined) // Filter berdasarkan 'value' dan 'label'
+                const brandId = "SDLG"; // 'SDLG' for SDLG
+                const groupId = "SM"; // 'SM' for Storage Maintenance
+
+                // model/ Type MA API
+                const modelResponse = await fetch('http://127.0.0.1:5000/api/unit-types/SDLG');
+                if (!modelResponse.ok) throw new Error(`HTTP error! status: ${modelResponse.status}`);
+                const modelData = await modelResponse.json();
+                const formattedModels = modelData
+                    .filter(item => item.value !== null && item.value !== undefined && item.label !== null && item.label !== undefined)
                     .map(item => ({
                         value: item.value,
                         label: item.label
                     }));
-                setMachineModelsData(formattedModels);
+                setUnitModels(formattedModels);
+
+                // wo Number API
+				const woResponse = await fetch(`http://127.0.0.1:5000/api/work-orders?brand_id=${brandId}&group_id=${groupId}`);
+				if (!woResponse.ok) throw new Error(`HTTP error! status: ${woResponse.status}`);
+				const woData = await woResponse.json();
+				const formattedWoData = woData.map(wo => ({ 
+					value: wo.WONumber, 
+					label: wo.WONumber 
+				}));
+				setWoNumbers(formattedWoData);
+
+                // dummy Technicians API
+                const dummyTechniciansData = [
+                    { value: "tech1", label: "John Doe" },
+                    { value: "tech2", label: "Jane Smith" },
+                    { value: "tech3", label: "Peter Jones" }
+                ];
+                setTechnicians(dummyTechniciansData);
+
+                // dummy Approvers API
+                const dummyApproverData = [
+                    { value: "app1", label: "Alice Brown" },
+                    { value: "app2", label: "Bob White" },
+                    { value: "app3", label: "John Green" }
+                ];
+                setApprovers(dummyApproverData);
+                
             } catch (error) {
-                console.error("Failed to fetch machine models:", error);
+                console.error("Failed to fetch models:", error);
                 notifications.show({
                     title: "Error Loading Data",
-                    message: "Failed to load machine models. Please try again!",
+                    message: "Failed to load models. Please try again!",
                     color: "red",
                 });
             }
-
-            // Set dummy data for inspectors
-            const dummyInspectorData = [
-                { value: "tech1", label: "John Doe" },
-                { value: "tech2", label: "Jane Smith" },
-                { value: "tech3", label: "Peter Jones" }
-            ];
-            setInspectorData(dummyInspectorData);
-
-            // Set dummy data for approvers
-            const dummySupervisorData = [
-                { value: "app1", label: "Alice Brown" },
-                { value: "app2", label: "Bob White" },
-                { value: "app3", label: "John Green" }
-            ];
-            setSupervisorData(dummySupervisorData);
-        };
-
+        }
         fetchData();
     }, []);
 
@@ -266,50 +282,70 @@ export default function SDLGStorageMaintenanceForm() {
                 })}>
                     <Box mb="xl">
                         <Title order={4} mb="md"> Unit Information </Title>
-                        <Group grow mb="md">
-                            <Select
-                                label="Machine Model"
-                                placeholder="Select a Machine Model"
-                                data={machineModelsData}
-                                searchable
-                                clearable
-                                {...form.getInputProps('machineModel')}
-                            />
-                            <TextInput
-                                label="Vehicle Number"
-                                placeholder="Input Vehicle S/N"
-                                {...form.getInputProps('vehicleNumber')}
-                            />
-                            <TextInput
-                                label="Working Hours"
-                                placeholder="Input Working Hours"
-                                {...form.getInputProps('workingHours')}
-                            />
-                        </Group>
-                        <Group grow>
-                            <DateInput
-                                label="Vehicle Arrival Date"
-                                placeholder="Select Date"
-                                valueFormat="DD-MM-YYYY"
-                                {...form.getInputProps('vehicleArrivalDate')}
-                                rightSection={<IconCalendar size={16} />}
-                            />
-                            <DateInput
-                                label="Inspection Date"
-                                placeholder="Select date"
-                                valueFormat="DD-MM-YYYY"
-                                {...form.getInputProps('inspectionDate')}
-                                rightSection={<IconCalendar size={16} />}
-                            />
-                            <Select
-                                label="Inspector Name"
-                                placeholder="Select Inspector"
-                                clearable
-                                searchable
-                                data={inspectorData}
-                                {...form.getInputProps('inspector')}
-                            />
-                        </Group>
+                        <Grid gutter="xl">
+                            <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
+                                <Select
+                                    label="WO Number"
+                                    placeholder="Select Wo Number"
+                                    data={woNumbers}
+                                    searchable
+                                    clearable
+                                    {...form.getInputProps('woNumbers')}
+                                />
+                            </Grid.Col>
+                            <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
+                                <Select
+                                    label="Machine Model"
+                                    placeholder="Select Model"
+                                    data={unitModels}
+                                    searchable
+                                    clearable
+                                    {...form.getInputProps('machineModel')}
+                                />
+                            </Grid.Col>
+                            <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
+                                <TextInput
+                                    label="Vehicle Number"
+                                    placeholder="Input Vehicle S/N"
+                                    {...form.getInputProps('vehicleNumber')}
+                                />
+                            </Grid.Col>
+                            <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
+                                <TextInput
+                                    label="Working Hours"
+                                    placeholder="Input Working Hours"
+                                    {...form.getInputProps('workingHours')}
+                                />
+                            </Grid.Col>
+                            <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
+                                <DateInput
+                                    label="Vehicle Arrival Date"
+                                    placeholder="Select Date"
+                                    valueFormat="DD-MM-YYYY"
+                                    {...form.getInputProps('vehicleArrivalDate')}
+                                    rightSection={<IconCalendar size={16} />}
+                                />
+                            </Grid.Col>
+                            <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
+                                <DateInput
+                                    label="Inspection Date"
+                                    placeholder="Select date"
+                                    valueFormat="DD-MM-YYYY"
+                                    {...form.getInputProps('inspectionDate')}
+                                    rightSection={<IconCalendar size={16} />}
+                                />
+                            </Grid.Col>
+                            <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
+                                <Select
+                                    label="Inspector Name"
+                                    placeholder="Select Inspector"
+                                    clearable
+                                    searchable
+                                    data={technicians}
+                                    {...form.getInputProps('inspector')}
+                                />
+                            </Grid.Col>
+                        </Grid>
                         <Text size="xs" c="dimmed" mt="xs">
                             <Text component="span" fw={700}>Important:</Text> 
                             <Text component="span">Please follow the safety instructions in the machine operation and maintenance manual...</Text>
@@ -453,7 +489,7 @@ export default function SDLGStorageMaintenanceForm() {
                                 placeholder="Select Inspector"
                                 clearable
                                 searchable
-                                data={inspectorData}
+                                data={approvers}
                                 {...form.getInputProps('signatureInspectorName')}
                             />
                             <DateInput
@@ -470,7 +506,7 @@ export default function SDLGStorageMaintenanceForm() {
                                 placeholder="Select Supervisor"
                                 clearable
                                 searchable
-                                data={supervisorData}
+                                data={approvers}
                                 {...form.getInputProps('supervisorName')}
                             />
                             <DateInput
