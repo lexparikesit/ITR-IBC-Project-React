@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { Container, Paper, Title } from "@mantine/core";
 import OtpForm from "@/components/auth/OtpForm";
 
@@ -23,7 +22,6 @@ export default function OtpPage() {
 						Verify OTP
 					</Title>
 
-					{/* Judul Halaman */}
 					<p className="text-center text-sm mt-4" style={{ color: "#7E99A3" }}>
 						We’ve sent a 6-digit code to your email. Please check your inbox and
 						enter it here.

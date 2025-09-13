@@ -21,6 +21,7 @@ class User(db.Model):
     email = db.Column(db.String(150), unique=True, nullable=False)
     password = db.Column(db.String(200), nullable=False)
     otps: Mapped[List["UserOtp"]] = relationship(back_populates="user")
+    reset_tokens: Mapped[List["PasswordResetToken"]] = relationship(back_populates="user")
 
 class UserOtp(db.Model):
 
@@ -34,5 +35,14 @@ class UserOtp(db.Model):
     used_at = db.Column(db.DateTime)
     created_at: Mapped[datetime] = mapped_column(db.DateTime, default=datetime.now, nullable=False)
     
-    # created_at: Mapped[datetime] = db.Column(db.DateTime, nullable=False)
-    # user = db.relationship('User', backref=db.backref('otp_codes', lazy=True))
+class PasswordResetToken(db.Model):
+
+    __tablename__ = 'IBC_Password_Reset_Token'
+
+    resetId = db.Column(UNIQUEIDENTIFIER, primary_key=True, default=uuid.uuid4)
+    user_id = db.Column(UNIQUEIDENTIFIER, db.ForeignKey('IBC_Users.userid'), nullable=False)
+    token = db.Column(db.String(255), unique=True, nullable=False)
+    expired_at = db.Column(db.DateTime, nullable=False)
+    used_at = db.Column(db.DateTime)
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
+    user: Mapped[User] = relationship(back_populates="reset_tokens")

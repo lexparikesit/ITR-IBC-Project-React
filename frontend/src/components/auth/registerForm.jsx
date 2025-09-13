@@ -14,7 +14,6 @@ export default function RegisterForm() {
 	const [email, setEmail] = useState("");
 	const [password, setPassword] = useState("");
 	const [confirmPassword, setConfirmPassword] = useState("");
-
 	const [isLoading, setIsLoading] = useState(false);
 
 	const handleRegister = async (e) => {

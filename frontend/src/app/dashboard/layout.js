@@ -62,7 +62,7 @@ export default function DashboardLayout({ children }) {
     // handling user settings
     const handleSettings = () => {
         console.log("User Settings Clicked!");
-        router.push('/dashboard/settings')
+        router.push('/dashboard/settings/users');
     }
 
     const handleNotificationsClick = () => {
@@ -87,6 +87,8 @@ export default function DashboardLayout({ children }) {
             const segment = path.split('/').pop()
             const capitalizedSegment = segment.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
             return `Pre-Delivery - ${capitalizedSegment}`
+        } else if (path.startsWith('/dashboard/settings/users')) {
+            return 'Settings - User Account'
         }
         // to input another logic below this section
 

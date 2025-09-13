@@ -50,6 +50,7 @@
 .links {
     flex: 1;
     overflow-y: auto;
+    color: #fff;
     /* margin-left: calc(var(--mantine-spacing-md) * -1);
     margin-right: calc(var(--mantine-spacing-md) * -1); */
 }
@@ -60,6 +61,7 @@
     display: flex;
     flex-direction: column;
     gap: 0;
+    color: #fff;
 }
 
 .linksGroupItem {
@@ -72,6 +74,15 @@
     border-radius: var(--mantine-radius-sm);
     transition: background-color 0.2s ease;
     margin-bottom: 10px;
+    color: var(--mantine-color-white);
+}
+
+.linksGroupItem svg {
+    color: var(--mantine-color-white);
+}
+
+.linksGroupItem[data-active="true"] svg {
+    color: var(--mantine-color-white);
 }
 
 .linksGroupItem:last-of-type {
@@ -98,6 +109,18 @@
     color: var(--mantine-color-white);
     display: flex;
     align-items: center;
+}
+
+.sectionWrapper {
+    margin-top: var(--mantine-spacing-xl);
+}
+
+.sectionWrapper:first-of-type {
+    margin-top: 0;
+}
+
+.sectionLabel {
+    margin-bottom: var(--mantine-spacing-sm);
 }
 
 .submenu {

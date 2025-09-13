@@ -88,7 +88,7 @@ const LoginForm = () => {
 			/>
 
 			<Flex justify="space-between" w="100%" mt="lg">
-				<Anchor href="#" size="sm">
+				<Anchor href="/forgot-password" size="sm">
 					Forget Password
 				</Anchor>
 			</Flex>

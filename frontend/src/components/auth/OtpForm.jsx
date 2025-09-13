@@ -82,7 +82,7 @@ export default function OtpForm() {
 			});
 
 			const data = response.data;
-			console.log("Respon API Verifikasi OTP:", data);
+			console.log("API Respond for Verification", data);
 
 			if (data.user_id && data.email && data.user && data.access_token) {
                 localStorage.setItem("access_token", data.access_token);
