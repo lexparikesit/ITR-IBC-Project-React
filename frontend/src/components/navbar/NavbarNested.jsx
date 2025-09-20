@@ -4,9 +4,10 @@ import {
     IconNotes,
     IconTool,
     IconForms,
-    IconLogout,
     IconBox,
     IconFolder,
+    IconTruckDelivery,
+    IconChecks
 } from '@tabler/icons-react';
 
 import { Code, Group, ScrollArea, Text } from '@mantine/core';
@@ -52,14 +53,12 @@ const mockdata = [
                 ],
             },
             { 
-                label: 'Delivery Unit', 
-                icon: IconNotes,
+                label: 'Commissioning Unit', 
+                icon: IconTruckDelivery,
                 links: [
-                    { label: 'Kalmar', link: '/dashboard/delivery-unit/kalmar' },
-                    { label: 'Manitou', link: '/dashboard/delivery-unit/manitou' },
-                    { label: 'Mantsinen', link: '/dashboard/delivery-unit/mantsinen' },
-                    { label: 'Renault Trucks', link: '/dashboard/delivery-unit/renault-trucks' },
-                    { label: 'SDLG', link: '/dashboard/delivery-unit/sdlg' },
+                    { label: 'Manitou', link: '/dashboard/commissioning/manitou' },
+                    { label: 'Renault Trucks', link: '/dashboard/commissioning/renault-trucks' },
+                    { label: 'SDLG', link: '/dashboard/commissioning/sdlg' },
                 ],
             },
         ],
@@ -69,6 +68,12 @@ const mockdata = [
         links: [
             { label: 'IBC Form', icon: IconForms, link: '/dashboard/ibc' }
         ],
+    },
+    {
+        label: 'Delivery Unit',
+        links: [
+            { label: 'Upload KHO Document', icon: IconChecks, link: '/dashboard/ibc' }
+        ]
     },
     {
         label: 'Log Activity',

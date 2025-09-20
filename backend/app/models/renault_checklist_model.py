@@ -11,14 +11,15 @@ class RenaultChecklistModel(db.Model):
     AC_ID = db.Column(UNIQUEIDENTIFIER, primary_key=True, default=uuid.uuid4)
 
     # Information Unit
+    brand = db.Column(db.String(50), nullable=False)
     woNumber = db.Column(db.String(50), nullable=False)
     UnitType = db.Column(db.String(50), nullable=False)
     VIN = db.Column(db.String(50), nullable=False, unique=True)
     EngineNo = db.Column(db.String(50), nullable=False)
     chassisNumber = db.Column(db.String(50), nullable=False)
-
-    technician = db.Column(db.String(200), nullable=False)
-    approvalBy = db.Column(db.String(200), nullable=False)
+    arrivalDate = db.Column(db.Date, nullable=False)
+    technician = db.Column(db.String(255), nullable=False)
+    approvalBy = db.Column(db.String(255), nullable=False)
 
     # column cab1 with bit type
     Cab1 = db.Column(db.Boolean, nullable=False)
@@ -104,9 +105,6 @@ class RenaultChecklistModel(db.Model):
     # column for Created By and Created On
     createdon = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     createdby = db.Column(db.String(50), nullable=False)
-
-    # column for created Date Check
-    arrivalDate = db.Column(db.Date, nullable=False)
 
     def __repr__(self):
 

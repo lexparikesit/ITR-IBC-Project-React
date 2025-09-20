@@ -23,71 +23,105 @@ import { notifications } from "@mantine/notifications";
 import { Dropzone, MIME_TYPES } from "@mantine/dropzone";
 import { rem } from "@mantine/core";
 
-const manitouPdiChecklistItemDefinition = {
-    levels: [
-        { id: '01', label: 'Engine Oil', itemKey: 'engineOil' },
-        { id: '02', label: 'Transmission Oil', itemKey: 'transmissionOil' },
-        { id: '03', label: 'Hydraulic Oil', itemKey: 'hydraulicOil' },
-        { id: '04', label: 'Brake Fluid', itemKey: 'brakeFluid' },
-        { id: '05', label: 'Coolant', itemKey: 'coolant' },
-        { id: '06', label: 'Front Axle - Rear Axle - Transfer Box Oil', itemKey: 'frontAxleRearAxleTransferBoxOil' },
-        { id: '07', label: 'Windscreen Washer Fluid', itemKey: 'windscreenWasherFluid' },
-        { id: '08', label: 'Battery Level', itemKey: 'batteryLevel' },
-        { id: '09', label: 'Heating System Tank', itemKey: 'heatingSystemTank' },
+const ManitouCommissioningChecklistForm = {
+    engine: [
+        { id: '01', label: 'Air Filter', itemKey: 'airFilter' },
+        { id: '02', label: 'Fuel Tank', itemKey: 'fuelTank' },
+        { id: '03', label: 'Fuel Pipes and Filters', itemKey: 'fuelPipeFilters' },
+        { id: '04', label: 'Injection / Carburation System', itemKey: 'injectionCarburationSystem' },
+        { id: '05', label: 'Radiator and Cooling Systems', itemKey: 'radiatorCoolingSystems' },
+        { id: '06', label: 'Belts', itemKey: 'belts' },
+        { id: '07', label: 'Hoses', itemKey: 'hosesEngine' },
     ],
-    visualInspection: [
-        { id: '11', label: 'Of All Electric Connections', itemKey: 'electricConnections' },
-        { id: '12', label: 'Of All Hydraulic Connections', itemKey: 'hydraulicConnections' },
-        { id: '13', label: 'Of All Screw and Nuts', itemKey: 'screwAndNuts' },
-        { id: '14', label: 'Lubrication', itemKey: 'lubrication' },
-        { id: '15', label: 'Tyres (Aspect)', itemKey: 'tyresAspect' },
+    transmission: [
+        { id: '01', label: 'Reversing System', itemKey: 'reversingSystem' },
+        { id: '02', label: 'Control of Gears', itemKey: 'controlOfGears' },
+        { id: '03', label: 'Transmission Disconnect Pedal', itemKey: 'transmissionDisconnectPedal' },
+        { id: '04', label: 'Clutch', itemKey: 'clutch' },
     ],
-    operation: [
-        { id: '16', label: 'Instrumentation, Indicators, Headlights, Rear Lights', itemKey: 'instrumentationIndicatorsHeadlightsRearLights' },
-        { id: '17', label: 'Windscreen Wiper, Heating, Air Conditioning', itemKey: 'windscreenWiperHeatingAirConditioning' },
-        { id: '18', label: 'Safety and Emergency Recovery System', itemKey: 'safetyAndEmergencyRecoverySystem' },
+    axleTransferBox: [
+        { id: '01', label: 'Operation and Tightness', itemKey: 'operationTightness' },
+        { id: '02', label: 'Adjustment of Stops', itemKey: 'adjustmentStops' },
     ],
-    tests: [
-        { id: '19', label: 'Lifting', itemKey: 'lifting' },
-        { id: '20', label: 'Tilting', itemKey: 'tilting' },
-        { id: '21', label: 'Telescopes', itemKey: 'telescopes' },
-        { id: '22', label: 'Accessory (ies)', itemKey: 'accessory' },
-        { id: '23', label: 'Fan Operation', itemKey: 'fanOperation' },
-        { id: '24', label: 'Steering: 2 Wheels, 4 Wheels, Crab', itemKey: 'steering' },
-        { id: '25', label: 'Swing', itemKey: 'swing' },
-        { id: '26', label: 'Stabiliser and Chassis Levelling/ Rear Axle Locking', itemKey: 'stabiliserAndChassisLevelling' },
-        { id: '27', label: 'Platform', itemKey: 'platform' },
-        { id: '28', label: 'Brake/ Parking Brake', itemKey: 'brakeParkingBrake' },
+    hydraulicHydrostaticCircuits: [
+        { id: '01', label: 'Oil Tank', itemKey: 'oilTank' },
+        { id: '02', label: 'Pumps and Coupling', itemKey: 'pumpsCoupling' },
+        { id: '03', label: 'Tightness of Unions', itemKey: 'tightnessOfUnions' },
+        { id: '04', label: 'Lifting Rams', itemKey: 'liftingRams' },
+        { id: '05', label: 'Tilting Rams', itemKey: 'tiltingRams' },
+        { id: '06', label: 'Accessory Rams', itemKey: 'accessoryRams' },
+        { id: '07', label: 'Telescope Rams', itemKey: 'telescopeRams' },
+        { id: '08', label: 'Compensating Rams', itemKey: 'compensatingRams' },
+        { id: '09', label: 'Steering Rams', itemKey: 'steeringRams' },
+        { id: '10', label: 'Control Valves', itemKey: 'controlValves' },
+        { id: '11', label: 'Counterbalance Valve', itemKey: 'counterBalanceValve' },
     ],
-    checkingOfGeneralMachineCondition: [
-        { id: '29', label: 'Paint/ Frame/ Cab', itemKey: 'paintFrameCab' },
-        { id: '30', label: 'Decals', itemKey: 'decals' },
-        { id: '31', label: 'Instructions Manual', itemKey: 'instructionsManual' },
-        { id: '32', label: 'Wheels nut Torque', itemKey: 'wheelsNutTorque' },
-        { id: '33', label: 'Type Pressures', itemKey: 'typePressures' },
+    brakingCircuits: [
+        { id: '01', label: 'Checking of Service Brake & Parking Brake Operation', itemKey: 'serviceBrakeParkingBrakeOperation' },
+        { id: '02', label: 'Checking Brake Fluid Level (as per assembly)', itemKey: 'brakeFluidLevel' },
     ],
-    transportationDelivery: [
-        { id: '34', label: 'Transport Equipment', itemKey: 'transportEquipment' },
-        { id: '35', label: 'Compliance with Instructions/ Time Schedules', itemKey: 'complianceInstructions' },
-        { id: '36', label: 'The Driver Services', itemKey: 'theDriverServices' },
+    lubrication: [
+        { id: '01', label: 'Lubrication', itemKey: 'lubrication' },
+    ],
+    boomMastManiscopicManicess: [
+        { id: '01', label: 'Boom & Telescopes', itemKey: 'boomTelescopes' },
+        { id: '02', label: 'Wear Pads', itemKey: 'wearPads' },
+        { id: '03', label: 'Linkage', itemKey: 'linkage' },
+        { id: '04', label: 'Carriage', itemKey: 'carriageBooms' },
+        { id: '05', label: 'Forks', itemKey: 'forksBooms' }
+    ],
+    mastUnit: [
+        { id: '01', label: 'Fixed & Movable Masts', itemKey: 'fixedMovableMast' },
+        { id: '02', label: 'Carriage', itemKey: 'carriageMast' },
+        { id: '03', label: 'Chains', itemKey: 'chains' },
+        { id: '04', label: 'Rollers', itemKey: 'rollers' },
+        { id: '05', label: 'Forks', itemKey: 'forksMastUnit' },
+    ],
+    accessories: [
+        { id: '01', label: 'Adaptation to Machine', itemKey: 'adaptationToMachine' },
+        { id: '02', label: 'Hydraulic Connections', itemKey: 'hydraulicConnections' },
+    ],
+    cabProtectiveDeviceElectricCircuit: [
+        { id: '01', label: 'Seat', itemKey: 'seat' },
+        { id: '02', label: 'Control Panel & Radio', itemKey: 'controlPanelRadio' },
+        { id: '03', label: 'Horn & Warning Light, Safety Device', itemKey: 'hornWarningLightSafetyDevice' },
+        { id: '04', label: 'Heating / Air Conditioning', itemKey: 'heatingAirConditioning' },
+        { id: '05', label: 'Windscreen Wiper / Washer', itemKey: 'windscreenWiperWasher' },
+        { id: '06', label: 'Horns', itemKey: 'horns' },
+        { id: '07', label: 'Backup Alarm', itemKey: 'backupAlarm' },
+        { id: '08', label: 'Head Lighting', itemKey: 'headLighting' },
+        { id: '09', label: 'Additional Lighting', itemKey: 'additionalLighting' },
+        { id: '10', label: 'Rotating Beacon', itemKey: 'rotatingBeacon' },
+        { id: '11', label: 'Battery', itemKey: 'battery' },
+    ],
+    wheels: [
+        { id: '01', label: 'Rims', itemKey: 'rims' },
+        { id: '02', label: 'Tires & Pressure', itemKey: 'tiresPressure' },
+    ],
+    otherItems: [
+        { id: '01', label: 'Screws and Nuts', itemKey: 'screwsNuts' },
+        { id: '02', label: 'Frame and Body', itemKey: 'frameBody' },
+        { id: '03', label: 'Paint', itemKey: 'paint' },
+        { id: '04', label: 'General Operation', itemKey: 'generalOperation' },
+        { id: '05', label: 'Operator\'s Manual', itemKey: 'operatorsManual' },
+        { id: '06', label: 'Instructions for Customer', itemKey: 'instructionsForCustomer' },
     ],
 };
 
-export function ManitouPDIForm() {
+export function ManitouCommissioningForm() {
     const [unitModels, setUnitModels] = useState([]);
-    const [WoNumbers, setWoNumbers] = useState([]);
+    const [woNumbers, setWoNumbers] = useState([]);
+    const [customers, setCustomers] = useState([]);
     const [technicians, setTechnicians] = useState([]);
     const [approvers, setApprovers] = useState([]);
-    const [customers, setCustomers] = useState([]);
-    const [dealerCode, setDealerCode] = useState('');
 
     const generateChecklistValidation = () => {
         let validationRules = {};
-        Object.keys(manitouPdiChecklistItemDefinition).forEach(sectionKey => {
-            manitouPdiChecklistItemDefinition[sectionKey].forEach(item => {
+        Object.keys(ManitouCommissioningChecklistForm).forEach(sectionKey => {
+            ManitouCommissioningChecklistForm[sectionKey].forEach(item => {
                 const itemKey = item.itemKey;
                 validationRules[`checklistItems.${sectionKey}.${itemKey}.value`] = (value) => (
-                    value ? null : 'This Field is Required!'
+                    value ? null : 'This field is Required!'
                 );
                 validationRules[`checklistItems.${sectionKey}.${itemKey}.image`] = (value) => (
                     value ? null : 'An Image is Required for This Item!'
@@ -100,46 +134,43 @@ export function ManitouPDIForm() {
     const form = useForm({
         initialValues: (() => {
             const initialChecklist = {};
-            Object.keys(manitouPdiChecklistItemDefinition).forEach(sectionKey => {
+            Object.keys(ManitouCommissioningChecklistForm).forEach(sectionKey => {
                 initialChecklist[sectionKey] = {};
-                manitouPdiChecklistItemDefinition[sectionKey].forEach(item => {
+                ManitouCommissioningChecklistForm[sectionKey].forEach(item => {
                     initialChecklist[sectionKey][item.itemKey] = {
-                        value: '', // Status: Good, Bad, Missing
-                        notes: '', // Caption
-                        image: null, // Image File
+                        value: '',
+                        notes: '',
+                        image: null,
                     };
                 });
             });
 
             return {
-                dealerCode: null,
-                machineType: null,
-                serialNumber: '',
+                woNumber: null,
+                unitModel: null,
+                VIN: '',
+                hourMeter: '',
                 deliveryDate: null,
-                checkingDate: null,
-                HourMeter: '',
+                commissioningDate: null,
+                customer: null,
                 inspectorSignature: null,
                 approvalBy: null,
-                customer: null,
-                woNumber: null,
-                deliveryRemarks: '',
                 generalRemarks: '',
                 checklistItems: initialChecklist,
             };
         })(),
 
         validate: {
-            dealerCode: (value) => (value ? null : "Dealer Code is Required!"),
-            machineType: (value) => (value ? null : "Model Type is Required!"),
-            serialNumber: (value) => (value ? null : "Serial Number is Required!"),
-            deliveryDate: (value) => (value ? null : "Delivery Date is Required!"),
-            checkingDate: (value) => (value ? null : "Checking Date is Required!"),
-            HourMeter: (value) => (value ? null : "Hour Meter is Required!"),
-            inspectorSignature: (value) => (value ? null : "Inspector Signature is Required!"),
-            approvalBy: (value) => (value ? null : "Approval By is Required!"),
-            customer: (value) => (value ? null : "Customer is Required!"),
-            woNumber: (value) => (value ? null : "WO Number is Required!"),
-            ...generateChecklistValidation(),
+            woNumber: (value) => (value ? null : 'WO Number is Required!'),
+            unitModel: (value) => (value ? null : 'Unit Model is Required!'),
+            VIN: (value) => (value ? null : 'VIN is Required!'),
+            hourMeter: (value) => (value ? null : 'Hour Meter is Required!'),
+            deliveryDate: (value) => (value ? null : 'Delivery Date is Required!'),
+            commissioningDate: (value) => (value ? null : 'Commissioning Date is Required!'),
+            customer: (value) => (value ? null : 'Customer is Required!'),
+            inspectorSignature: (value) => (value ? null : 'Inspector Signature is Required!'),
+            approvalBy: (value) => (value ? null : 'Approval By is Required!'),
+            /*...generateChecklistValidation(),*/ 
         },
     });
 
@@ -147,7 +178,7 @@ export function ManitouPDIForm() {
         const fetchData = async () => {
             try {
                 const brandId = "MA"; // 'MA' for Manitou
-                const groupId = "DPDPI"; // 'DPDPI' for PDI
+                const groupId = "COMM"; // 'COMM' for Commissioning
 
                 // model/ Type MA API
                 const modelResponse = await fetch(`http://127.0.0.1:5000/api/unit-types/${brandId}`);
@@ -160,7 +191,8 @@ export function ManitouPDIForm() {
                         label: item.label
                     }));
                 setUnitModels(formattedModels);
-
+                console.log("Formatted Unit Models:", formattedModels);
+                
                 // wo Number API
                 const woResponse = await fetch(`http://127.0.0.1:5000/api/work-orders?brand_id=${brandId}&group_id=${groupId}`);
                 if (!woResponse.ok) throw new Error(`HTTP error! status: ${woResponse.status}`);
@@ -197,11 +229,7 @@ export function ManitouPDIForm() {
                 ];
                 setApprovers(dummyApprover);
 
-                // delaer Code
-                setDealerCode([{ value: "30479", label: "30479" }]);
-
             } catch (error) {
-                console.error("Failed to fetch data:", error);
                 notifications.show({
                     title: "Error Loading Data",
                     message: "Failed to load form data. Please try again!",
@@ -213,8 +241,9 @@ export function ManitouPDIForm() {
     }, []);
 
     const handleSubmit = async (values) => {
+        console.log("Form values before submission:", values);
         const token = localStorage.getItem('access_token');
-        if (!token) {
+        if(!token) {
             notifications.show({
                 title: "Authentication Error",
                 message: "Please log in again. Authentication token is missing.",
@@ -226,8 +255,8 @@ export function ManitouPDIForm() {
         const formData = new FormData();
         const checklistItemsPayload = {};
 
-        Object.keys(manitouPdiChecklistItemDefinition).forEach(sectionKey => {
-            const items = manitouPdiChecklistItemDefinition[sectionKey];
+        Object.keys(ManitouCommissioningChecklistForm).forEach(sectionKey => {
+            const items = ManitouCommissioningChecklistForm[sectionKey];
             items.forEach(item => {
                 const itemData = values.checklistItems[sectionKey]?.[item.itemKey];
                 
@@ -237,7 +266,7 @@ export function ManitouPDIForm() {
                     }
                     checklistItemsPayload[sectionKey][item.itemKey] = {
                         status: itemData.value,
-                        notes: itemData.notes || "",
+                        notes: itemData.notes || '',
                     };
 
                     if (itemData.image) {
@@ -249,20 +278,18 @@ export function ManitouPDIForm() {
         });
 
         const payload = {
-            brand: 'manitou',
+            brand: "Manitou",
             unitInfo: {
-                dealerCode: values.dealerCode,
-                customers: values.customer,
-                machineType: values.machineType,
-                serialNumber: values.serialNumber,
+                woNumber: values.woNumber,
+                unitModel: values.unitModel,
+                VIN: values.VIN,
+                hourMeter: values.hourMeter,
                 deliveryDate: values.deliveryDate,
-                checkingDate: values.checkingDate,
-                HourMeter: values.HourMeter,
+                commissioningDate: values.commissioningDate,
+                customer: values.customer,
                 inspectorSignature: values.inspectorSignature,
                 approvalBy: values.approvalBy,
-                woNumber: values.woNumber,
             },
-            remarksTransport: values.deliveryRemarks,
             generalRemarks: values.generalRemarks,
             checklistItems: checklistItemsPayload,
         };
@@ -270,17 +297,17 @@ export function ManitouPDIForm() {
         formData.append('data', JSON.stringify(payload));
 
         try {
-            const response = await fetch(`http://localhost:5000/api/pre-delivery-inspection/manitou/submit`, {
+            const response = await fetch(`http://localhost:5000/api/commissioning/manitou/submit`, {
                 method: 'POST',
                 headers: {
-                    'Authorization': `Bearer ${token}`
+                    'Authorization': `Bearer ${token}`,
                 },
-                body: formData,
+                body: formData
             });
 
             if (!response.ok) {
                 const errorData = await response.json();
-                throw new Error(errorData.message || "Failed to submit Manitou Pre-Delivery Inspection");
+                throw new Error(errorData.message || "Failed to submit Manitou Commissioning Inspection");
             }
 
             const result = await response.json();
@@ -307,7 +334,7 @@ export function ManitouPDIForm() {
         const hasImage = itemData?.image instanceof File;
         const imageError = form.errors[`${path}.image`];
         const notesError = form.errors[`${path}.notes`];
-    
+
         return (
             <Grid.Col span={{ base: 12, sm: 6, md: 4 }} key={`${sectionKey}-${itemKey}`}>
                 <Stack gap="xs">
@@ -327,7 +354,7 @@ export function ManitouPDIForm() {
                             <Radio value="Missing" label={<Text style={{ color: '#000000 !important' }}>Missing</Text>} />
                         </Group>
                     </Radio.Group>
-                    
+
                     <Dropzone
                         onDrop={(files) => {
                             if (files.length > 0) {
@@ -397,7 +424,7 @@ export function ManitouPDIForm() {
             </Card>
         );
     };
-    
+
     return (
         <Box maw="100%" mx="auto" px="md">
             <Title
@@ -405,7 +432,7 @@ export function ManitouPDIForm() {
                 mt="md"
                 mb="lg"
                 style={{ color: '#000000 !important' }}
-            > Pre Delivery Inspection Form
+            > Commissioning Form
             </Title>
 
             <form onSubmit={form.onSubmit(handleSubmit)}>
@@ -414,39 +441,46 @@ export function ManitouPDIForm() {
                     <Grid gutter="xl">
                         <Grid.Col span={{ base: 12, md: 6, md: 3 }}>
                             <Select 
-                                label="Dealer Code"
-                                placeholder="Select Dealer Code"
-                                data={dealerCode}
-                                searchable
-                                clearable
-                                {...form.getInputProps('dealerCode')}
-                            />
-                        </Grid.Col>
-                        <Grid.Col span={{ base: 12, md: 6, md: 3 }}>
-                            <Select 
                                 label="WO Number"
                                 placeholder="Select WO Number"
-                                data={WoNumbers}
+                                data={woNumbers}
                                 searchable
                                 clearable
                                 {...form.getInputProps('woNumber')}
                             />
                         </Grid.Col>
                         <Grid.Col span={{ base: 12, md: 6, md: 3 }}>
-                            <Select
+                            <Select 
+                                label="Customer"
+                                placeholder="Select Customer"
+                                data={customers}
+                                searchable
+                                clearable
+                                {...form.getInputProps('customer')}
+                            />
+                        </Grid.Col>
+                        <Grid.Col span={{ base: 12, md: 6, md: 3 }}>
+                            <Select 
                                 label="Type/ Model"
                                 placeholder="Select Model"
                                 data={unitModels}
                                 searchable
                                 clearable
-                                {...form.getInputProps('machineType')}
+                                {...form.getInputProps('unitModel')}
                             />
                         </Grid.Col>
                         <Grid.Col span={{ base: 12, md: 6, md: 3 }}>
                             <TextInput
                                 label="VIN"
                                 placeholder="Input VIN Number"
-                                {...form.getInputProps('serialNumber')}
+                                {...form.getInputProps('VIN')}
+                            />
+                        </Grid.Col>
+                        <Grid.Col span={{ base: 12, md: 6, md: 3 }}>
+                            <TextInput
+                                label="Hour Meter"
+                                placeholder="Input Hour Meter"
+                                {...form.getInputProps('hourMeter')}
                             />
                         </Grid.Col>
                         <Grid.Col span={{ base: 12, md: 6, md: 3 }}>
@@ -463,25 +497,8 @@ export function ManitouPDIForm() {
                                 label="Date of Check"
                                 placeholder="Select Date"
                                 valueFormat="DD-MM-YYYY"
-                                {...form.getInputProps('checkingDate')}
+                                {...form.getInputProps('commissioningDate')}
                                 rightSection={<IconCalendar size={16} />}
-                            />
-                        </Grid.Col>
-                        <Grid.Col span={{ base: 12, md: 6, md: 3 }}>
-                            <TextInput
-                                label="Hour Meter"
-                                placeholder="Input Hour Meter"
-                                {...form.getInputProps('HourMeter')}
-                            />
-                        </Grid.Col>
-                        <Grid.Col span={{ base: 12, md: 6, md: 3 }}>
-                            <Select
-                                label="Customer"
-                                placeholder="Select Customer"
-                                data={customers}
-                                searchable
-                                clearable
-                                {...form.getInputProps('customer')}
                             />
                         </Grid.Col>
                         <Grid.Col span={{ base: 12, md: 6, md: 3 }}>
@@ -506,7 +523,7 @@ export function ManitouPDIForm() {
                         </Grid.Col>
                     </Grid>
                 </Card>
-                
+
                 <Divider my="xl" label={<Text style={{ color: '#000000 !important' }}>Legend</Text>} labelPosition="center" />
                     <Group justify="center" gap="xl" mb="lg">
                         <Text style={{ color: '#000000 !important' }}> 1: Good </Text>
@@ -515,37 +532,34 @@ export function ManitouPDIForm() {
                     </Group>
                 <Divider my="xl" />
 
-                {Object.keys(manitouPdiChecklistItemDefinition).map(sectionKey => (
+                {Object.keys(ManitouCommissioningChecklistForm).map(sectionKey  => (
                     <div key={sectionKey}>
                         {renderChecklistSection(
                             {
-                                levels: "01. Levels",
-                                visualInspection: "02. Visual Inspection",
-                                operation: "03. Operation",
-                                tests: "04. Test",
-                                checkingOfGeneralMachineCondition: "05. Checking of General Machine Condition",
-                                transportationDelivery: "06. Transport/Delivery - Remarks Regarding",
-                            }[sectionKey] || sectionKey,
+                                engine: "01. Engine",
+                                transmission: "02. Transmission",
+                                axleTransferBox: "03. Axle & Transfer Box",
+                                hydraulicHydrostaticCircuits: "04. Hydraulic & Hydrostatic Circuits",
+                                brakingCircuits: "05. Braking Circuits",
+                                lubrication: "06. Lubrication",
+                                boomMastManiscopicManicess: "07. Boom, Mast, Maniscopic & Manicess",
+                                mastUnit: "08. Mast Unit",
+                                accessories: "09. Accessories",
+                                cabProtectiveDeviceElectricCircuit: "10. Cab, Protective Device & Electric Circuit",
+                                wheels: "11. Wheels",
+                                otherItems: "12. Other Items",
+                            }[sectionKey],
                             sectionKey,
-                            manitouPdiChecklistItemDefinition[sectionKey]
+                            ManitouCommissioningChecklistForm[sectionKey]
                         )}
                     </div>
                 ))}
-            
-                <Divider my="xl" />
-                <Title order={3} mb="md" style={{ color: '#000000 !important' }}> Possible Remarks on Transport and Delivery </Title>
-                <Textarea
-                    placeholder="Add Any Comments Here..."
-                    minRows={4}
-                    mb="xl"
-                    {...form.getInputProps('deliveryRemarks')}
-                />
 
                 <Divider my="xl" />
-                <Title order={3} mb="md" style={{ color: '#000000 !important' }}> Comments Regarding Technical Problems </Title>
+                <Title order={3} mb="md" style={{ color: '#000000 !important' }}> General Remarks </Title>
                 <Textarea
                     placeholder="Add Any Comments Here..."
-                    minRows={4}
+                    minRows={10}
                     mb="xl"
                     {...form.getInputProps('generalRemarks')}
                 />
@@ -557,4 +571,4 @@ export function ManitouPDIForm() {
     )
 }
 
-export default ManitouPDIForm;
+export default ManitouCommissioningForm;

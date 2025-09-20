@@ -116,10 +116,10 @@ export function ManitouStorageMaintenanceForm() {
                 const key = `${sectionKey}.${item.itemKey}`;
                 validationRules[key] = (value) => {
                     if ((value.status === 'Bad' || value.status === 'Missing') && !value.image) {
-                        return 'Image is Required for Bad/ Missing!';
+                        return 'Image is Required for "Bad" or "Missing"!';
                     }
                     if (!value.status) {
-                        return 'Item is Required!';
+                        return 'This Field is Required!';
                     }
                     return null;
                 };
@@ -239,9 +239,7 @@ export function ManitouStorageMaintenanceForm() {
                 model: values.model,
                 serialNo: values.serialNo,
                 hourMeter: values.hourMeter,
-                dateOfCheck: (values.dateOfCheck instanceof Date && !isNaN(values.dateOfCheck)) 
-                                ? values.dateOfCheck.toISOString() 
-                                : null,
+                dateOfCheck: values.dateOfCheck,
                 timeOfCheck: values.timeOfCheck,
                 technician: values.technician,
                 approvalBy: values.approvalBy,
@@ -435,7 +433,7 @@ export function ManitouStorageMaintenanceForm() {
                     <Grid gutter="xl">
                         <Grid.Col span={{ base: 12, md: 6, md: 3 }}>
                             <Select
-                                label="Wo Number"
+                                label="WO Number"
                                 placeholder="Select WO Number"
                                 data={woNumbers}
                                 searchable
@@ -458,7 +456,6 @@ export function ManitouStorageMaintenanceForm() {
                                 label="VIN"
                                 placeholder="Input VIN Number"
                                 {...form.getInputProps('serialNo')}
-                                styles={{ input: { color: '#000000 !important' } }}
                             />
                         </Grid.Col>
                         <Grid.Col span={{ base: 12, md: 6, md: 3 }}>
@@ -466,7 +463,6 @@ export function ManitouStorageMaintenanceForm() {
                                 label="Hour Meter"
                                 placeholder="Input Hour Meter"
                                 {...form.getInputProps('hourMeter')}
-                                styles={{ input: { color: '#000000 !important' } }}
                             />
                         </Grid.Col>
                         <Grid.Col span={{ base: 12, md: 6, md: 3 }}>
@@ -475,12 +471,6 @@ export function ManitouStorageMaintenanceForm() {
                                 placeholder="Select Date"
                                 valueFormat="DD-MM-YYYY"
                                 {...form.getInputProps('dateOfCheck')}
-                                onChange={(value) => {
-                                    console.log("DateInput onChange value:", value);
-                                    const parsedDate = value ? new Date(value) : null;
-                                    console.log("DateInput onChange value (parsed):", parsedDate);
-                                    form.setFieldValue('dateOfCheck', parsedDate);
-                                }}
                                 rightSection={<IconCalendar size={16} />}
                             />
                         </Grid.Col>

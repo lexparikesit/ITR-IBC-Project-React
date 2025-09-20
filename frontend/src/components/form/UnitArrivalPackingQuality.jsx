@@ -86,7 +86,7 @@ export function ArrivingPackingQuality() {
 
             // importation
             unitLanded: null,
-            clearanceCustom: '',
+            clearanceCustom: null,
             unitStripping: null,
 
             // S/N Checklist
@@ -105,16 +105,18 @@ export function ArrivingPackingQuality() {
             remarks: '',
         },
         validate: {
-            woNumber: (value) => (value ? null : 'Work Order Number is Required!'),
+            woNumber: (value) => (value ? null : 'WO Number is Required!'),
             distributionName: (value) => (value ? null : 'Distribution Name is Required!'),
             containerNo: (value) => (value ? null : 'Container Number is Required!'),
             leadSealingNo: (value) => (value ? null : 'Lead Sealing Number is Required!'),
-            vin: (value) => (value ? null : 'Machine S/N is Required!'),
+            vin: (value) => (value ? null : 'VIN is Required!'),
             dateOfCheck: (value) => (value ? null : "Date of Check is Required!"),
             inspectorSignature: (value) => (value ? null : 'Inpsector Signature is Required!'),
             approvers: (value) => (value ? null : 'Approver is Required!'),
             unitLanded: (value) => (value ? null : 'Unit Landed Date is Required!'),
             unitStripping: (value) => (value ? null : 'Unit Stripping Date is Required!'),
+            clearanceCustom: (value) => (value ? null : 'Celarance & Custom is Required!'),
+            approverSignature: (value) => (value ? null : 'Approver Signature is Required!'),
         }
     });
 
@@ -177,9 +179,7 @@ export function ArrivingPackingQuality() {
 	};
 
     const handleSubmit = async (values) => {
-        console.log("DEBUG FRONTEND: Nilai form saat ini:", values);
         const token = localStorage.getItem('access_token');
-        console.log("DEBUG: Token from localStorage:", token);
         
         if (!token) {
             notifications.show({
@@ -195,7 +195,7 @@ export function ArrivingPackingQuality() {
             if (vinExists) {
                 notifications.show({
                     title: "Submission Blocked",
-                    message: "VIN already exists! Please enter a unique Machine S/N.",
+                    message: "VIN already exists! Please enter a unique VIN.",
                     color: "red",
                 });
                 return;
@@ -290,22 +290,22 @@ export function ArrivingPackingQuality() {
                             />
                             <TextInput
                                 mt="md"
-                                label='Machine S/N'
-                                placeholder='Input Machine Serial Number/ VIN'
+                                label='VIN'
+                                placeholder='Input VIN Number'
                                 {...form.getInputProps('vin')}
                             />
                             <DateInput
                                 mt="md"
-                                label="Arrival Date"
-                                placeholder="Select Arrival Date"
+                                label="Date of Check"
+                                placeholder="Select Date"
                                 valueFormat="DD-MM-YYYY"
                                 {...form.getInputProps('dateOfCheck')}
                                 rightSection={<IconCalendar size={16} />}
                             />
                             <Select
                                 mt="md"
-                                label="Inspector Signature"
-                                placeholder="Select Inspector Signature"
+                                label="Technician"
+                                placeholder="Select Technician"
                                 clearable
                                 searchable
                                 data={technicians}
@@ -313,7 +313,7 @@ export function ArrivingPackingQuality() {
                             />
                             <Select
                                 mt="md"
-                                label="Approver Signature"
+                                label="Approval By"
                                 placeholder="Select Approver"
                                 clearable
                                 searchable

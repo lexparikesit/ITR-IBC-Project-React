@@ -1,24 +1,34 @@
+import os
+import uuid
 from flask import json, jsonify, request, g
 from app import db
-from app.models.renault_pdi_model import RenaultPDIModel
-from app.models.manitou_pdi_model import ManitouPDI
-from app.models.sdlg_pdi_model import SdlgPDIModel, SDLGDefectsAndRemarksPDI
+from app.models.manitou_pdi_form import PDIFormModel_MA
+from app.models.manitou_pdi_items import PDIChecklistItemModel_MA
+from app.models.renault_pdi_form import PDIFormModel_RT
+from app.models.renault_pdi_items import PDIChecklistItemModel_RT
+from app.models.sdlg_pdi_form import PDIFormModel_Sdlg, PDI_sdlg_defect_remarks
+from app.models.sdlg_pdi_items import PDIChecklistItemModel_SDLG
 from datetime import datetime
 from app.controllers.auth_controller import jwt_required
-import uuid
+# from google.cloud import Storage
+
+# configuartion of GCS Environment
+# GCS_Bucket_Name = os.environ.get('GCS_BUCKET_NAME')
+# CDN_BASE_URL = os.environ.get('CDN_BASE_URL', 'https://cdn.example.com')
+
+# initiate GCS Client
+# storage_client = storage.Client()
 
 # mapping for brand Models
 BRAND_MODELS = {
-    'renault': RenaultPDIModel,
-    'manitou': ManitouPDI,
-    'sdlg': SdlgPDIModel,
+    'manitou': PDIFormModel_MA,
+    'renault': PDIFormModel_RT,
+    'sdlg': PDIFormModel_Sdlg,
 }
 
 @jwt_required
-def submit_pdi_form():
-
-    print("DEBUG (PDI CHECK): Headers received:")
-    print(request.headers)
+def submit_pdi_form(brand):
+    """Handles form submissions for Commissioning for various brands."""
 
     if request.content_type and 'multipart/form-data' in request.content_type:
         data_string = request.form.get('data')
@@ -36,33 +46,21 @@ def submit_pdi_form():
 
     else:
         data = request.get_json()
-
-    brand = data.get("brand")
+        uploaded_files = {}
 
     if not brand or brand.lower() not in BRAND_MODELS:
         return jsonify({"error": "Invalid Brand"}), 400
 
     ModelClass = BRAND_MODELS.get(brand.lower())
-    new_pdi_entry = ModelClass()
+    pdi_entry = ModelClass()
 
     try:
-        new_pdi_entry.createdBy = g.user_name
-        new_pdi_entry.createdOn = datetime.utcnow()
-
-        def converted_renault_status_to_int(status):
-            if status and isinstance(status, str):
-                status_lower = status.lower()
-                if status_lower == "repaired":
-                    return 1
-                elif status_lower == "recommended_repair":
-                    return 2
-                elif status_lower == "immediately_repair":
-                    return 3
-                elif status_lower == "not_applicable":
-                    return 0
-            return None
+        pdi_entry.createdBy = g.user_name
+        pdi_entry.createdOn = datetime.utcnow()
         
         def converted_manitou_status_to_int(status_str):
+            """handles conversion to tinyint - MA"""
+            
             if status_str and isinstance(status_str, str):
                 status_lower = status_str.lower()  
                 if status_lower == "missing":
@@ -72,270 +70,196 @@ def submit_pdi_form():
                 elif status_lower == "bad":
                     return 2
             return None
-        
-        # logic for Renault
-        if brand.lower() == 'renault':
-            unit_info = data.get('unitInfo', {})
-            checklist_items = data.get('checklistItems', {})
-            battery_status = data.get('batteryStatus', {})
+
+        def converted_renault_status_to_int(status):
+            """handles conversion to tinyint - RT"""
+
+            if status and isinstance(status, str):
+                status_lower = status.lower()
+                if status_lower == "checked":
+                    return 1
+                elif status_lower == "recommended_repair":
+                    return 2
+                elif status_lower == "immediately_repair":
+                    return 3
+                elif status_lower == "not_applicable":
+                    return 0
+            return None
+
+        def parse_date(date_string):
+            """handle date parsing"""
             
-            # vehicle inspections notes
-            vehicle_inspection_notes = data.get('vehicle_innspection', '')
-
-            # Mapping data for unit information
-            new_pdi_entry.WO = unit_info.get('WO')
-            new_pdi_entry.mileage = unit_info.get('mileage')
-            new_pdi_entry.chassisID = unit_info.get('chassisID')
-            new_pdi_entry.registrationNo = unit_info.get('registrationNO')
-            new_pdi_entry.customer = unit_info.get('customer')
-            new_pdi_entry.city = unit_info.get('city')
-            new_pdi_entry.model = unit_info.get('model')
-            new_pdi_entry.engine = unit_info.get('engine')
-            new_pdi_entry.axle = unit_info.get('axle')
-            new_pdi_entry.VIN = unit_info.get('VIN')
-            new_pdi_entry.technicians = unit_info.get('technician')
-            new_pdi_entry.approvalBy = unit_info.get('approvalBy')
-
-            # Parsing date
-            date_str = unit_info.get('date')
-            if date_str:
+            formats_to_try = [
+                '%Y-%m-%dT%H:%M:%S.%fZ',  # ISO format with milliseconds
+                '%Y-%m-%d'              # Simple date format
+            ]
+            for fmt in formats_to_try:
                 try:
-                    new_pdi_entry.Date = datetime.fromisoformat(date_str.replace('Z', ''))
-                except ValueError:
-                    return jsonify({"message": "Invalid date format"}), 400
-
-            # Mapping checklist items (payload sudah flattened)
-            renault_mapping = {
-                'lubricationOilAndFluidLevels.chargeBattery': 'lub1',
-                'lubricationOilAndFluidLevels.batteryChargeFluidLevel': 'lub2',
-                'lubricationOilAndFluidLevels.lubricateLeafSuspensionBushings': 'lub3',
-                'lubricationOilAndFluidLevels.fluidLevelsWindscreenHeadlamp': 'lub4',
-                'lubricationOilAndFluidLevels.coolantLevel': 'lub5',
-                'lubricationOilAndFluidLevels.engineOilLevel': 'lub6',
-                'lubricationOilAndFluidLevels.adBlueLevel': 'lub7',
-                'lubricationOilAndFluidLevels.replaceBatteryCable': 'lub8',
-                'lubricationOilAndFluidLevels.installChocks': 'lub9',
-                'lubricationOilAndFluidLevels.activateLubricateFifthWheel': 'lub10',
-
-                'cab.connectDisconnectDiagnosticTool': 'cab1',
-                'cab.activateElectricalSystem': 'cab2',
-                'cab.connectivityCheck': 'cab3',
-                'cab.activateRadio': 'cab4',
-                'cab.activateAntiTheftAlarm': 'cab5',
-                'cab.checkWarningControlLamps': 'cab6',
-                'cab.functionCheckParkingHeater': 'cab7',
-
-                'exterior.attachExhaustTailPipe': 'ext1',
-                'exterior.checkCabChassis': 'ext2',
-                'exterior.checkWheelNuts': 'ext3',
-                'exterior.checkTyrePressure': 'ext4',
-                'exterior.installLicensePlate': 'ext5',
-                'exterior.installAirDeflector': 'ext6',
-                'exterior.removeSpareWheel': 'ext7',
-
-                'underVehicle.removeScrewChargeAirCooler': 'under1',
-                'underVehicle.checkLoadSensingValve': 'under2',
-                'underVehicle.checkSuperstructure': 'under3',
-
-                'testDrive.checkAfterStart': 'test_drive1',
-                'testDrive.checkDuringRoadTest': 'test_drive2',
-                'testDrive.checkAfterRoadTest': 'test_drive3',
-                
-                'finish.removeProtectiveFilm': 'finish1',
-                'finish.finish': 'finish2',
-                'finish.brakeAdaptation': 'finish3',
-            }
-
-            for frontend_path, db_column in renault_mapping.items():
-                sections = frontend_path.split('.')
-                current_data = checklist_items
-
-                for section in sections[:-1]:
-                    current_data = current_data.get(section, {})
-                
-                item_key = sections[-1]
-
-                status_value = current_data.get(item_key)
-                caption_value = current_data.get(f'caption_{item_key}')
-                image_value = current_data.get(f'img_{item_key}')
-
-                converted_value = converted_renault_status_to_int(status_value)
-
-                if converted_value is not None and hasattr(new_pdi_entry, db_column):
-                    setattr(new_pdi_entry, db_column, converted_value)
-                
-                caption_db_column = f'caption_{db_column}'
-
-                if caption_value is not None and hasattr(new_pdi_entry, caption_db_column):
-                    setattr(new_pdi_entry, caption_db_column, caption_value)
-                
-                img_db_column = f'img_{db_column}'
-                
-                if image_value and hasattr(new_pdi_entry, img_db_column):
-                    setattr(new_pdi_entry, img_db_column, image_value)
-
-                # Mapping status battery
-                if battery_status:
-                    new_pdi_entry.batt_inner_front = battery_status.get('batt_inner_front')
-                    new_pdi_entry.test_code_batt_inner_front = battery_status.get('test_code_batt_inner_front')
-                    new_pdi_entry.batt_outer_rear = battery_status.get('batt_outer_rear')
-                    new_pdi_entry.test_code_batt_outer_rear = battery_status.get('test_code_batt_outer_rear')
-
-                # Mapping vehicle inspection
-                new_pdi_entry.vehicle_inspection = vehicle_inspection_notes
+                    return datetime.strptime(date_string, fmt)
+                except (ValueError, TypeError):
+                    continue
+            return None
         
-        # logic for Manitou
-        elif brand.lower() == 'manitou':
+        # for Manitou
+        if brand.lower() == 'manitou':
             unit_info = data.get('unitInfo', {})
-            checklist_items = data.get('checklistItems', {})
+            remarks_transport = data.get('deliveryRemarks', '')
             general_remarks = data.get('generalRemarks', '')
-            remarks_transport = data.get('remarksTransport', '')
+            checklist_item_payloads = data.get('checklistItems', {})
 
-            # Mapping unit information
-            new_pdi_entry.dealerCode = unit_info.get('dealerCode')
-            new_pdi_entry.machineType = unit_info.get('machineType')
-            new_pdi_entry.VIN = unit_info.get('serialNumber')
-            new_pdi_entry.HourMeter = unit_info.get('HourMeter')
-            new_pdi_entry.inspectorSignature = unit_info.get('inspectorSignature')
-            new_pdi_entry.approver = unit_info.get('approvalBy')
-            new_pdi_entry.customer = unit_info.get('customers')
-            new_pdi_entry.woNumber = unit_info.get('woNumber')
+            # mapping unit information from frontend to form model
+            pdi_entry.brand = brand
+            pdi_entry.dealerCode = unit_info.get('dealerCode')
+            pdi_entry.woNumber = unit_info.get('woNumber')
+            pdi_entry.customer = unit_info.get('customer')
+            pdi_entry.machineType = unit_info.get('machineType')
+            pdi_entry.VIN = unit_info.get('serialNumber')
+            pdi_entry.deliveryDate = parse_date(unit_info.get('deliveryDate'))
+            pdi_entry.checkingDate = parse_date(unit_info.get('checkingDate'))
+            pdi_entry.HourMeter = unit_info.get('HourMeter')
+            pdi_entry.customer = unit_info.get('customer')
+            pdi_entry.approver  = unit_info.get('approvalBy')
+            pdi_entry.inspectorSignature = unit_info.get('inspectorSignature')
+            pdi_entry.generalRemarks = general_remarks
+            pdi_entry.remarksTransport = remarks_transport
+
+            # session to add the payload
+            db.session.add(pdi_entry)
+            db.session.flush()
+
+            for section_key, items in checklist_item_payloads.items():
+                if isinstance(items, dict):
+                    for item_key, item_details in items.items():
+                        if isinstance(item_details, dict):
+                            image_url = None # will None as long as GCS/ CDN is commenting
+
+                            new_item = PDIChecklistItemModel_MA(
+                                pdiID = pdi_entry.pdiID,
+                                section = section_key,
+                                itemName = item_key,
+                                status = converted_manitou_status_to_int(item_details.get('status')),
+                                image_url = image_url,
+                                caption = item_details.get('notes')
+                            )
+                            db.session.add(new_item)
+
+            # Commit all changes to the database at once
+            db.session.commit()
+
+            return jsonify({
+                'message': 'Manitou Commissioning Form submitted successfully!',
+                'id': str(pdi_entry.pdiID)
+            }), 201
+
+        # for Renault
+        elif brand.lower() == 'renault':
+            unit_info = data.get('unitInfo', {})
+            checklist_item_payloads = data.get('checklistItems', {})
+            battery_status_data = data.get('batteryStatus', {})
+
+            # mapping unit information from frontend to form model
+            pdi_entry.brand = brand
+            pdi_entry.woNumber = unit_info('repairOrderNo')
+            pdi_entry.VIN = unit_info('vinNo')
+            pdi_entry.Date = parse_date(unit_info.get('date'))
+            pdi_entry.customer = unit_info('customer')
+            pdi_entry.mileage = unit_info('mileageHourMeter')
+            pdi_entry.chassisID = unit_info('chassisId')
+            pdi_entry.registrationNo = unit_info('registrationNo')
+            pdi_entry.city = unit_info('city'),
+            pdi_entry.model = unit_info('model')
+            pdi_entry.engine = unit_info('engine')
+            pdi_entry.axle = unit_info('axle')
+            pdi_entry.technician = unit_info('technician')
+            pdi_entry.approvalBy = unit_info('approvalBy')
+
+            # session to add the payload
+            db.session.add(pdi_entry)
+            db.session.flush()
+
+            for section_key, items in checklist_item_payloads():
+                if isinstance(items, dict):
+                    for item_key, item_details, in items.items():
+                        if isinstance(item_details, dict):
+                            image_url = None # will None as long as GCS/ CDN is commenting
+
+                            new_item = PDIChecklistItemModel_RT(
+                                pdiID = pdi_entry.pdiID,
+                                section = section_key,
+                                itemName = item_key,
+                                status = converted_renault_status_to_int(item_details.get('status')),
+                                image_url = image_url,
+                                caption = item_details.get('notes'),
+                                value = None # No specific value for regular items
+                            )
+                            db.session(new_item)
             
-            # Parsing dates
-            delivery_date_str = unit_info.get('deliveryDate')
-            checking_date_str = unit_info.get('checkingDate')
+            for key, value, in battery_status_data.items():
+                new_item = PDIChecklistItemModel_MA(
+                    pdiID = pdi_entry.pdiID,
+                    section = 'battery_status',
+                    itemName = key,
+                    value = value,
+                    status = None, # No specific value for regular items
+                    image_url = None, # No specific value for regular items
+                    caption = None # No specific value for regular items
+                )
+                db.session(new_item)
             
-            # delivery date
-            if delivery_date_str:
-                try:
-                    new_pdi_entry.deliveryDate = datetime.strptime(delivery_date_str, '%Y-%m-%d')
-                except ValueError:
-                    return jsonify({"message": "Invalid delivery date format. Please use YYYY-MM-DD."}), 400
-            else:
-                new_pdi_entry.deliveryDate = None
+            # Commit all changes to the database at once
+            db.session.commit()
 
-            # checking date
-            if checking_date_str:
-                try:
-                    new_pdi_entry.checkingDate = datetime.strptime(checking_date_str, '%Y-%m-%d')
-                except ValueError:
-                    return jsonify({"message": "Invalid checking date format. Please use YYYY-MM-DD."}), 400
-            else:
-                new_pdi_entry.checkingDate = None
+            return jsonify({
+                'message': 'Renault Commissioning Form submitted successfully!',
+                'id': str(pdi_entry.pdiID)
+            }), 201
 
-            # Mapping checklist items
-            manitou_mapping = {
-                ('levels', 'engineOil'): 'levels1',
-                ('levels', 'transmissionOil'): 'levels2',
-                ('levels', 'hydraulicOil'): 'levels3',
-                ('levels', 'brakeFluid'): 'levels4',
-                ('levels', 'coolant'): 'levels5',
-                ('levels', 'frontAxleRearAxleTransferBoxOil'): 'levels6',
-                ('levels', 'windscreenWasherFluid'): 'levels7',
-                ('levels', 'batteryLevel'): 'levels8',
-                ('levels', 'heatingSystemTank'): 'levels9',
-
-                ('visualInspection', 'electricConnections'): 'vis_inspection1',
-                ('visualInspection', 'hydraulicConnections'): 'vis_inspection2',
-                ('visualInspection', 'screwAndNuts'): 'vis_inspection3',
-                ('visualInspection', 'lubrication'): 'vis_inspection4',
-                ('visualInspection', 'tyresAspect'): 'vis_inspection5',
-
-                ('operation', 'instrumentationIndicatorsHeadlightsRearLights'): 'ops1',
-                ('operation', 'windscreenWiperHeatingAirConditioning'): 'ops2',
-                ('operation', 'safetyAndEmergencyRecoverySystem'): 'ops3',
-
-                ('tests', 'lifting'): 'test1',
-                ('tests', 'tilting'): 'test2',
-                ('tests', 'telescopes'): 'test3',
-                ('tests', 'accessory'): 'test4',
-                ('tests', 'fanOperation'): 'test5',
-                ('tests', 'steering'): 'test6',
-                ('tests', 'swing'): 'test7',
-                ('tests', 'stabiliserAndChassisLevelling'): 'test8',
-                ('tests', 'platform'): 'test9',
-                ('tests', 'brakeParkingBrake'): 'test10',
-
-                ('general', 'paintFrameCab'): 'general1',
-                ('general', 'decals'): 'general2',
-                ('general', 'instructionsManual'): 'general3',
-                ('general', 'wheelsNutTorque'): 'general4',
-                ('general', 'typePressures'): 'general5',
-
-                ('transport', 'transportEquipment'): 'transport1', # Perbaikan disini
-                ('transport', 'complianceInstructions'): 'transport2',
-                ('transport', 'theDriverServices'): 'transport3',
-            }
-            
-            # iterate through the nested checklist items
-            for (section, item), db_column in manitou_mapping.items():
-                section_data = checklist_items.get(section, {})
-                item_details = section_data.get(item, {})
-
-                if isinstance(item_details, dict):
-                    status_value_str = item_details.get('status')
-                    caption_value = item_details.get('caption')
-                    image_value = item_details.get('image') # Perbaikan disini
-
-                    converted_value = converted_manitou_status_to_int(status_value_str)
-
-                    if converted_value is not None and hasattr(new_pdi_entry, db_column):
-                        setattr(new_pdi_entry, db_column, converted_value)
-
-                    caption_db_column = f'caption_{db_column}'
-
-                    if caption_value is not None and hasattr(new_pdi_entry, caption_db_column):
-                        setattr(new_pdi_entry, caption_db_column, caption_value)
-                    
-                    img_db_column = f'img_{db_column}'
-
-                    if image_value is not None and hasattr(new_pdi_entry, img_db_column):
-                        setattr(new_pdi_entry, img_db_column, image_value)
-            
-            # Mapping remarks
-            new_pdi_entry.remarksTransport = remarks_transport
-            new_pdi_entry.generalRemarks = general_remarks
-
-        # logic for SDLG
+        # for sdlg
         elif brand.lower() == 'sdlg':
             unit_info = data.get('unitInfo', {})
-            checklist_items = data.get('checklistItems', {})
-            defects_and_remarks = data.get('defectsAndRemarks', [])
+            signatures = data.get('signatures', {})
+            checklist = data.get('checklist', {})
+            defects = data.get('defects', {})
 
-            # Mapping unit information from the payload
-            new_pdi_entry.woNumber = unit_info.get('woNumber')
-            new_pdi_entry.machineModel = unit_info.get('machineModel')
-            new_pdi_entry.VIN = unit_info.get('VIN')
-            new_pdi_entry.pdiInspector = unit_info.get('pdiInspector')
+            # mapping unit information from frontend to form model
+            pdi_entry.brand = brand
+            pdi_entry.woNumber = unit_info.get('woNumber')
+            pdi_entry.machineModel = unit_info.get('machineModel')
+            pdi_entry.VIN = unit_info.get('vehicleNumber')
+            pdi_entry.dateOfCheck = parse_date(unit_info.get('inspectionDate'))
+            pdi_entry.technician = unit_info.get('preInspectionPersonnel')
+            pdi_entry.approvalBy = unit_info.get('approvalBy')
+            pdi_entry.technicianSignature = signatures.get('inspector')
+            pdi_entry.technicianSignatureDate = parse_date(signatures.get('inspectorDate'))
+            pdi_entry.approverSignature = signatures.get('supervisorSignature')
+            pdi_entry.approverSignatureDate = parse_date(signatures.get('supervisorDate'))
 
-            # Mapping boolean checklist items (sn1 to sn7)
-            for i in range(1, 8):
-                sn_key = f'sn{i}'
-                status_value = checklist_items.get(sn_key, False) 
-                setattr(new_pdi_entry, sn_key, status_value)
+            db.session.add(pdi_entry)
+            db.session.flush()
 
-            # Mapping signatures
-            new_pdi_entry.inspectorSignature = data.get('inspectorSignature')
-            new_pdi_entry.supervisorSignature = data.get('supervisorSignature')
-
-            # remarks and defects relationship
-            for defect_item in defects_and_remarks:
-                defect_entry = SDLGDefectsAndRemarksPDI(
-                    description=defect_item.get('description'),
-                    remarks=defect_item.get('remarks'),
+            for item_id, status in checklist.items():
+                new_item = PDIChecklistItemModel_SDLG(
+                    pdiID = pdi_entry.pdiID,
+                    itemName = item_id,
+                    status = status
                 )
-
-                new_pdi_entry.defect.append(defect_entry)
-
-        if new_pdi_entry:
-            db.session.add(new_pdi_entry)
+                db.session.add(new_item)
+            
+            for defect_entry in defects:
+                new_defect = PDI_sdlg_defect_remarks(
+                    pdiID = pdi_entry.pdiID,
+                    description = defect_entry.get('description'),
+                    remarks = defect_entry.get('remarks')
+                )
+                db.session.add(new_defect)
+            
+            # Commit all changes to the database at once
             db.session.commit()
+
             return jsonify({
-                'message': f'{brand.capitalize()} Checklist submitted successfully!',
-                'id': str(new_pdi_entry.pdiID)
+                'message': 'SDLG PDI form submitted successfully!',
+                'id': str(pdi_entry.pdiID)
             }), 201
-        else:
-            return jsonify({"error": "No logic found for the specified brand."}), 400
 
     except Exception as e:
         db.session.rollback()

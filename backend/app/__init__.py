@@ -89,4 +89,7 @@ def create_app():
     from app.routes.pdi_check_routes import pdi_bp
     app.register_blueprint(pdi_bp)
 
+    from app.routes.commissioning_form_routes import commissioning_bp
+    app.register_blueprint(commissioning_bp)
+
     return app

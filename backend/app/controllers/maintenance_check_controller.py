@@ -1,24 +1,36 @@
+import os
+import uuid
 from flask import json, jsonify, request, current_app, g
 from app import db
-from app.models.renault_maintenance_model import RenaultMaintenanceModel
-from app.models.manitou_maintenance_model import ManitouMaintenanceModel
-from app.models.sdlg_maintenance_model import SDLGMaintenanceModel, SDLGDefectsAndRemarksModel
+from app.models.manitou_maintenance_form import StorageMaintenanceFormModel_MA
+from app.models.manitou_maintenance_items import StorageMaintenanceChecklistItemModel_MA
+from app.models.renault_maintenance_form import StorageMaintenanceFormModel_RT
+from app.models.renault_maintenance_items import StorageMaintenanceChecklistItemModel_RT
+from app.models.sdlg_maintenance_form import StorageMaintenanceFormModel_SDLG
+from app.models.sdlg_maintenance_items import MaintenanceChecklistItemModel_SDLG
+from app.models.sdlg_maintenance_form import Maintenance_sdlg_defect_remarks
 from datetime import datetime, time, date
 from app.controllers.auth_controller import jwt_required
+# from google.cloud import Storage
+
+# configuartion of GCS Environment
+# GCS_Bucket_Name = os.environ.get('GCS_BUCKET_NAME')
+# CDN_BASE_URL = os.environ.get('CDN_BASE_URL', 'https://cdn.example.com')
+
+# initiate GCS Client
+# storage_client = storage.Client()
 
 # mapping for brand Models
 BRAND_MODELS = {
-    'renault': RenaultMaintenanceModel,
-    'manitou': ManitouMaintenanceModel,
-    'sdlg': SDLGMaintenanceModel,
+    'manitou': StorageMaintenanceFormModel_MA,
+    'renault': StorageMaintenanceFormModel_RT,
+    'sdlg': StorageMaintenanceFormModel_SDLG,
 }
 
 @jwt_required
 def submit_maintenance_checklist():
-
-    print("DEBUG (ARRIVAL CHECK): Headers received:")
-    print(request.headers)
-
+    """Handles form submissions for Commissioning for various brands."""
+    
     if request.content_type and 'multipart/form-data' in request.content_type:
         data_string = request.form.get('data')
     
@@ -35,6 +47,7 @@ def submit_maintenance_checklist():
     
     else:
         data = request.get_json()
+        uploaded_files = {}
 
     brand = data.get("brand")
 
@@ -42,28 +55,15 @@ def submit_maintenance_checklist():
         return jsonify({"error": "Invalid Brand"}), 400
     
     ModelClass = BRAND_MODELS[brand.lower()]
-    new_checklist_entry = ModelClass()
+    storage_maintenance_entry = ModelClass()
 
     try:
-        new_checklist_entry.createdby = g.user_name
-        new_checklist_entry.createdon = datetime.utcnow()
+        storage_maintenance_entry.createdby = g.user_name
+        storage_maintenance_entry.createdon = datetime.utcnow()
 
-        def converted_renault_status_to_int(status):
+        def converted_manitou_status_to_int(status_str):
+            """handles conversion to tinyint - MA"""
 
-            if status and isinstance(status, str):
-                status_lower = status.lower()
-                if status_lower == "repaired":
-                    return 1
-                elif status_lower == "recommended_repair":
-                    return 2
-                elif status_lower == "immediately_repair":
-                    return 3
-                elif status_lower == "not_applicable":
-                    return 0
-            return None
-        
-        def converted_manitou_status_to_tinyint(status_str):
-            
             if status_str and isinstance(status_str, str):
                 status_lower = status_str.lower()
                 if status_lower == "missing":
@@ -74,314 +74,232 @@ def submit_maintenance_checklist():
                     return 2
             return None
 
-        # logic for Renault
-        if brand.lower() == 'renault':
+        def converted_renault_status_to_int(status):
+            """handles conversion to tinyint - RT"""
+
+            if status and isinstance(status, str):
+                status_lower = status.lower()
+                if status_lower == "checked":
+                    return 1
+                elif status_lower == "recommended_repair":
+                    return 2
+                elif status_lower == "immediately_repair":
+                    return 3
+                elif status_lower == "not_applicable":
+                    return 0
+            return None
+        
+        def parse_date(date_string):
+            formats_to_try = [
+                '%Y-%m-%dT%H:%M:%S.%fZ',  # ISO format with milliseconds
+                '%Y-%m-%d'              # Simple date format
+            ]
+            for fmt in formats_to_try:
+                try:
+                    return datetime.strptime(date_string, fmt)
+                except (ValueError, TypeError):
+                    continue
+            return None
+
+        # for Manitou
+        if brand.lower() == 'manitou':
             unit_info = data.get('unitInfo', {})
-            checklist_items = data.get('checklistItems', {})
-            battery_inspection = data.get('batteryInspection', [])
-            fault_codes = data.get('faultCodes', [])
-            repair_notes = data.get('repairNotes')
-    
-            # mapping data for unit information
-            new_checklist_entry.VIN = unit_info.get("vinNo")
-            new_checklist_entry.engineType = unit_info.get("engineTypeNo")
-            new_checklist_entry.transmissionType = unit_info.get("transmissionTypeNo")
-            new_checklist_entry.hourMeter = unit_info.get("hourMeter")
-            new_checklist_entry.mileage = unit_info.get("mileage")
-            new_checklist_entry.woNumber = unit_info.get("repairOrderNo")
-            new_checklist_entry.technician = unit_info.get("technician")
-            new_checklist_entry.approvalBy = unit_info.get("approvalBy")
+            remarks = data.get('remarks')
+            checklist_item_payloads = data.get('checklistItems', {})
 
-            # parsing date
-            date_str = unit_info.get('dateOfCheck')
-            
-            if date_str:
-                try:
-                    new_checklist_entry.dateOfCheck = datetime.fromisoformat(date_str.replace('Z', ''))
-                except ValueError:
-                    return jsonify({"message": "Invalid date format"}), 400
-            
-            # mapping checklist (ops1 - ops52)
-            renault_mapping = {
-                # Operations in Cab (ops1 - ops6)
-                'operationsInCab.doorLocksRemoteControl': 'ops1',
-                'operationsInCab.parkingBrake': 'ops2',
-                'operationsInCab.elementsOfVision': 'ops3',
-                'operationsInCab.safetyElements': 'ops4',
-                'operationsInCab.dashboardInstrumentation': 'ops5',
-                'operationsInCab.airConditioningHeating': 'ops6',
+            # mapping unit information from frontend to form model
+            storage_maintenance_entry.brand = brand
+            storage_maintenance_entry.woNumber = unit_info.get('woNumber')
+            storage_maintenance_entry.model = unit_info.get('model')
+            storage_maintenance_entry.VIN = unit_info.get('serialNo')
+            storage_maintenance_entry.hourMeter = unit_info.get('hourMeter')
+            storage_maintenance_entry.dateOfCheck = parse_date(unit_info.get('dateOfCheck'))
+            storage_maintenance_entry.technician = unit_info.get('technician')
+            storage_maintenance_entry.approvalBy = unit_info.get('approvalBy')
+            storage_maintenance_entry.remarks = remarks
 
-                # Operations Around Vehicle (ops7 - ops24)
-                'operationsAroundVehicle.cabGeneralCondition': 'ops7',
-                'operationsAroundVehicle.windscreenWiperBlades': 'ops8',
-                'operationsAroundVehicle.windscreenWasherLiquid': 'ops9',
-                'operationsAroundVehicle.coolantLevel': 'ops10',
-                'operationsAroundVehicle.clutchFluidLevel': 'ops11',
-                'operationsAroundVehicle.engineOilLevel': 'ops12',
-                'operationsAroundVehicle.radiatorsInsectNet': 'ops13',
-                'operationsAroundVehicle.cabFrontRotationPoints': 'ops14',
-                'operationsAroundVehicle.frontStepsCondition': 'ops15',
-                'operationsAroundVehicle.fuelPreFilterWaterContent': 'ops16',
-                'operationsAroundVehicle.lightsSignaling': 'ops17',
-                'operationsAroundVehicle.wheelHubReductionsLeakTightness': 'ops18',
-                'operationsAroundVehicle.wheelHubReductionsOilLevel': 'ops19',
-                'operationsAroundVehicle.tirePressure': 'ops20',
-                'operationsAroundVehicle.accumulatorBatteriesFixing': 'ops21',
-                'operationsAroundVehicle.batteryAnalyzerCheck': 'ops22',
-                'operationsAroundVehicle.fuelTankBreatherTubes': 'ops23',
-                'operationsAroundVehicle.fifthWheelTowingHook': 'ops24',
+            # session to add the payload
+            db.session.add(storage_maintenance_entry)
+            db.session.flush()
 
-                # Operations under cab (ops25 - ops31)
-                'operationsUnderCab.cabFixingUnlockingSystem': 'ops25',
-                'operationsUnderCab.wiringBundleEngineCoolantCircuit': 'ops26',
-                'operationsUnderCab.engineLeakTightness': 'ops27',
-                'operationsUnderCab.soundProofingScreens': 'ops28',
-                'operationsUnderCab.steeringComponentsState': 'ops29',
-                'operationsUnderCab.engineOilFilterChange': 'ops30',
-                'operationsUnderCab.engineOilChange': 'ops31',
+            for section_key, items in checklist_item_payloads.items():
+                if isinstance(items, dict):
+                    for item_key, item_details in items.items():
+                        if isinstance(item_details, dict):
+                            image_url = None # will None as long as GCS/ CDN is commenting
 
-                # operations under vehicle (ops32 - ops47)
-                'operationsUnderVehicle.chassisGrease': 'ops32',
-                'operationsUnderVehicle.driveAxleLeakTightness': 'ops33',
-                'operationsUnderVehicle.driveAxleOilLevel': 'ops34',
-                'operationsUnderVehicle.brakingSystemState': 'ops35',
-                'operationsUnderVehicle.springsPadsAntiRollBarsShockAbsorbers': 'ops36',
-                'operationsUnderVehicle.wiringBundlesChassis': 'ops37',
-                'operationsUnderVehicle.compressedAirTanksWaterOil': 'ops38',
-                'operationsUnderVehicle.transferBoxLeakTightness': 'ops39',
-                'operationsUnderVehicle.transferBoxOilLevel': 'ops40',
-                'operationsUnderVehicle.fuelTanksLeakTightness': 'ops41',
-                'operationsUnderVehicle.exhaustLineCondition': 'ops42',
-                'operationsUnderVehicle.ptoLeakTightness': 'ops43',
-                'operationsUnderVehicle.gearboxLeakTightness': 'ops44',
-                'operationsUnderVehicle.gearboxOilLevel': 'ops45',
-                'operationsUnderVehicle.steeringComponents': 'ops46',
-                'operationsUnderVehicle.engineLeakTightness2': 'ops47',
-
-                # dynamic Testing (ops 48 - ops 52)
-                'dynamicTesting.engineNoiseSmokePerformance': 'ops48',
-                'dynamicTesting.gearboxClutchOperation': 'ops49',
-                'dynamicTesting.steeringSystemOperation': 'ops50',
-                'dynamicTesting.brakingReactionsDirectionHolding': 'ops51',
-                'dynamicTesting.roadTestFunctions': 'ops52',
-            }
-
-            for frontend_path, db_column in renault_mapping.items():
-                section, item_key = frontend_path.split('.')
-                section_data = checklist_items.get(section, {})
-
-                status_value = section_data.get(item_key)
-                caption_value = section_data.get(f'caption_{item_key}')
-                image_value = section_data.get(f'img_{item_key}')
-
-                converted_value = converted_renault_status_to_int(status_value)
-                
-                if converted_value is not None and hasattr(new_checklist_entry, db_column):
-                    setattr(new_checklist_entry, db_column, converted_value)
-
-                caption_db_column = f'caption_{db_column}'
-                
-                if caption_value is not None and hasattr(new_checklist_entry, caption_db_column):
-                    setattr(new_checklist_entry, caption_db_column, caption_value)
-
-                img_db_column = f'img_{db_column}'
-                
-                if image_value is not None and hasattr(new_checklist_entry, img_db_column):
-                    setattr(new_checklist_entry, img_db_column, image_value)
-
-            if len(battery_inspection) > 0:
-                new_checklist_entry.FRBattery_electrolyte_level = battery_inspection[0].get('electrolyteLevel')
-                new_checklist_entry.FRBattery_statusOn = battery_inspection[0].get('statusOnBatteryAnalyzer')
-                voltage_str = battery_inspection[0].get('voltage')
-                
-                if voltage_str is not None:
-                    new_checklist_entry.FRBattery_voltage = int(voltage_str)
-            
-            if len(battery_inspection) > 1:
-                new_checklist_entry.RRBattery_electrolyte_level = battery_inspection[1].get('electrolyteLevel')
-                new_checklist_entry.RRBattery_statusOn = battery_inspection[1].get('statusOnBatteryAnalyzer')
-                voltage_str = battery_inspection[1].get('voltage')
-                
-                if voltage_str is not None:
-                    new_checklist_entry.RRBattery_voltage = int(voltage_str)
-
-            for i, fault in enumerate(fault_codes):
-                if i < 5:
-                    setattr(new_checklist_entry, f'FaultCode{i+1}', fault.get('faultCode'))
-                    setattr(new_checklist_entry, f'status{i+1}', fault.get('status'))
-            
-            new_checklist_entry.generalRemarks = repair_notes
-
-        # logic for Manitou
-        elif brand.lower() == 'manitou':
-            unit_info = data.get("unitInfo", {})
-            new_checklist_entry.woNumber = unit_info.get('woNumber')
-            new_checklist_entry.model = unit_info.get('model')
-            new_checklist_entry.VIN = unit_info.get('serialNo')
-            new_checklist_entry.HM = unit_info.get('hourMeter')
-            new_checklist_entry.technician = unit_info.get('technician')
-            new_checklist_entry.approvalBy = unit_info.get('approvalBy')
-            new_checklist_entry.remarks = data.get('remarks')
-
-            date_of_check_val = unit_info.get('dateOfCheck')
-            
-            if date_of_check_val:
-                try:
-                    parsed_date = datetime.fromisoformat(date_of_check_val.replace('Z', '+00:00')).date()
-                    new_checklist_entry.dateOfCheck = datetime.combine(parsed_date, time(0, 0, 0))
-                except ValueError as e:
-                    print(f"Error parsing date for Manitou: {e}")
-                    new_checklist_entry.dateOfCheck = None
-            else:
-                new_checklist_entry.dateOfCheck = None
-
-            checklist_data = data.get('checklistItems', {})
-
-            manitou_mapping = {
-                ('engine', 'oilLevel'): 'engine1',
-                ('engine', 'fuelPipeFilters'): 'engine2',
-                ('engine', 'radiatorCoolingSystems'): 'engine3',
-                ('engine', 'runAt15Minutes'): 'engine4',
-                ('engine', 'belts'): 'engine5',
-                ('engine', 'hosesEngine'): 'engine6',
-                ('engine', 'Battery'): 'engine7',
-
-                ('driveline', 'driveMachineFrRv'): 'driveline1',
-                ('driveline', 'controlGears'): 'driveline2',
-                ('driveline', 'transFluid'): 'driveline3',
-                ('driveline', 'lubricatePivot'): 'driveline4',
-
-                ('hydraulicHydrostaticCircuits', 'oilTank'): 'hydraulic1',
-                ('hydraulicHydrostaticCircuits', 'checkCylinderRod'): 'hydraulic2',
-                ('hydraulicHydrostaticCircuits', 'testAllHydraulic'): 'hydraulic3',
-                ('hydraulicHydrostaticCircuits', 'lubricateCylinder'): 'hydraulic4',
-                ('hydraulicHydrostaticCircuits', 'useCrabArticulated'): 'hydraulic5',
-
-                ('brakingCircuits', 'checkServiceParkingBrake'): 'braking1',
-                ('brakingCircuits', 'checkBrakeFluidLevel'): 'braking2',
-
-                ('boomMastManiscopicManicess', 'boomTelescopes'): 'boom1',
-                ('boomMastManiscopicManicess', 'lubricatePinsPivots'): 'boom2',
-                ('boomMastManiscopicManicess', 'lubricateCirclipsPin'): 'boom3',
-
-                ('mastUnit', 'fixedMovableMast'): 'mast1',
-                ('mastUnit', 'carriageMast'): 'mast2',
-                ('mastUnit', 'lubricateChain'): 'mast3',
-                ('mastUnit', 'lubricateRoller'): 'mast4',
-
-                ('accessories', 'adaptationToMachine'): 'acc1',
-                ('accessories', 'hydraulicConnections'): 'acc2',
-                ('accessories', 'functionTest'): 'acc3',
-
-                ('cabProtectiveDeviceElectricCircuit', 'seat'): 'cab1',
-                ('cabProtectiveDeviceElectricCircuit', 'controlPanelRadio'): 'cab2',
-                ('cabProtectiveDeviceElectricCircuit', 'hornWarningLightSafetyDevice'): 'cab3',
-                ('cabProtectiveDeviceElectricCircuit', 'heatingAirConditioning'): 'cab4',
-                ('cabProtectiveDeviceElectricCircuit', 'windscreenWiperWasher'): 'cab5',
-                ('cabProtectiveDeviceElectricCircuit', 'horns'): 'cab6',
-                ('cabProtectiveDeviceElectricCircuit', 'backupAlarm'): 'cab7',
-                ('cabProtectiveDeviceElectricCircuit', 'lighting'): 'cab8',
-                ('cabProtectiveDeviceElectricCircuit', 'additionalLighting'): 'cab9',
-                ('cabProtectiveDeviceElectricCircuit', 'rotatingBeacon'): 'cab10',
-
-                ('wheels', 'rims'): 'wheels1',
-                ('wheels', 'tiresPressure'): 'wheels2',
-                ('screwsAndNuts', 'screwsAndNuts'): 'screw',
-                ('frameBody', 'lubricateStrainGauge'): 'frame1',
-                ('frameBody', 'lubricatePivots'): 'frame2',
-                ('paint', 'paint'): 'paint',
-
-                ('generalOperation', 'generalOperation'): 'general',
-                ('operatorsManual', 'operatorsManual'): 'operator',
-                ('instructionsForCustomer', 'instructionsForCustomer'): 'instruction',
-            }
-            
-            for (section, item), db_column in manitou_mapping.items():
-                section_data = checklist_data.get(section, {})
-                status_value_str = section_data.get(item)
-
-                caption_value = section_data.get(f'caption_{item}')
-                image_value = section_data.get(f'img_{item}')
-
-                converted_value = converted_manitou_status_to_tinyint(status_value_str)
-                
-                if converted_value is not None and hasattr(new_checklist_entry, db_column):
-                    setattr(new_checklist_entry, db_column, converted_value)
-            
-                caption_db_column = f'caption_{db_column}'
-                
-                if caption_value is not None and hasattr(new_checklist_entry, caption_db_column):
-                    setattr(new_checklist_entry, caption_db_column, caption_value)
-                
-                img_db_column = f'img_{db_column}'
-
-                if image_value is not None and hasattr(new_checklist_entry, img_db_column):
-                    setattr(new_checklist_entry, img_db_column, image_value)
-        
-                elif not hasattr(new_checklist_entry, db_column):
-                    print(f"WARNING: DB column '{db_column}' not found in model.")
-
-        # logic for SDLG
-        elif brand.lower() == 'sdlg':
-            unit_info = data.get("unitInfo", {})
-            checklist_items = data.get("checklistItems", {})
-            defect = data.get("defect", [])
-            
-            new_checklist_entry.woNumber = data.get("woNumber")
-            new_checklist_entry.model = data.get("model")
-            new_checklist_entry.vehicleNumber = data.get("vehicleNumber")
-            new_checklist_entry.workingHour = data.get("workingHour")
-            new_checklist_entry.inspector = data.get("inspector")
-
-            vehicle_arrival_str = data.get("vehicleArrival")
-            inspection_date_str = data.get("inspectionDate")
-
-            if vehicle_arrival_str:
-                new_checklist_entry.vehicleArrival = datetime.fromisoformat(vehicle_arrival_str.replace('Z', ''))
-            if inspection_date_str:
-                new_checklist_entry.inspectionDate = datetime.fromisoformat(inspection_date_str.replace('Z', ''))
-
-            # inspection column
-            for i in range(1, 10):
-                column_name = f"inspection{i}"
-                setattr(new_checklist_entry, column_name, data.get(column_name, False))
-
-            # testing column
-            for i in range(10, 24):
-                column_name = f"testing{i}"
-                setattr(new_checklist_entry, column_name, data.get(column_name, False))
-
-            new_checklist_entry.signatureInspector = data.get("signatureInspector")
-            new_checklist_entry.signatureSupervisor = data.get("signatureSupervisor")
-            
-            inspector_date_str = data.get("signatureInspectorDate")
-            supervisor_date_str = data.get("signatureSupervisorDate")
-
-            if inspector_date_str:
-                new_checklist_entry.signatureInspectorDate = datetime.fromisoformat(inspector_date_str.replace('Z', ''))
-            if supervisor_date_str:
-                new_checklist_entry.signatureSupervisorDate = datetime.fromisoformat(supervisor_date_str.replace('Z', ''))
-
-            observed_conditions = data.get("observedConditions", [])
-            
-            for defect in observed_conditions:
-                new_defect_entry = SDLGDefectsAndRemarksModel(
-                    description=defect.get("description"),
-                    remarks=defect.get("remarks"),
-                )
-
-                new_checklist_entry.defect.append(new_defect_entry)
-        
-        if new_checklist_entry:
-            db.session.add(new_checklist_entry)
+                            new_item = StorageMaintenanceChecklistItemModel_MA(
+                                smID = storage_maintenance_entry.smID,
+                                section = section_key,
+                                itemName = item_key,
+                                status = converted_manitou_status_to_int(item_details.get('status')),
+                                image_url = image_url,
+                                caption = item_details.get('notes')
+                            )
+                            db.session.add(new_item)
+            # Commit all changes to the database
             db.session.commit()
+
             return jsonify({
-                'message': f'{brand.capitalize()} Checklist submitted successfully!',
-                'id': str(new_checklist_entry.storageID)
+                'message': 'Manitou Storage Maintenance Checklist submitted successfully!',
+                'id': str(storage_maintenance_entry.smID)
             }), 201
-        else:
-            return jsonify({"error": "No logic found for the specified brand."}), 400
-    
+
+
+        # for Renault
+        elif brand.lower() == 'renault':
+            unit_info = data.get('unitInfo', {})
+            remarks = data.get('repairNotes')
+            checklist_item_payloads = data.get('checklistItem', {})
+            battery_data = data.get('batteryInspection', {})
+            fault_codes = data.get('faultCodes', {})
+
+            # mapping unit information from frontend to form model
+            storage_maintenance_entry.brand = brand
+            storage_maintenance_entry.woNumber = unit_info.get('repairOrderNo')
+            storage_maintenance_entry.VIN = unit_info.get('vinNo')
+            storage_maintenance_entry.engineType = unit_info.get('engineTypeNo')
+            storage_maintenance_entry.transmissionType = unit_info.get('transmissionTypeNo')
+            storage_maintenance_entry.hourMeter = unit_info.get('hourMeter')
+            storage_maintenance_entry.mileage = unit_info.get('mileage')
+            storage_maintenance_entry.dateOfCheck = parse_date(unit_info.get())
+            storage_maintenance_entry.technician = unit_info.get('technician')
+            storage_maintenance_entry.approvalBy = unit_info.get('approvalBy')
+            storage_maintenance_entry.generalRemarks = remarks
+
+            # session to add the payload
+            db.session.add(storage_maintenance_entry)
+            db.session.flush()
+
+            def save_items(section, item_name, status=None, value=None, code=None, caption=None, image_url=None):
+                """handles generic Data"""
+
+                new_item = StorageMaintenanceChecklistItemModel_RT(
+                    smID = storage_maintenance_entry.smID,
+                    section = section,
+                    itemName = item_name,
+                    status = status,
+                    value = value,
+                    code = code,
+                    caption = caption,
+                    image_url = image_url
+                )
+                db.session.add(new_item)
+            
+            # items iteration
+            for section_key, items in checklist_item_payloads.items():
+                for item_key, item_details in items.items():
+                    image_url = None # will None as long as GCS/ CDN is commenting
+                    
+                    save_items(
+                        section = section_key,
+                        item_name = item_key,
+                        status = converted_renault_status_to_int(item_details.get('status')),
+                        caption = item_details.get('notes'),
+                        image_url = image_url
+                    )
+
+            # battery data
+            if battery_data:
+                save_items(
+                    section = 'battery_inspection',
+                    item_name = 'front_battery_level',
+                    value = battery_data.get('frontBatteryLevel'),    
+                )
+                save_items(
+                    section='battery_inspection',
+                    item_name='front_battery_voltage',
+                    value=battery_data.get('frontBatteryVoltage'),
+                )
+                save_items(
+                    section='battery_inspection',
+                    item_name='rear_battery_level',
+                    value=battery_data.get('rearBatteryLevel'),
+                )
+                save_items(
+                    section='battery_inspection',
+                    item_name='rear_battery_voltage',
+                    value=battery_data.get('rearBatteryVoltage'),
+                )
+            
+            # fault codes information
+            if fault_codes and isinstance(fault_codes, list):
+                for i, code_item in enumerate(fault_codes):
+                    save_items(
+                        section='fault_codes',
+                        item_name=f'fault_code_{i+1}',
+                        code=code_item.get('code'),
+                        caption=code_item.get('status')
+                    )
+
+            db.session.commit()
+
+            return jsonify({
+                'message': 'Renault Storage Maintenance Checklist submitted successfully!',
+                'id': str(storage_maintenance_entry.smID)
+            }), 201
+
+        # for sdlg
+        elif brand.lower() == 'sdlg':
+            unit_info = data
+
+            storage_maintenance_entry.brand = unit_info.get('brand')
+            storage_maintenance_entry.woNumber = unit_info.get('woNumber')
+            storage_maintenance_entry.model = unit_info.get('model')
+            storage_maintenance_entry.VIN = unit_info.get('vehicleNumber')
+            storage_maintenance_entry.hourMeter = unit_info.get('workingHours')
+            storage_maintenance_entry.vehicleArrivalDate = parse_date(unit_info.get('vehicleArrivalDate'))
+            storage_maintenance_entry.dateOfCheck = parse_date(unit_info.get('inspectionDate'))
+            storage_maintenance_entry.technician = unit_info.get('inspector')
+            storage_maintenance_entry.approvalBy = unit_info.get('approvalBy')
+            storage_maintenance_entry.signatureTechnician = unit_info.get('signatureInspectorName')
+            storage_maintenance_entry.signatureTechnicianDate = parse_date(unit_info.get('signatureInspectorDate'))
+            storage_maintenance_entry.signatureApprover = unit_info.get('signatureSupervisor')
+            storage_maintenance_entry.supervisorNameDate = parse_date(unit_info.get('signatureSupervisorDate'))           
+
+            # session to add the payload
+            db.session.add(storage_maintenance_entry)
+            db.session.flush()
+
+            # checklist keys
+            checklist_keys = [
+                'inspection1', 'inspection2', 'inspection3', 'inspection4', 'inspection5',
+                'inspection6', 'inspection7', 'inspection8', 'inspection9',
+                'testing10', 'testing11', 'testing12', 'testing13', 'testing14',
+                'testing15', 'testing16', 'testing17', 'testing18', 'testing19',
+                'testing20', 'testing21', 'testing22', 'testing23', 'testing24'
+            ]
+
+            # get checklist items
+            for item_name in checklist_keys:
+                status_value = unit_info.get(item_name)
+                
+                if status_value is not None:
+                    new_item = MaintenanceChecklistItemModel_SDLG(
+                        smID = storage_maintenance_entry.smID,
+                        itemName = item_name,
+                        status = status_value
+                    )
+                    db.session.add(new_item)
+            
+            # get defacts and remarks
+            defects = data.get('observedConditions', [])
+
+            for defect_entry in defects:
+                new_defect = Maintenance_sdlg_defect_remarks(
+                    smID = storage_maintenance_entry.smID,
+                    description = defect_entry.get('description'),
+                    remarks = defect_entry.get('remarks')
+                )
+                db.session.add(new_defect)
+
+            db.session.commit()
+
+            return jsonify({
+                'message': 'SDLG Storage Maintenance Checklist submitted successfully!',
+                'id': str(storage_maintenance_entry.smID)
+            }), 201
+        
     except Exception as e:
         db.session.rollback()
         
@@ -414,8 +332,8 @@ def get_maintenance_checklist_by_brand_and_id(brand, item_id):
     
     pk_column = None
     
-    if hasattr(ModelClass, 'storageID'):
-        pk_column = ModelClass.storageID
+    if hasattr(ModelClass, 'smID'):
+        pk_column = ModelClass.smID
     elif hasattr(ModelClass, 'ArrivalID'):
         pk_column = ModelClass.ArrivalID
     

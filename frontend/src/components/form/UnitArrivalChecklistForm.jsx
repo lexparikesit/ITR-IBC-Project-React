@@ -135,8 +135,8 @@ export function UnitArrivalChecklistForm() {
 			typeModel: (value) => (value ? null : "Type/ Model is Required!"),
 			woNumber: (value) => (value ? null : "WO Number is Required!"),
 			vin: (value) => (value ? null : "VIN is Required!"),
-			noChassis: (value) => (value ? null : "No. Chassis is Required!"),
-			noEngine: (value) => (value ? null : "No. Engine is Required!"),
+			noChassis: (value) => (value ? null : "Chassis Number is Required!"),
+			noEngine: (value) => (value ? null : "Engine Number is Required!"),
 			dateOfCheck: (value) => (value ? null : "Date of Check is Required!"),
 			technician: (value) => (value ? null : "Technician is Required!"),
 			approvalBy: (value) => (value ? null : "Approval By is Required!"), 
@@ -190,6 +190,7 @@ export function UnitArrivalChecklistForm() {
 					{ value: "app3", label: "John Green" }
 				];
 				setApprovers(dummyApprovers);
+
 			} catch (error) {
 				console.error("Error fetching data:", error);
 				notifications.show({
@@ -235,6 +236,7 @@ export function UnitArrivalChecklistForm() {
 			}
 			const data = await response.json();
 			return data.exists;
+
 		} catch (error) {
 			console.error("Network Error or Failed to Check VIN:", error);
 			notifications.show({
@@ -362,9 +364,7 @@ export function UnitArrivalChecklistForm() {
 								placeholder="Select WO Number"
 								data={woNumbers}
 								searchable
-								clearable
 								{...form.getInputProps("woNumber")}
-								renderOption={({ option }) => <Text>{option.label}</Text>}
 							/>
 						</Grid.Col>
 						<Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
@@ -375,7 +375,6 @@ export function UnitArrivalChecklistForm() {
 								searchable
 								clearable
 								{...form.getInputProps("typeModel")}
-								renderOption={({ option }) => <Text>{option.label}</Text>}
 							/>
 						</Grid.Col>
 						<Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
@@ -403,8 +402,8 @@ export function UnitArrivalChecklistForm() {
 							<DateInput
 								label="Date of Check"
 								placeholder="Select Date"
+								valueFormat="DD-MM-YYYY"
 								{...form.getInputProps("dateOfCheck")}
-								valueFormat="DD/MM/YYYY"
 								rightSection={<IconCalendar size={16} />}
 							/>
 						</Grid.Col>
@@ -416,7 +415,6 @@ export function UnitArrivalChecklistForm() {
                                 searchable
                                 clearable
                                 {...form.getInputProps("technician")}
-                                renderOption={({ option }) => <Text>{option.label}</Text>}
                             />
 						</Grid.Col>
 						<Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
@@ -427,7 +425,6 @@ export function UnitArrivalChecklistForm() {
                                 searchable
                                 clearable
                                 {...form.getInputProps("approvalBy")}
-                                renderOption={({ option }) => <Text>{option.label}</Text>}
                             />
 						</Grid.Col>
 					</Grid>
@@ -460,13 +457,11 @@ export function UnitArrivalChecklistForm() {
 				})}
 
 				<Card shadow="sm" padding="lg" radius="md" withBorder mb="lg">
-					<Title order={3} mb="md">
-						General Remarks
-					</Title>
+					<Title order={3} mb="md">General Remarks</Title>
 					<Textarea
 						placeholder="Add any general remarks here..."
 						autosize
-						minRows={3}
+						minRows={4}
 						{...form.getInputProps("generalRemarks")}
 					/>
 				</Card>

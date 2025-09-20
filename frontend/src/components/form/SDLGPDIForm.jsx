@@ -45,6 +45,8 @@ export function SdlgPDIForm() {
             machineModel: null,
             vehicleNumber: '',
             preInspectionPersonnel: null,
+            approvalBy: null,
+            inspectionDate: null,
 
             inspectionChecklist: inspectionItemsDefinition.reduce((acc, item) => {
                 acc[item.id] = false;
@@ -53,21 +55,23 @@ export function SdlgPDIForm() {
 
             defects: [{ sn: 1, description: '', remarks: '' }],
 
-            inspectorSignature: '',
+            inspectorSignature: null,
             inspectorDate: null,
-            supervisorSignature: '',
+            supervisorSignature: null,
             supervisorDate: null,
         },
 
         validate: {
             woNumber: (value) => (value ? null : 'WO Number is Required!'),
-            machineModel: (value) => (value ? null : 'Machine Model is Required!'),
-            vehicleNumber: (value) => (value ? null : 'Vehicle Number is Required!'),
-            preInspectionPersonnel: (value) => (value ? null : 'Personnel Name is Required!'),
-            inspectorSignature: (value) => (value ? null : 'Inspector signature is required!'),
-            inspectorDate: (value) => (value ? null : 'Inspector date is required!'),
-            supervisorSignature: (value, values) => (values.supervisorDate ? (value ? null : 'Supervisor name is required if date is filled') : null),
-            supervisorDate: (value, values) => (values.supervisorSignature ? (value ? null : 'Supervisor date is required if name is filled') : null),
+            machineModel: (value) => (value ? null : 'Type/ Model is Required!'),
+            vehicleNumber: (value) => (value ? null : 'VIN Number is Required!'),
+            preInspectionPersonnel: (value) => (value ? null : 'Technician is Required!'),
+            approvalBy: (value) => (value ? null: 'Approval By is Required!'),
+            inspectionDate: (value) => (value ? null : 'Inspection Date is Required!'),
+            inspectorSignature: (value) => (value ? null : 'Inspector signature is Required!'),
+            inspectorDate: (value) => (value ? null : 'Inspector date is Required!'),
+            supervisorSignature: (value) => (value ? null : 'Supervisor Signature is Required!'),
+            supervisorDate: (value) => (value ? null : 'Supervisor Date is Required!'),
         }
     });
 
@@ -169,6 +173,8 @@ export function SdlgPDIForm() {
                 machineModel: values.machineModel,
                 vehicleNumber: values.vehicleNumber,
                 preInspectionPersonnel: values.preInspectionPersonnel,
+                approvalBy: values.approvalBy,
+                inspectionDate: formatDate(values.inspectionDate),
             },
             checklist: values.inspectionChecklist,
             defects: values.defects,
@@ -216,199 +222,210 @@ export function SdlgPDIForm() {
 
     return (
         <Box maw="100%" mx="auto" px="md" mt="md">
-            <Title order={1} ta="left" mb="lg"> Pre Delivery Inspection Form </Title>
-            <Paper p="md" shadow="xs">
-                <form onSubmit={form.onSubmit(handleSubmit, (validationError) => {
-                    console.error('Validation Errors:', validationError);
-                    notifications.show({
-                        title: "Validation Error",
-                        message: "Please fill in all required fields!",
-                        color: "red",
-                    });
-                })}>
-                    {/* Header: Unit Information */}
-                    <Card shadow="sm" p="lg" withBorder mb="lg">
-                        <Title order={3} mb="md" style={{ color: '#000000 !important' }}> Unit Information </Title>
-                        <Grid gutter="xl">
-                            <Grid.Col span={{ base: 12, md: 6, md: 3 }}>
-                                <Select
-                                    label="WO Number"
-                                    placeholder="Select WO Number"
-                                    data={WoNumbers}
-                                    searchable
-                                    clearable
-                                    {...form.getInputProps('woNumber')}
-                                />
-                            </Grid.Col>
-                            <Grid.Col span={{ base: 12, md: 6, md: 3 }}>
-                                <Select
-                                    label="Machine Model"
-                                    placeholder="Select Machine Model"
-                                    data={unitModels}
-                                    searchable
-                                    clearable
-                                    {...form.getInputProps('machineModel')}
-                                />
-                            </Grid.Col>
-                            <Grid.Col span={{ base: 12, md: 6, md: 3 }}>
-                                <TextInput
-                                    label="Vehicle Number"
-                                    placeholder="Input Vehicle Number/ VIN"
-                                    {...form.getInputProps('vehicleNumber')}
-                                />
-                            </Grid.Col>
-                            <Grid.Col span={{ base: 12, md: 6, md: 3 }}>
-                                <Select
-                                    label="Inspection Personnel"
-                                    placeholder="Select Inspector"
-                                    data={technicians}
-                                    searchable
-                                    clearable
-                                    {...form.getInputProps('preInspectionPersonnel')}
-                                />
-                            </Grid.Col>
-                        </Grid>
-                    </Card>
+            <Title
+                order={1}
+                mt="md"
+                mb="lg"
+                style={{ color: '#000000 !important' }}
+            > Pre Delivery Inspection Form
+            </Title>
 
-                    {/* important notes */}
-                    <Box mb="xs">
-                        <Text size="sm" c="dimmed"> Notes: </Text>
-                        <Text size="sm" c="dimmed"> Any faults or quality issues must be photographed, recorded, and reported, with appropriate remedial measures taken accordingly. </Text>
-                    </Box>
+            <form onSubmit={form.onSubmit(handleSubmit)}>
+                {/* Header: Unit Information */}
+                <Card shadow="sm" p="xl" withBorder mb="lg">
+                    <Title order={3} mb="md" style={{ color: '#000000 !important' }}> Unit Information </Title>
+                    <Grid gutter="xl">
+                        <Grid.Col span={{ base: 12, md: 6, md: 3 }}>
+                            <Select
+                                label="WO Number"
+                                placeholder="Select WO Number"
+                                data={WoNumbers}
+                                searchable
+                                clearable
+                                {...form.getInputProps('woNumber')}
+                            />
+                        </Grid.Col>
+                        <Grid.Col span={{ base: 12, md: 6, md: 3 }}>
+                            <Select
+                                label="Type/ Model"
+                                placeholder="Select Type/ Model"
+                                data={unitModels}
+                                searchable
+                                clearable
+                                {...form.getInputProps('machineModel')}
+                            />
+                        </Grid.Col>
+                        <Grid.Col span={{ base: 12, md: 6, md: 3 }}>
+                            <TextInput
+                                label="VIN"
+                                placeholder="Input VIN Number"
+                                {...form.getInputProps('vehicleNumber')}
+                            />
+                        </Grid.Col>
+                        <Grid.Col span={{ base: 12, md: 6, md: 3 }}>
+                            <DateInput
+                                label="Date of Check"
+                                placeholder="Select Date"
+                                valueFormat="DD-MM-YYYY"
+                                {...form.getInputProps('inspectionDate')}
+                                rightSection={<IconCalendar size={16} />}
+                            />
+                        </Grid.Col>
+                        <Grid.Col span={{ base: 12, md: 6, md: 3 }}>
+                            <Select
+                                label="Technician"
+                                placeholder="Select Technician"
+                                data={technicians}
+                                searchable
+                                clearable
+                                {...form.getInputProps('preInspectionPersonnel')}
+                            />
+                        </Grid.Col>
+                        <Grid.Col span={{ base: 12, md: 6, md: 3 }}>
+                            <Select
+                                label="Approval By"
+                                placeholder="Select Approver"
+                                data={approvers}
+                                searchable
+                                clearable
+                                {...form.getInputProps('approvalBy')}
+                            />
+                        </Grid.Col>
+                    </Grid>
+                </Card>
 
-                    {/* Part 1: Inspection */}
-                    <Card shadow="sm" p="lg" withBorder mb="xl">
-                        <Title order={4} mb="md">1. Inspection</Title>
-                        <Table withRowBorders withColumnBorders>
-                            <Table.Thead>
-                                <Table.Tr>
-                                    <Table.Th style={{ width: '50px' }}>SN</Table.Th>
-                                    <Table.Th>Inspection Items</Table.Th>
-                                    <Table.Th style={{ width: '120px', textAlign: 'center' }}>Perform or not</Table.Th>
-                                </Table.Tr>
-                            </Table.Thead>
-                            <Table.Tbody>
-                                {inspectionItemsDefinition.map((item, index) => (
-                                    <Table.Tr key={`inspection-${item.id}`}>
-                                        <Table.Td>{item.id}</Table.Td>
-                                        <Table.Td>{item.label}</Table.Td>
-                                        <Table.Td>
-                                            <Group justify='center'>
-                                                <Checkbox
-                                                    {...form.getInputProps(`inspectionChecklist.${item.id}`, { type: 'checkbox' })}
-                                                />
-                                            </Group>
-                                        </Table.Td>
-                                    </Table.Tr>
-                                ))}
-                            </Table.Tbody>
-                        </Table>
-                    </Card>
-
-                    {/* Part 2: Record all observed conditions */}
-                    <Card shadow="sm" p="lg" withBorder mb="xl">
-                        <Title order={4} mb="md">Record all observed conditions and report to the supervisor</Title>
-                        <Table withRowBorders withColumnBorders>
-                            <Table.Thead>
-                                <Table.Tr>
-                                    <Table.Th style={{ width: '50px' }}>SN</Table.Th>
-                                    <Table.Th>Description of defects or failures</Table.Th>
-                                    <Table.Th>Remarks</Table.Th>
-                                    <Table.Th style={{ width: '50px' }}>Action</Table.Th>
-                                </Table.Tr>
-                            </Table.Thead>
-                            <Table.Tbody>
-                                {form.values.defects.map((condition, index) => (
-                                    <Table.Tr key={index}>
-                                        <Table.Td>{index + 1}</Table.Td>
-                                        <Table.Td>
-                                            <Textarea
-                                                placeholder="Enter the Description of defects or failures"
-                                                autosize
-                                                minRows={1}
-                                                {...form.getInputProps(`defects.${index}.description`)}
+                {/* Part 1: Inspection */}
+                <Card shadow="sm" p="lg" withBorder mb="xl">
+                    <Title order={4} mb="md">1. Inspection</Title>
+                    <Table withRowBorders withColumnBorders>
+                        <Table.Thead>
+                            <Table.Tr>
+                                <Table.Th style={{ width: '50px' }}>SN</Table.Th>
+                                <Table.Th>Inspection Items</Table.Th>
+                                <Table.Th style={{ width: '120px', textAlign: 'center' }}>Perform or not</Table.Th>
+                            </Table.Tr>
+                        </Table.Thead>
+                        <Table.Tbody>
+                            {inspectionItemsDefinition.map((item, index) => (
+                                <Table.Tr key={`inspection-${item.id}`}>
+                                    <Table.Td>{item.id}</Table.Td>
+                                    <Table.Td>{item.label}</Table.Td>
+                                    <Table.Td>
+                                        <Group justify='center'>
+                                            <Checkbox
+                                                {...form.getInputProps(`inspectionChecklist.${item.id}`, { type: 'checkbox' })}
                                             />
-                                        </Table.Td>
-                                        <Table.Td>
-                                            <Textarea
-                                                placeholder="Enter Remarks of the Description"
-                                                autosize
-                                                minRows={1}
-                                                {...form.getInputProps(`defects.${index}.remarks`)}
-                                            />
-                                        </Table.Td>
-                                        <Table.Td ta="center">
-                                            <ActionIcon
-                                                color="red"
-                                                variant="light"
-                                                onClick={() => removeObservedConditionRow(index)}
-                                                disabled={form.values.defects.length === 1}
-                                            >
-                                                <IconTrash size={16} />
-                                            </ActionIcon>
-                                        </Table.Td>
-                                    </Table.Tr>
-                                ))}
-                            </Table.Tbody>
-                        </Table>
-                        <Button
-                            leftSection={<IconPlus size={16} />}
-                            mt="md"
-                            onClick={addObservedConditionRow}
-                            variant="light"
-                        >
-                            Add Row
-                        </Button>
-                    </Card>
+                                        </Group>
+                                    </Table.Td>
+                                </Table.Tr>
+                            ))}
+                        </Table.Tbody>
+                    </Table>
+                </Card>
 
-                    {/* Signature Parts */}
-                    <Card shadow="sm" p="lg" withBorder mb="xl">
-                        <Title order={4} mb="md">Signature</Title>
-                        <Grid gutter="xl">
-                            <Grid.Col span={{ base: 12, md: 6 }}>
-                                <Select
-                                    label="Inspector Signature"
-                                    placeholder="Select Inspector"
-                                    clearable
-                                    searchable
-                                    data={approvers}
-                                    {...form.getInputProps('inspectorSignature')}
-                                />
-                                <DateInput
-                                    label="Date"
-                                    placeholder="Select Date"
-                                    valueFormat="YYYY-MM-DD"
-                                    mt="md"
-                                    {...form.getInputProps('inspectorDate')}
-                                    rightSection={<IconCalendar size={16} />}
-                                />
-                            </Grid.Col>
-                            <Grid.Col span={{ base: 12, md: 6 }}>
-                                <Select
-                                    label="Supervisor Signature"
-                                    placeholder="Select Supervisor"
-                                    clearable
-                                    searchable
-                                    data={approvers}
-                                    {...form.getInputProps('supervisorSignature')}
-                                />
-                                <DateInput
-                                    label="Date"
-                                    placeholder="Select Date"
-                                    valueFormat="YYYY-MM-DD"
-                                    mt="md"
-                                    {...form.getInputProps('supervisorDate')}
-                                    rightSection={<IconCalendar size={16} />}
-                                />
-                            </Grid.Col>
-                        </Grid>
-                    </Card>
+                {/* Part 2: Record all observed conditions */}
+                <Card shadow="sm" p="lg" withBorder mb="xl">
+                    <Title order={4} mb="md">Record all observed conditions and report to the supervisor</Title>
+                    <Table withRowBorders withColumnBorders>
+                        <Table.Thead>
+                            <Table.Tr>
+                                <Table.Th style={{ width: '50px' }}>SN</Table.Th>
+                                <Table.Th>Description of defects or failures</Table.Th>
+                                <Table.Th>Remarks</Table.Th>
+                                <Table.Th style={{ width: '50px' }}>Action</Table.Th>
+                            </Table.Tr>
+                        </Table.Thead>
+                        <Table.Tbody>
+                            {form.values.defects.map((condition, index) => (
+                                <Table.Tr key={index}>
+                                    <Table.Td>{index + 1}</Table.Td>
+                                    <Table.Td>
+                                        <Textarea
+                                            placeholder="Enter the Description of defects or failures"
+                                            autosize
+                                            minRows={1}
+                                            {...form.getInputProps(`defects.${index}.description`)}
+                                        />
+                                    </Table.Td>
+                                    <Table.Td>
+                                        <Textarea
+                                            placeholder="Enter Remarks of the Description"
+                                            autosize
+                                            minRows={1}
+                                            {...form.getInputProps(`defects.${index}.remarks`)}
+                                        />
+                                    </Table.Td>
+                                    <Table.Td ta="center">
+                                        <ActionIcon
+                                            color="red"
+                                            variant="light"
+                                            onClick={() => removeObservedConditionRow(index)}
+                                            disabled={form.values.defects.length === 1}
+                                        >
+                                            <IconTrash size={16} />
+                                        </ActionIcon>
+                                    </Table.Td>
+                                </Table.Tr>
+                            ))}
+                        </Table.Tbody>
+                    </Table>
+                    <Button
+                        leftSection={<IconPlus size={16} />}
+                        mt="md"
+                        onClick={addObservedConditionRow}
+                        variant="light"
+                    >
+                        Add Row
+                    </Button>
+                </Card>
 
-                    <Group justify="flex-end" mt="xl">
-                        <Button type="submit">Submit</Button>
-                    </Group>
-                </form>
-            </Paper>
+                {/* Signature Parts */}
+                <Card shadow="sm" p="lg" withBorder mb="xl">
+                    <Title order={4} mb="md">Signature</Title>
+                    <Grid gutter="xl">
+                        <Grid.Col span={{ base: 12, md: 6 }}>
+                            <Select
+                                label="Inspector Signature"
+                                placeholder="Select Inspector"
+                                clearable
+                                searchable
+                                data={approvers}
+                                {...form.getInputProps('inspectorSignature')}
+                            />
+                            <DateInput
+                                label="Date"
+                                placeholder="Select Date"
+                                valueFormat="YYYY-MM-DD"
+                                mt="md"
+                                {...form.getInputProps('inspectorDate')}
+                                rightSection={<IconCalendar size={16} />}
+                            />
+                        </Grid.Col>
+                        <Grid.Col span={{ base: 12, md: 6 }}>
+                            <Select
+                                label="Supervisor Signature"
+                                placeholder="Select Supervisor"
+                                clearable
+                                searchable
+                                data={approvers}
+                                {...form.getInputProps('supervisorSignature')}
+                            />
+                            <DateInput
+                                label="Date"
+                                placeholder="Select Date"
+                                valueFormat="YYYY-MM-DD"
+                                mt="md"
+                                {...form.getInputProps('supervisorDate')}
+                                rightSection={<IconCalendar size={16} />}
+                            />
+                        </Grid.Col>
+                    </Grid>
+                </Card>
+
+                <Group justify="flex-end" mt="xl">
+                    <Button type="submit">Submit</Button>
+                </Group>
+            </form>
         </Box>
     )
 }

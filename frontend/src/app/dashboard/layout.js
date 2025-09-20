@@ -89,6 +89,10 @@ export default function DashboardLayout({ children }) {
             return `Pre-Delivery - ${capitalizedSegment}`
         } else if (path.startsWith('/dashboard/settings/users')) {
             return 'Settings - User Account'
+        } else if (path.startsWith('/dashboard/commissioning/')) {
+            const segment = path.split('/').pop()
+            const capitalizedSegment = segment.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+            return `Commissioning - ${capitalizedSegment}`
         }
         // to input another logic below this section
 

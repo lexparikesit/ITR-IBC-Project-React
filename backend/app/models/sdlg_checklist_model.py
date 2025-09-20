@@ -11,6 +11,7 @@ class SDLGChecklistModels(db.Model):
     ArrivalID = db.Column(UNIQUEIDENTIFIER, primary_key=True, default=uuid.uuid4)
 
     # Information Unit
+    brand = db.Column(db.String(50), nullable=False)
     woNumber = db.Column(db.String(50), nullable=False)
     distributionName = db.Column(db.String(100), nullable=False)
     containerNo = db.Column(db.String(100), nullable=False)

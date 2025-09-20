@@ -122,7 +122,7 @@ export function UnitArrivalInspectionForm() {
                     const key = item.itemKey;
                     validationRules[key] = (value) => {
                         if ((value.status === 'Bad' || value.status === 'Missing') && !value.image) {
-                            return 'Image is Required for Bad/ Missing!';
+                            return 'Image is Required for "Bad" or "Missing"!';
                         }
                         if (!value.status) {
                             return 'Item is Required!';
@@ -138,7 +138,7 @@ export function UnitArrivalInspectionForm() {
                             return 'Image is Required for Bad/ Missing!';
                         }
                         if (!value.status) {
-                            return 'Item is Required!';
+                            return 'This Field is Required!';
                         }
                         return null;
                     };
@@ -178,7 +178,7 @@ export function UnitArrivalInspectionForm() {
 
         validate: {
             woNumber: (value) => (value ? null : 'WO Number is Required!'),
-            model: (value) => (value ? null : 'Model is Required!'),
+            model: (value) => (value ? null : 'Type/ Model is Required!'),
             serialNo: (value) => (value ? null : 'VIN is Required!'),
             hourMeter: (value) => (value ? null : 'Hour Meter is Required!'),
             dateOfCheck: (value) => (value ? null : 'Date of Check is Required!'),
@@ -556,10 +556,6 @@ export function UnitArrivalInspectionForm() {
                                 placeholder="Select Date"
                                 valueFormat="DD-MM-YYYY"
                                 {...form.getInputProps('dateOfCheck')}
-                                onChange={(value) => {
-                                    const parsedDate = value ? new Date(value) : null;
-                                    form.setFieldValue('dateOfCheck', parsedDate);
-                                }}
                                 rightSection={<IconCalendar size={16} />}
                             />
                         </Grid.Col>
@@ -609,6 +605,7 @@ export function UnitArrivalInspectionForm() {
                                 accessories: "09. Accessories",
                                 cabProtectiveDeviceElectricCircuit: "10. Cab / Protective Device / Electric Circuit",
                                 wheels: "11. Wheels",
+                                otherItems: "12. Other Items",
                             }[sectionKey] || sectionKey,
                             sectionKey,
                             manitouChecklistItemsDefinition[sectionKey]
@@ -616,10 +613,8 @@ export function UnitArrivalInspectionForm() {
                     </div>
                 ))}
 
-                {renderChecklistSection("12. Other Item", "otherItems", manitouChecklistItemsDefinition.otherItems)}
-
                 <Divider my="xl" />
-                <Title order={3} mb="md" style={{ color: '#000000 !important' }}> General Remarks </Title>
+                <Title order={3} mb="md">General Remarks</Title>
                 <Textarea
                     placeholder="Add any general remarks here..."
                     minRows={4}

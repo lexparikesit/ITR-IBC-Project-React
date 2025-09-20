@@ -140,6 +140,7 @@ export function RenaultPDIForm() {
         initialValues: initialRenaultPdiValues,
         validate: {
             repairOrderNo: (value) => (value ? null : "WO Number is Required!"),
+            vinNo: (value) => (value ? null: "VIN Number is Required!"),
             mileageHourMeter: (value) => (value ? null: "Mileage is Required!"),
             chassisId: (value) => (value ? null : "Chassis ID is Required!"),
             registrationNo: (value) => (value ? null : "Registration No is Required!"),
@@ -262,14 +263,12 @@ export function RenaultPDIForm() {
         const payload = {
             brand: 'renault',
             unitInfo: {
-                WO: values.repairOrderNo,
-                mileage: values.mileageHourMeter,
-                chassisID: values.chassisId,
+                repairOrderNo: values.repairOrderNo,
+                mileageHourMeter: values.mileageHourMeter,
+                chassisId: values.chassisId,
                 registrationNO: values.registrationNo,
-                VIN: values.vinNo,
-                date: (values.date instanceof Date && !isNaN(values.date))
-                        ? values.date.toISOString()
-                        : null,
+                vinNo: values.vinNo,
+                date: values.date,
                 customer: values.customer,
                 city: values.city,
                 model: values.model,
@@ -342,10 +341,10 @@ export function RenaultPDIForm() {
                         value={itemData.value.value}
                         onChange={(statusValue) => form.setFieldValue(`checklistItems.${sectionKey}.${itemKey}.value`, statusValue)}
                         orientation="horizontal"
-                        error={form.errors[`checklistItems.${sectionKey}.${itemKey}`]}
+                        error={form.errors[`checklistItems.${sectionKey}.${itemKey}.value`]}
                     >
                         <Group mt="xs" justify="space-between" style={{ width: '100%' }}>
-                            <Radio value="repaired" label={<Text style={{ color: '#000000 !important' }}> Repaired, Without Notes </Text>} />
+                            <Radio value="checked" label={<Text style={{ color: '#000000 !important' }}> Checked, Without Notes </Text>} />
                             <Radio value="recommended_repair" label={<Text style={{ color: '#000000 !important' }}> Repair Recommended </Text>} />
                             <Radio value="immediately_repair" label={<Text style={{ color: '#000000 !important' }}> Repair Immediately </Text>} />
                             <Radio value="not_applicable" label={<Text style={{ color: '#000000 !important' }}> Not Applicable </Text>} />
@@ -456,8 +455,15 @@ export function RenaultPDIForm() {
                             />
                         </Grid.Col>
                         <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
+                            <TextInput
+                                label="VIN"
+                                placeholder="Input VIN Number"
+                                {...form.getInputProps('vinNo')}
+                            />
+                        </Grid.Col>
+                        <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
                             <DateInput
-                                label="Date"
+                                label="Date of Check"
                                 placeholder="Select Date"
                                 valueFormat="DD-MM-YYYY"
                                 {...form.getInputProps('date')}
@@ -514,7 +520,6 @@ export function RenaultPDIForm() {
                                 searchable
                                 clearable
                                 {...form.getInputProps("model")}
-                                renderOption={({ option }) => <Text>{option.label}</Text>}
                             />
                         </Grid.Col>
                         <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
@@ -539,7 +544,6 @@ export function RenaultPDIForm() {
                                 searchable
                                 clearable
                                 {...form.getInputProps("technician")}
-                                renderOption={({ option }) => <Text>{option.label}</Text>}
                             />
                         </Grid.Col>
                         <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
@@ -550,14 +554,6 @@ export function RenaultPDIForm() {
                                 searchable
                                 clearable
                                 {...form.getInputProps("approvalBy")}
-                                renderOption={({ option }) => <Text>{option.label}</Text>}
-                            />
-                        </Grid.Col>
-                        <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
-                            <TextInput
-                                label="VIN"
-                                placeholder="Input VIN Number"
-                                {...form.getInputProps('vinNo')}
                             />
                         </Grid.Col>
                     </Grid>
@@ -565,7 +561,7 @@ export function RenaultPDIForm() {
 
                 <Divider my="xl" label={<Text style={{ color: '#000000 !important' }}>Legend</Text>} labelPosition="center" />
                     <Group justify="center" gap="xl" mb="lg">
-                        <Text style={{ color: '#000000 !important' }}> 1: Repaired, Without Notes </Text>
+                        <Text style={{ color: '#000000 !important' }}> 1: Checked, Without Notes </Text>
                         <Text style={{ color: '#000000 !important' }}> 2: Repair Recommended </Text>
                         <Text style={{ color: '#000000 !important' }}> 3: Repair Immediately </Text>
                         <Text style={{ color: '#000000 !important' }}> 0: Not Applicable </Text>
@@ -636,7 +632,7 @@ export function RenaultPDIForm() {
                     <Text size="sm" mb="md" style={{ color: '#000000 !important' }}> Note any damage </Text>
                     <Textarea
                         placeholder="Add any vehicle damage notes here..."
-                        minRows={10}
+                        minRows={4}
                         mb="xl"
                         {...form.getInputProps('vehicleDamageNotes')}
                     />

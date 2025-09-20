@@ -103,6 +103,7 @@ const initialChecklistValues = Object.keys(renaultChecklistItemDefinition).reduc
 
 const initialRenaultValues = {
     vinNo: '',
+    unitModel: null,
     engineTypeNo: '',
     transmissionTypeNo: '',
     hourMeter: '',
@@ -131,6 +132,7 @@ const initialRenaultValues = {
 };
 
 export function RenaultStorageMaintenanceForm() {
+    const [unitModels, setUnitModels] = useState([]);
     const [technicians, setTechnicians] = useState([]);
     const [approvers, setApprovers] = useState([]);
     const [woNumbers, setWoNumbers] = useState([]);
@@ -145,11 +147,11 @@ export function RenaultStorageMaintenanceForm() {
                     const image = itemValue.image;
 
                     if (!status) {
-                        return "Item is required!";
+                        return "This Field is Required!";
                     }
 
                     if ((status === "recommended_repair" || status === "immediately_repair") && !image) {
-                        return "Image is required for 'Repair Recommended' or 'Repair Immediately'!";
+                        return 'Image is Required for "Repair Recommended" or "Repair Immediately"!';
                     }
                     return null;
                 };
@@ -162,8 +164,9 @@ export function RenaultStorageMaintenanceForm() {
         initialValues: initialRenaultValues,
         validate: {
             vinNo: (value) => (value ? null : "VIN is Required!"),
-            engineTypeNo: (value) => (value ? null : "Engine Type/ No. is Required!"),
-            transmissionTypeNo: (value) => (value ? null : "Transmission Type/ No. is Required!"),
+            unitModel: (value) => (value ? null: "Type/ Model is Required!"),
+            engineTypeNo: (value) => (value ? null : "Engine Type/ Number is Required!"),
+            transmissionTypeNo: (value) => (value ? null : "Transmission Type/ Number is Required!"),
             hourMeter: (value) => (value ? null : "Hour Meter is Required!"),
             mileage: (value) => (value ? null : "Mileage is Required!"),
             dateOfCheck: (value) => (value ? null : "Date is Required!"),
@@ -179,6 +182,12 @@ export function RenaultStorageMaintenanceForm() {
             try {
                 const brandId = "RT"; // 'RT' for Renault
                 const groupId = "SM"; // 'SM' for Storage Maintenance
+
+                // model/ type RT API
+				const modelResponse = await fetch(`http://127.0.0.1:5000/api/unit-types/RT`);
+				if (!modelResponse.ok) throw new Error(`HTTP error! status: ${modelResponse.status}`);
+				const modelData = await modelResponse.json();
+				setUnitModels(modelData);
 
                 // wo Number API
                 const woResponse = await fetch(`http://127.0.0.1:5000/api/work-orders?brand_id=${brandId}&group_id=${groupId}`);
@@ -237,14 +246,13 @@ export function RenaultStorageMaintenanceForm() {
             brand: 'renault',
             unitInfo: {
                 vinNo: values.vinNo,
+                unitModel: values.unitModel,
                 engineTypeNo: values.engineTypeNo,
                 transmissionTypeNo: values.transmissionTypeNo,
                 hourMeter: values.hourMeter,
                 mileage: values.mileage,
                 repairOrderNo: values.repairOrderNo,
-                dateOfCheck: (values.dateOfCheck instanceof Date && !isNaN(values.dateOfCheck))
-                    ? values.dateOfCheck.toISOString()
-                    : null,
+                dateOfCheck: values.dateOfCheck,
                 technician: values.technician,
                 approvalBy: values.approvalBy,
             },
@@ -307,7 +315,7 @@ export function RenaultStorageMaintenanceForm() {
                         error={form.errors[`checklistItems.${sectionKey}.${itemKey}`]}
                     >
                         <Group mt="xs" justify="space-between" style={{ width: '100%' }}>
-                            <Radio value="repaired" label={<Text style={{ color: '#000000 !important' }}> Repaired, Without Notes </Text>} />
+                            <Radio value="checked" label={<Text style={{ color: '#000000 !important' }}> Checked, Without Notes </Text>} />
                             <Radio value="recommended_repair" label={<Text style={{ color: '#000000 !important' }}> Repair Recommended </Text>} />
                             <Radio value="immediately_repair" label={<Text style={{ color: '#000000 !important' }}> Repair Immediately </Text>} />
                             <Radio value="not_applicable" label={<Text style={{ color: '#000000 !important' }}> Not Applicable </Text>} />
@@ -398,7 +406,7 @@ export function RenaultStorageMaintenanceForm() {
             > Storage Maintenance List
             </Title>
             <form onSubmit={form.onSubmit(handleSubmit)}>
-                <Card shadow="sm" p="xl" withBorder mb="lg">
+                <Card shadow="sm" padding="lg" radius="md" withBorder mb="lg">
                     <Title order={3} mb="md" style={{ color: '#000000 !important' }}> Unit Information </Title>
                     <Grid gutter="xl">
                         <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
@@ -411,12 +419,21 @@ export function RenaultStorageMaintenanceForm() {
                                 {...form.getInputProps('repairOrderNo')}
                             />
                         </Grid.Col>
+                        <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
+                            <Select
+                                label="Type/ Model"
+                                placeholder="Select Model"
+                                data={unitModels}
+                                searchable
+                                clearable
+                                {...form.getInputProps('unitModel')}
+                            />
+                        </Grid.Col>
                         <Grid.Col span={{ base: 12, md: 3, lg: 3 }}>
                             <TextInput
                                 label="VIN"
                                 placeholder="Input VIN Number"
                                 {...form.getInputProps('vinNo')}
-                                styles={{ input: { color: '#000000 !important' } }}
                             />
                         </Grid.Col>
                         <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
@@ -424,7 +441,6 @@ export function RenaultStorageMaintenanceForm() {
                                 label="Engine Type/ No."
                                 placeholder="Input Engine Type/ Number"
                                 {...form.getInputProps('engineTypeNo')}
-                                styles={{ input: { color: '#000000 !important' } }}
                             />
                         </Grid.Col>
                         <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
@@ -432,7 +448,6 @@ export function RenaultStorageMaintenanceForm() {
                                 label="Transmission Type/ No."
                                 placeholder="Input Transmission Type/ Number"
                                 {...form.getInputProps('transmissionTypeNo')}
-                                styles={{ input: { color: '#000000 !important' } }}
                             />
                         </Grid.Col>
                         <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
@@ -440,7 +455,6 @@ export function RenaultStorageMaintenanceForm() {
                                 label="Hour Meter"
                                 placeholder="Input Hour Meter"
                                 {...form.getInputProps('hourMeter')}
-                                styles={{ input: { color: '#000000 !important' } }}
                             />
                         </Grid.Col>
                         <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
@@ -448,21 +462,14 @@ export function RenaultStorageMaintenanceForm() {
                                 label="Mileage"
                                 placeholder="Input Mileage"
                                 {...form.getInputProps('mileage')}
-                                styles={{ input: { color: '#000000 !important' } }}
                             />
                         </Grid.Col>
                         <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
                             <DateInput
-                                label="Date"
+                                label="Date of Check"
                                 placeholder="Select Date"
                                 valueFormat="DD-MM-YYYY"
                                 {...form.getInputProps('dateOfCheck')}
-                                onChange={(value) => {
-                                    console.log("DateInput onChange value:", value);
-                                    const parsedDate = value ? new Date(value) : null;
-                                    console.log("DateInput onChange value (parsed):", parsedDate);
-                                    form.setFieldValue('dateOfCheck', parsedDate);
-                                }}
                                 rightSection={<IconCalendar size={16} />}
                             />
                         </Grid.Col>
@@ -490,7 +497,7 @@ export function RenaultStorageMaintenanceForm() {
                 </Card>
                 <Divider my="xl" label={<Text style={{ color: '#000000 !important' }}>Legend</Text>} labelPosition="center" />
                 <Group justify="center" gap="xl" mb="lg">
-                    <Text style={{ color: '#000000 !important' }}> 1: Repaired, Without Notes </Text>
+                    <Text style={{ color: '#000000 !important' }}> 1: Checked, Without Notes </Text>
                     <Text style={{ color: '#000000 !important' }}> 2: Repair Recommended </Text>
                     <Text style={{ color: '#000000 !important' }}> 3: Repair Immediately </Text>
                     <Text style={{ color: '#000000 !important' }}> 0: Not Applicable </Text>
@@ -615,7 +622,7 @@ export function RenaultStorageMaintenanceForm() {
                 </Card>
 
                 <Group justify="flex-end" mt="md">
-                    <Button type="submit" size="md"> Submit </Button>
+                    <Button type="submit"> Submit </Button>
                 </Group>
             </form>
         </Box>
