@@ -319,9 +319,7 @@ export function UnitArrivalInspectionForm() {
                 model: values.model,
                 serialNo: values.serialNo,
                 hourMeter: values.hourMeter,
-                dateOfCheck: (values.dateOfCheck instanceof Date && !isNaN(values.dateOfCheck))
-                            ? values.dateOfCheck.toISOString()
-                            : null,
+                dateOfCheck: values.dateOfCheck,
             },
             technician: values.technician,
             approver: values.approver,

@@ -187,32 +187,21 @@ export default function SDLGCommissioningForm() {
 
         console.log("Form submitted with values:", values);
 
-        const checkOfDocumentsPayload = Object.entries(values.checkOfDocuments).reduce((acc, [key, value]) => {
-            const index = key.replace('item', '');
-            acc[`checkOfDocumentsData${index}`] = value;
-            return acc;
-        }, {});
-
-        const checkCompleteMachinePayload = Object.entries(values.checkCompleteMachine).reduce((acc, [key, value]) => {
-            const index = key.replace('item', '');
-            acc[`checkCompleteMachinData${index}`] = value;
-            return acc;
-        }, {});
-
         const payload = {
             brand: 'SDLG',
-            machineModel: values.machineModel,
-            engineNumber: values.engineNumber,
-            vehicleNumber: values.vehicleNumber,
-            woNumber: values.woNumber,
-            customer: values.customer,
-            inspector: values.inspector,
-            approvalBy: values.approvalBy,
-            
-            inspectionDate: formatDate(values.inspectionDate),
-
-            ...checkOfDocumentsPayload,
-            ...checkCompleteMachinePayload,
+            unitInfo: {
+                woNumber: values.woNumber,
+                typeModel: values.machineModel,
+                VIN: values.vehicleNumber,
+                dateOfCheck: formatDate(values.inspectionDate),
+                customer: values.customer,
+                technician: values.inspector,
+                approvalBy: values.approvalBy,
+            },
+            checklistItems: {
+                checkOfDocuments: values.checkOfDocuments,
+                checkCompleteMachine: values.checkCompleteMachine,
+            }
         };
 
         console.log("Payload sent to backend:", payload);

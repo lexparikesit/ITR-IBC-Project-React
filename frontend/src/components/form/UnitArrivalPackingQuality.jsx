@@ -5,7 +5,6 @@ import {
     Box,
     Button,
     Card, 
-    Flex,
     Group,
     Grid,
     rem,
@@ -15,6 +14,7 @@ import {
     Title,
     useMantineTheme,
     Select,
+    Flex,
 } from '@mantine/core';
 import { DateInput } from '@mantine/dates';
 import { useForm } from '@mantine/form';
@@ -24,6 +24,7 @@ import { notifications } from '@mantine/notifications';
 
 export function ArrivingPackingQuality() {
     const theme = useMantineTheme();
+    const [unitModels, setUnitModels] = useState([]);
     const [technicians, setTechnicians] = useState([]);
     const [approvers, setApprovers] = useState([]);
     const [woNumbers, setWoNumbers] = useState([]);
@@ -33,6 +34,18 @@ export function ArrivingPackingQuality() {
             try {
                 const brandId = "SDLG"; // 'SDLG' for SDLG
                 const groupId = "AI"; // 'AI' for Arrival Inspection
+                
+                // model/ Type SDLG API
+                const modelResponse = await fetch(`http://127.0.0.1:5000/api/unit-types/${brandId}`);
+                if (!modelResponse.ok) throw new Error(`HTTP error! status: ${modelResponse.status}`);
+                const modelData = await modelResponse.json();
+                const formattedModels = modelData
+                    .filter(item => item.value !== null && item.value !== undefined && item.label !== null && item.label !== undefined)
+                    .map(item => ({
+                        value: item.value,
+                        label: item.label
+                    }));
+                setUnitModels(formattedModels);
 
                 // wo Number API
 				const woResponse = await fetch(`http://127.0.0.1:5000/api/work-orders?brand_id=${brandId}&group_id=${groupId}`);
@@ -76,6 +89,7 @@ export function ArrivingPackingQuality() {
         initialValues: {
             // unit info
             woNumber: null,
+            model: null,
             distributionName: '',
             containerNo: '',
             leadSealingNo: '',
@@ -106,6 +120,7 @@ export function ArrivingPackingQuality() {
         },
         validate: {
             woNumber: (value) => (value ? null : 'WO Number is Required!'),
+            model: (value) => (value ? null : 'Type/ Model is Required!'),
             distributionName: (value) => (value ? null : 'Distribution Name is Required!'),
             containerNo: (value) => (value ? null : 'Container Number is Required!'),
             leadSealingNo: (value) => (value ? null : 'Lead Sealing Number is Required!'),
@@ -204,11 +219,35 @@ export function ArrivingPackingQuality() {
         
         console.log("Form submitted with values:", values);
 
+        const checklistItems = technicalRequirements.map((req, index) => {
+        const snKey = `sn${index + 1}`;
+        return {
+                ItemName: req,
+                status: values[snKey],
+                remarks: null
+            };
+        });
+
         const payload = {
-            ...values,
             brand: 'SDLG',
-            unitLanded: values.unitLanded ? new Date(values.unitLanded).toISOString() : null,
-            unitStripping: values.unitStripping ? new Date(values.unitStripping).toISOString() : null,
+            unitInfo: {
+                woNumber: values.woNumber,
+                model: values.model,
+                distributionName: values.distributionName,
+                containerNo: values.containerNo,
+                leadSealingNo: values.leadSealingNo,
+                VIN: values.vin,
+                dateOfCheck: values.dateOfCheck ? new Date(values.dateOfCheck).toISOString() : null,
+                technician: values.inspectorSignature,
+                approvalBy: values.approverSignature,
+            },
+            importationInfo: {
+                unitLanded: values.unitLanded ? new Date(values.unitLanded).toISOString() : null,
+                clearanceCustom: values.clearanceCustom === 'Yes',
+                unitStripping: values.unitStripping ? new Date(values.unitStripping).toISOString() : null,
+            },
+            checklistItems: checklistItems,
+            remarks: values.remarks,
         };
 
         try {
@@ -255,14 +294,13 @@ export function ArrivingPackingQuality() {
             >
                 Unit Arrival Check
             </Title>
-            <Card shadow="sm" padding="lg" radius="md" withBorder>
-                <form onSubmit={form.onSubmit(handleSubmit)}>
-                    {/* Section: Top Info */}
-                    <Title order={3} mb="md" style={{ color: '#000000 !important' }}> Unit Information </Title>
-                    <Flex direction={{ base: 'column', md: 'row' }} justify="space-between" wrap="wrap" gap="md">
-                        <Box style={{ flex: 1, minWidth: '300px' }}>
+            
+            <form onSubmit={form.onSubmit(handleSubmit)}>
+                <Card shadow="sm" p="xl" withBorder mb="lg">
+                    <Title order={3} mb="md"> Unit Information </Title>
+                    <Grid gutter="xl">
+                        <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
                             <Select
-                                mt="md"
                                 label="WO Number"
                                 placeholder="Select WO Number"
                                 clearable
@@ -270,63 +308,55 @@ export function ArrivingPackingQuality() {
                                 data={woNumbers}
                                 {...form.getInputProps('woNumber')}
                             />
+                        </Grid.Col>
+                        <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
                             <TextInput
-                                mt="md"
                                 label='Distribution Name'
                                 placeholder='Input Distribution Name'
                                 {...form.getInputProps('distributionName')}
                             />
+                        </Grid.Col>
+                        <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
                             <TextInput
-                                mt="md"
                                 label='Container No.'
                                 placeholder='Input Container No.'
                                 {...form.getInputProps('containerNo')}
                             />
+                        </Grid.Col>
+                        <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
                             <TextInput
-                                mt="md"
                                 label='Lead Sealing No.'
                                 placeholder='Input Lead Sealing No.'
                                 {...form.getInputProps('leadSealingNo')}
                             />
+                        </Grid.Col>
+                        <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
+                            <Select
+                                label="Type/ Model"
+                                placeholder="Select Model"
+                                clearable
+                                searchable
+                                data={unitModels}
+                                {...form.getInputProps('model')}
+                            />
+                        </Grid.Col>
+                        <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
                             <TextInput
-                                mt="md"
                                 label='VIN'
                                 placeholder='Input VIN Number'
                                 {...form.getInputProps('vin')}
                             />
+                        </Grid.Col>
+                        <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
                             <DateInput
-                                mt="md"
                                 label="Date of Check"
                                 placeholder="Select Date"
                                 valueFormat="DD-MM-YYYY"
                                 {...form.getInputProps('dateOfCheck')}
                                 rightSection={<IconCalendar size={16} />}
                             />
-                            <Select
-                                mt="md"
-                                label="Technician"
-                                placeholder="Select Technician"
-                                clearable
-                                searchable
-                                data={technicians}
-                                {...form.getInputProps('inspectorSignature')}
-                            />
-                            <Select
-                                mt="md"
-                                label="Approval By"
-                                placeholder="Select Approver"
-                                clearable
-                                searchable
-                                data={approvers}
-                                {...form.getInputProps('approverSignature')}
-                            />
-                        </Box>
-                    </Flex>
-
-                    {/* New Section: Before Technical Requirements */}
-                    <Title order={4} mt="xl" mb="md"> Arrival Information </Title>
-                    <Flex gap="lg" wrap="wrap" direction={{ base: 'column', md: 'row' }}>
-                        <Box style={{ flex: 1, minWidth: '300px' }}>
+                        </Grid.Col>
+                        <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
                             <DateInput
                                 label="Unit Landed Date"
                                 placeholder="Select Unit Landed Date"
@@ -334,16 +364,16 @@ export function ArrivingPackingQuality() {
                                 {...form.getInputProps('unitLanded')}
                                 rightSection={<IconCalendar size={16} />}
                             />
-                        </Box>
-                        <Box style={{ flex: 1, minWidth: '300px' }}>
+                        </Grid.Col>
+                        <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
                             <Select
                                 label="Clearance & Custom"
                                 placeholder="Select status"
                                 data={['Yes', 'No']}
                                 {...form.getInputProps('clearanceCustom')}
                             />
-                        </Box>
-                        <Box style={{ flex: 1, minWidth: '300px' }}>
+                        </Grid.Col>
+                        <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
                             <DateInput
                                 label="Unit Stripping Date"
                                 placeholder="Select Unit Stripping Date"
@@ -351,10 +381,29 @@ export function ArrivingPackingQuality() {
                                 {...form.getInputProps('unitStripping')}
                                 rightSection={<IconCalendar size={16} />}
                             />
-                        </Box>
-                    </Flex>
-
-                    {/* Section: Check and Technical Requirements */}
+                        </Grid.Col>
+                        <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
+                            <Select
+                                label="Technician"
+                                placeholder="Select Technician"
+                                clearable
+                                searchable
+                                data={technicians}
+                                {...form.getInputProps('inspectorSignature')}
+                            />
+                        </Grid.Col>
+                        <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
+                            <Select
+                                label="Approval By"
+                                placeholder="Select Approver"
+                                clearable
+                                searchable
+                                data={approvers}
+                                {...form.getInputProps('approverSignature')}
+                            />
+                        </Grid.Col>
+                    </Grid>
+                    
                     <Title order={4} mt="xl" mb="md"> Check and Technical Requirements and Assembly Unit </Title>
                     <Box>
                         {technicalRequirements.map((req, index) => (
@@ -373,14 +422,12 @@ export function ArrivingPackingQuality() {
                                 <Group spacing="xs">
                                     <Flex align="flex-start" gap="xs">
                                         <Box style={{ width: rem(18), height: rem(18) }}>
-                                            {/* circle icon */}
                                             {form.values[`sn${index + 1}`] === true ? (
                                                 <IconCircleCheck style={{ width: rem(18), height: rem(18) }} color={theme.colors.teal[6]} />
                                             ) : (
                                                 <IconCircleDashed style={{ width: rem(18), height: rem(18) }} color={theme.colors.orange[6]} />
                                             )}
                                         </Box>
-                                        {/* description text */}
                                         <Text> {req} </Text>
                                     </Flex>
                                 </Group>
@@ -406,21 +453,19 @@ export function ArrivingPackingQuality() {
                         </Grid>
                         ))}
                     </Box>
-
-                    {/* Other Issues */}
-                    <Title order={4} mt="xl" mb="md"> Remarks </Title>
+                
+                    <Title order={3} mb="md" style={{ color: '#000000 !important' }}> Remarks </Title>
                     <Textarea
-                        mt="md"
+                        mb="xl"
                         placeholder="Describe any other issue or remark..."
-                        minRows={4}
+                        minRows={10}
                         {...form.getInputProps('remarks')}
                     />
-
-                    <Group justify="flex-end" mt="md">
+                    <Group justify="flex-end">
                         <Button type="submit">Submit</Button>
                     </Group>
-                </form>
-            </Card>
+                </Card>
+            </form>
         </Box>
     );
 };

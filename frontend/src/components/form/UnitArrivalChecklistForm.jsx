@@ -273,25 +273,34 @@ export function UnitArrivalChecklistForm() {
 			return;
 		}
 
-		const formattedValues = { ...values };
-		
-		if (typeof formattedValues.dateOfCheck === 'string' && formattedValues.dateOfCheck) {
-            const dateObj = new Date(formattedValues.dateOfCheck);
-				if (!isNaN(dateObj.getTime())) {
-					formattedValues.dateOfCheck = dateObj.toISOString();
-					console.log("DEBUG Frontend: dateOfCheck successfully converted and sent to backend:", formattedValues.dateOfCheck);
-				} else {
-					formattedValues.dateOfCheck = null;
-					console.log("DEBUG Frontend: dateOfCheck string is invalid, sending null.");
-				}
-        } else if (formattedValues.dateOfCheck instanceof Date && !isNaN(formattedValues.dateOfCheck.getTime())) {
-            formattedValues.dateOfCheck = formattedValues.dateOfCheck.toISOString();
-            console.log("DEBUG Frontend: dateOfCheck (Date object) sent to backend:", formattedValues.dateOfCheck);
-        }
-        else {
-            formattedValues.dateOfCheck = null;
-            console.log("DEBUG Frontend: dateOfCheck is null or invalid (not string/Date), sending null.");
-        }
+		const payload = {
+			brand: brand,
+			unitInfo: {
+				woNumber: values.woNumber,
+				UnitType: values.typeModel, 
+				VIN: values.vin,
+				EngineNo: values.noEngine,
+				chassisNumber: values.noChassis,
+				arrivalDate: values.dateOfCheck,
+				technician: values.technician,
+				approvalBy: values.approvalBy,
+			},
+			remarks: values.generalRemarks,
+			checklistItems: {},
+		};
+
+		Object.keys(CHECKLIST_DATA_RENAULT).forEach((sectionKey) => {
+			payload.checklistItems[sectionKey] = {};
+			CHECKLIST_DATA_RENAULT[sectionKey].forEach((item) => {
+				const statusFieldName = `${sectionKey}_${item.id}_status`;
+				const remarksFieldName = `${sectionKey}_${item.id}_remarks`;
+				
+				payload.checklistItems[sectionKey][`RT_${sectionKey}_${item.id}`] = { // Kunci baru
+					status: values[statusFieldName],
+					remarks: values[remarksFieldName] || "",
+				};
+			});
+		});
 
 		try {
 			const response = await fetch(`http://127.0.0.1:5000/api/arrival-check/${brand}/submit`, { 
@@ -300,8 +309,9 @@ export function UnitArrivalChecklistForm() {
 					"Content-Type": "application/json",
 					"Authorization": `Bearer ${token}`
 				},
-				body: JSON.stringify(formattedValues),
+				body: JSON.stringify(payload),
 			});
+
 			if (!response.ok) {
 				const errorData = await response.json();
 				throw new Error(errorData.message || "Failed to submit checklist");
@@ -314,6 +324,7 @@ export function UnitArrivalChecklistForm() {
 				color: "green",
 			})
 			form.reset();
+			
 		} catch (error) {
 			console.error("Error submitting form:", error);
 			notifications.show({

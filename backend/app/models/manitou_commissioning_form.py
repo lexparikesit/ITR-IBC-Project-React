@@ -28,7 +28,7 @@ class CommissioningFormModel_MA(db.Model):
     createdon = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
     # relational with others Table
-    items = db.relationship('CommissioningChecklistItemModel', backref='form', lazy=True)
+    items = db.relationship('CommissioningChecklistItemModel_MA', backref='form', lazy=True)
     
     def __repr__(self):
         return f"<CommissioningFormModel_MA {self.VIN}>"

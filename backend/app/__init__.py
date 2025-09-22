@@ -55,8 +55,9 @@ def create_app():
     db.init_app(app)
     mail.init_app(app)
 
-    from app.models.renault_checklist_model import RenaultChecklistModel 
-    from app.models.manitou_checklist_model import ManitouChecklistModel
+    from app.models.renault_arrival_form import ArrivalFormModel_RT
+    from app.models.manitou_arrival_form import ArrivalFormModel_MA
+    from app.models.sdlg_arrival_form import ArrivalFormModel_SDLG
     from app.models.mst_unit_type_model import MstUnitType
 
     from app.routes.auth_routes import auth_bp
@@ -91,5 +92,8 @@ def create_app():
 
     from app.routes.commissioning_form_routes import commissioning_bp
     app.register_blueprint(commissioning_bp)
+
+    from app.routes.province_routes import province_bp
+    app.register_blueprint(province_bp)
 
     return app

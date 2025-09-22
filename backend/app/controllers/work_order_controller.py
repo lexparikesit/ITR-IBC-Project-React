@@ -1,9 +1,9 @@
 from flask import jsonify, request
 from app import db
 from app.models.work_order_model import WorkOrderView
-from app.models.renault_checklist_model import RenaultChecklistModel
-from app.models.manitou_checklist_model import ManitouChecklistModel
-from app.models.sdlg_checklist_model import SDLGChecklistModels
+from app.models.renault_arrival_form import ArrivalFormModel_RT
+from app.models.manitou_arrival_form import ArrivalFormModel_MA
+from app.models.sdlg_arrival_form import ArrivalFormModel_SDLG
 
 def get_all_work_orders_data():
 
@@ -15,10 +15,10 @@ def get_all_work_orders_data():
         allowed_statuses = ["CREATED", "IN PROCESS"]
 
         # subquery for fetch all WO data from each Table
-        used_wo_subquery = db.session.query(ManitouChecklistModel.woNumber).union_all(
-            db.session.query(RenaultChecklistModel.woNumber)
+        used_wo_subquery = db.session.query(ArrivalFormModel_MA.woNumber).union_all(
+            db.session.query(ArrivalFormModel_RT.woNumber)
         ).union_all(
-            db.session.query(SDLGChecklistModels.woNumber)
+            db.session.query(ArrivalFormModel_SDLG.woNumber)
         ).subquery()
 
         query = db.session.query(WorkOrderView).filter(~WorkOrderView.CASEID.in_(used_wo_subquery))

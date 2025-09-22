@@ -257,14 +257,10 @@ export function RenaultCommissioningForm() {
                 setCustomers(formattedCustomers);
 
                 // province API
-                const provincesResponse = await fetch("https://wilayah.id/api/provinces.json");
+                const provincesResponse = await fetch("http://127.0.0.1:5000/api/provinces");
                 if (!provincesResponse.ok) throw new Error(`HTTP error! status: ${provincesResponse.status}`);
                 const provincesData = await provincesResponse.json();
-                const formattedProvinces = provincesData.data.map(p => ({
-                    value: p.code,
-                    label: p.name
-                }));
-                setProvinces(formattedProvinces);
+                setProvinces(provincesData);
 
                 // dummy Technicians API
 				const dummyTechnicians = [
@@ -337,6 +333,12 @@ export function RenaultCommissioningForm() {
                 items: values.checklistItems,
                 notes: values.checklistNotes,
             },
+            signatures: {
+                inspectorSignature: values,
+                inspectorSignatureDate: values,
+                supervisorSignature: values,
+                supervisorSignatureDate: values,
+            }
         };
 
         try {
