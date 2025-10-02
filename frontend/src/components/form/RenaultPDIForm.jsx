@@ -86,27 +86,21 @@ const initialChecklistValues = Object.keys(renaultPdiChecklistItemDefinition).re
 
 const initialRenaultPdiValues = {
     date: null,
-    repairOrderNo: null,
+    // repairOrderNo: null,
+    repairOrderNo: '',
     mileageHourMeter: '',
     chassisId: '',
     registrationNo: '',
     vinNo: '',
     customer: '',
-    city: '',
+    province: '',
     model: null,
     engine: '',
-    axle: '',
-
-    // property for technician
     technician: null,
     approvalBy: null,
-
-    // checklist items
     checklistItems: initialChecklistValues,
-
-    // battery inspection
     batteryStatus: [
-        { battery: 'Inner / Front Battery', testCode: '' },
+        { battery: 'Inner/ Front Battery', testCode: '' },
         { battery: 'Outer/ Rear Battery', testCode: '' },
     ],
 
@@ -116,10 +110,12 @@ const initialRenaultPdiValues = {
 
 export function RenaultPDIForm() {
     const [unitModels, setUnitModels] = useState([]);
-    const [customers, setCustomers] = useState('');
     const [WoNumbers, setWoNumbers] = useState([]);
     const [technicians, setTechnicians] = useState([]);
     const [approvers, setApprovers] = useState([]);
+    const [provinces, setProvinces] = useState([]);
+    const [engines, setEngines] = useState([]);
+    const [customers, setCustomers] = useState('');
 
     const buildChecklistValidation = () => {
         const checklistValidation = {};
@@ -145,14 +141,13 @@ export function RenaultPDIForm() {
             chassisId: (value) => (value ? null : "Chassis ID is Required!"),
             registrationNo: (value) => (value ? null : "Registration No is Required!"),
             customer: (value) => (value ? null : "Customer is Required!"),
-            city: (value) => (value ? null : "City is Required!"),
+            province: (value) => (value ? null : "City is Required!"),
             model: (value) => (value ? null : "Type/Model is Required!"),
             engine: (value) => (value ? null : "Engine is Required!"),
-            axle: (value) => (value ? null : "Axle is Required!"),
             date: (value) => (value ? null : "Date is Required!"),
             technician: (value) => (value ? null: "Technician is Required!"),
             approvalBy: (value) => (value ? null: "Approval By is Required!"),
-            ...buildChecklistValidation(),
+            // ...buildChecklistValidation(),
         },
     });
 
@@ -188,6 +183,12 @@ export function RenaultPDIForm() {
                 }));
                 setCustomers(formattedCustomers);
 
+                // province API
+                const provincesResponse = await fetch("http://127.0.0.1:5000/api/provinces");
+                if (!provincesResponse.ok) throw new Error(`HTTP error! status: ${provincesResponse.status}`);
+                const provincesData = await provincesResponse.json();
+                setProvinces(provincesData);
+
                  // dummy Technicians API
                 const dummyTechniciansData = [
                     { value: "tech1", label: "John Doe" },
@@ -203,6 +204,13 @@ export function RenaultPDIForm() {
                     { value: "app3", label: "John Green" }
                 ];
                 setApprovers(dummyApproverData);
+
+                // engine Types
+                const engineData = [
+                    { value: "engine1", label: "DXI 11" },
+                    { value: "engine2", label: "DXI 13" },
+                ];
+                setEngines(engineData);
                 
             } catch (error) {
                 console.error("Failed to fetch models:", error);
@@ -266,11 +274,11 @@ export function RenaultPDIForm() {
                 repairOrderNo: values.repairOrderNo,
                 mileageHourMeter: values.mileageHourMeter,
                 chassisId: values.chassisId,
-                registrationNO: values.registrationNo,
+                registrationNo: values.registrationNo,
                 vinNo: values.vinNo,
                 date: values.date,
                 customer: values.customer,
-                city: values.city,
+                province: values.province,
                 model: values.model,
                 engine: values.engine,
                 axle: values.axle,
@@ -287,14 +295,12 @@ export function RenaultPDIForm() {
             vehicle_innspection: values.vehicleDamageNotes,
         };
 
-        formData.append('json_payload', JSON.stringify(payload));
-        console.log("Payload to backend: ", payload)
+        formData.append('data', JSON.stringify(payload));
 
         try {
             const response = await fetch(`http://localhost:5000/api/pre-delivery-inspection/renault/submit`, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
                 },
                 body: formData,
@@ -445,12 +451,17 @@ export function RenaultPDIForm() {
                     <Title order={3} mb="md" style={{ color: '#000000 !important' }}> Unit Information </Title>
                     <Grid gutter="xl">
                         <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
-                            <Select
+                            {/* <Select
                                 label="WO Number"
                                 placeholder="Select WO Number"
                                 searchable
                                 clearable
                                 data={WoNumbers}
+                                {...form.getInputProps('repairOrderNo')}
+                            /> */}
+                            <TextInput
+                                label="WO Number"
+                                placeholder="Input WO Number"
                                 {...form.getInputProps('repairOrderNo')}
                             />
                         </Grid.Col>
@@ -465,7 +476,6 @@ export function RenaultPDIForm() {
                             <DateInput
                                 label="Date of Check"
                                 placeholder="Select Date"
-                                valueFormat="DD-MM-YYYY"
                                 {...form.getInputProps('date')}
                                 rightSection={<IconCalendar size={16} />}
                             />
@@ -505,11 +515,13 @@ export function RenaultPDIForm() {
                             />
                         </Grid.Col>
                         <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
-                            <TextInput
-                                label="City"
-                                placeholder="Input City"
-                                {...form.getInputProps('city')}
-                                styles={{ input: { color: '#000000 !important' } }}
+                            <Select
+                                label="Location"
+                                placeholder="Select Location (by Provinces)"
+                                searchable
+                                clearable
+                                data={provinces}
+                                {...form.getInputProps('province')}
                             />
                         </Grid.Col>
                         <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
@@ -523,17 +535,13 @@ export function RenaultPDIForm() {
                             />
                         </Grid.Col>
                         <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
-                            <TextInput
+                            <Select
                                 label="Engine"
-                                placeholder="Input Engine Number"
+                                placeholder="Select Engine Type"
+                                data={engines}
+                                searchable
+                                clearable
                                 {...form.getInputProps('engine')}
-                            />
-                        </Grid.Col>
-                        <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
-                            <TextInput
-                                label="Axle"
-                                placeholder="Input Axle Number"
-                                {...form.getInputProps('axle')}
                             />
                         </Grid.Col>
                         <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>

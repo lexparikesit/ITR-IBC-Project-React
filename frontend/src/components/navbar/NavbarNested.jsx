@@ -72,13 +72,13 @@ const mockdata = [
     {
         label: 'Delivery Unit',
         links: [
-            { label: 'Upload KHO Document', icon: IconChecks, link: '/dashboard/ibc' }
+            { label: 'Upload KHO Document', icon: IconChecks, link: '/dashboard/kho-doc' }
         ]
     },
     {
         label: 'Log Activity',
         links: [
-            { label: 'Arrival Check Log', icon: IconFolder, link: '/dashboard/logs/arrival-check' },
+            { label: 'Arrival Check Log', icon: IconFolder, link: '/dashboard/arrival-check-log/' },
             { label: 'Maintenance Log', icon: IconFolder, link: '/dashboard/logs/maintenance' },
             { label: 'Pre-Delivery Log', icon: IconFolder, link: '/dashboard/logs/pre-delivery' },
             { label: 'Delivery Unit Log', icon: IconFolder, link: '/dashboard/logs/delivery-unit' },

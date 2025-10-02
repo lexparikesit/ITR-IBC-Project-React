@@ -19,10 +19,9 @@ class PDIFormModel_RT(db.Model):
     mileage = db.Column(db.Float, nullable=False)
     chassisID = db.Column(db.String(50), nullable=False)
     registrationNo = db.Column(db.String(50), nullable=False)
-    city = db.Column(db.String(255), nullable=False)
+    province = db.Column(db.String(255), nullable=False)
     model = db.Column(db.String(50), nullable=False)
     engine = db.Column(db.String(50), nullable=False)
-    axle = db.Column(db.String(50), nullable=False)
     technician = db.Column(db.String(100), nullable=False)
     approvalBy = db.Column(db.String(100), nullable=False)
     

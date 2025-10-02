@@ -7,4 +7,4 @@ pdi_bp = Blueprint('pdi_bp', __name__, url_prefix='/api/pre-delivery-inspection'
 def submit_pdi(brand):
     """Endpoint for receiving and processing PDI data."""
     
-    return submit_pdi_form()
+    return submit_pdi_form(brand)

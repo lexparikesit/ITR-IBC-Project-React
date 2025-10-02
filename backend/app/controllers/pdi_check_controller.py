@@ -19,6 +19,51 @@ from app.controllers.auth_controller import jwt_required
 # initiate GCS Client
 # storage_client = storage.Client()
 
+def parse_date(date_string):
+    """handle date parsing"""
+    
+    if not date_string or not isinstance(date_string, str):
+        return None
+    formats_to_try = [
+        '%Y-%m-%d',
+        '%Y-%m-%dT%H:%M:%S.%fZ',
+    ]
+
+    for fmt in formats_to_try:
+        try:
+            return datetime.strptime(date_string, fmt)
+        except (ValueError, TypeError):
+            continue
+    return None
+
+def converted_manitou_status_to_int(status_str):
+    """handles conversion to tinyint - MA"""
+    
+    if status_str and isinstance(status_str, str):
+        status_lower = status_str.lower()  
+        if status_lower == "missing":
+            return 0
+        elif status_lower == "good":
+            return 1
+        elif status_lower == "bad":
+            return 2
+    return None
+
+def converted_renault_status_to_int(status):
+    """handles conversion to tinyint - RT"""
+
+    if status and isinstance(status, str):
+        status_lower = status.lower()
+        if status_lower == "checked":
+            return 1
+        elif status_lower == "recommended_repair":
+            return 2
+        elif status_lower == "immediately_repair":
+            return 3
+        elif status_lower == "not_applicable":
+            return 0
+    return None
+
 # mapping for brand Models
 BRAND_MODELS = {
     'manitou': PDIFormModel_MA,
@@ -57,49 +102,7 @@ def submit_pdi_form(brand):
     try:
         pdi_entry.createdBy = g.user_name
         pdi_entry.createdOn = datetime.utcnow()
-        
-        def converted_manitou_status_to_int(status_str):
-            """handles conversion to tinyint - MA"""
-            
-            if status_str and isinstance(status_str, str):
-                status_lower = status_str.lower()  
-                if status_lower == "missing":
-                    return 0
-                elif status_lower == "good":
-                    return 1
-                elif status_lower == "bad":
-                    return 2
-            return None
-
-        def converted_renault_status_to_int(status):
-            """handles conversion to tinyint - RT"""
-
-            if status and isinstance(status, str):
-                status_lower = status.lower()
-                if status_lower == "checked":
-                    return 1
-                elif status_lower == "recommended_repair":
-                    return 2
-                elif status_lower == "immediately_repair":
-                    return 3
-                elif status_lower == "not_applicable":
-                    return 0
-            return None
-
-        def parse_date(date_string):
-            """handle date parsing"""
-            
-            formats_to_try = [
-                '%Y-%m-%dT%H:%M:%S.%fZ',  # ISO format with milliseconds
-                '%Y-%m-%d'              # Simple date format
-            ]
-            for fmt in formats_to_try:
-                try:
-                    return datetime.strptime(date_string, fmt)
-                except (ValueError, TypeError):
-                    continue
-            return None
-        
+    
         # for Manitou
         if brand.lower() == 'manitou':
             unit_info = data.get('unitInfo', {})
@@ -156,30 +159,31 @@ def submit_pdi_form(brand):
             unit_info = data.get('unitInfo', {})
             checklist_item_payloads = data.get('checklistItems', {})
             battery_status_data = data.get('batteryStatus', {})
+            vehicle_damage_notes = data.get('vehicle_inspection', {})
 
             # mapping unit information from frontend to form model
             pdi_entry.brand = brand
-            pdi_entry.woNumber = unit_info('repairOrderNo')
-            pdi_entry.VIN = unit_info('vinNo')
+            pdi_entry.woNumber = unit_info.get('repairOrderNo')
+            pdi_entry.VIN = unit_info.get('vinNo')
             pdi_entry.Date = parse_date(unit_info.get('date'))
-            pdi_entry.customer = unit_info('customer')
-            pdi_entry.mileage = unit_info('mileageHourMeter')
-            pdi_entry.chassisID = unit_info('chassisId')
-            pdi_entry.registrationNo = unit_info('registrationNo')
-            pdi_entry.city = unit_info('city'),
-            pdi_entry.model = unit_info('model')
-            pdi_entry.engine = unit_info('engine')
-            pdi_entry.axle = unit_info('axle')
-            pdi_entry.technician = unit_info('technician')
-            pdi_entry.approvalBy = unit_info('approvalBy')
+            pdi_entry.customer = unit_info.get('customer')
+            pdi_entry.mileage = unit_info.get('mileageHourMeter')
+            pdi_entry.chassisID = unit_info.get('chassisId')
+            pdi_entry.registrationNo = unit_info.get('registrationNo')
+            pdi_entry.province = unit_info.get('province')
+            pdi_entry.model = unit_info.get('model')
+            pdi_entry.engine = unit_info.get('engine')
+            pdi_entry.technician = unit_info.get('technician')
+            pdi_entry.approvalBy = unit_info.get('approvalBy')
+            pdi_entry.vehicleDamageNotes = vehicle_damage_notes
 
             # session to add the payload
             db.session.add(pdi_entry)
             db.session.flush()
 
-            for section_key, items in checklist_item_payloads():
+            for section_key, items in checklist_item_payloads.items():
                 if isinstance(items, dict):
-                    for item_key, item_details, in items.items():
+                    for item_key, item_details in items.items():
                         if isinstance(item_details, dict):
                             image_url = None # will None as long as GCS/ CDN is commenting
 
@@ -187,15 +191,14 @@ def submit_pdi_form(brand):
                                 pdiID = pdi_entry.pdiID,
                                 section = section_key,
                                 itemName = item_key,
-                                status = converted_renault_status_to_int(item_details.get('status')),
+                                status = converted_renault_status_to_int(item_details.get('value')),
                                 image_url = image_url,
                                 caption = item_details.get('notes'),
-                                value = None # No specific value for regular items
                             )
-                            db.session(new_item)
+                            db.session.add(new_item)
             
-            for key, value, in battery_status_data.items():
-                new_item = PDIChecklistItemModel_MA(
+            for key, value in battery_status_data.items():
+                new_item = PDIChecklistItemModel_RT(
                     pdiID = pdi_entry.pdiID,
                     section = 'battery_status',
                     itemName = key,
@@ -204,7 +207,7 @@ def submit_pdi_form(brand):
                     image_url = None, # No specific value for regular items
                     caption = None # No specific value for regular items
                 )
-                db.session(new_item)
+                db.session.add(new_item)
             
             # Commit all changes to the database at once
             db.session.commit()
@@ -231,7 +234,7 @@ def submit_pdi_form(brand):
             pdi_entry.approvalBy = unit_info.get('approvalBy')
             pdi_entry.technicianSignature = signatures.get('inspector')
             pdi_entry.technicianSignatureDate = parse_date(signatures.get('inspectorDate'))
-            pdi_entry.approverSignature = signatures.get('supervisorSignature')
+            pdi_entry.approverSignature = signatures.get('supervisor')
             pdi_entry.approverSignatureDate = parse_date(signatures.get('supervisorDate'))
 
             db.session.add(pdi_entry)
@@ -246,12 +249,16 @@ def submit_pdi_form(brand):
                 db.session.add(new_item)
             
             for defect_entry in defects:
-                new_defect = PDI_sdlg_defect_remarks(
-                    pdiID = pdi_entry.pdiID,
-                    description = defect_entry.get('description'),
-                    remarks = defect_entry.get('remarks')
-                )
-                db.session.add(new_defect)
+                description = defect_entry.get('description')
+                remarks = defect_entry.get('remarks')
+
+                if description or remarks:
+                    new_defect = PDI_sdlg_defect_remarks(
+                        pdiID = pdi_entry.pdiID,
+                        description = defect_entry.get('description'),
+                        remarks = defect_entry.get('remarks')
+                    )
+                    db.session.add(new_defect)
             
             # Commit all changes to the database at once
             db.session.commit()

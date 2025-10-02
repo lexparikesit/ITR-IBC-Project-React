@@ -50,6 +50,7 @@ def create_app():
 
     # Cors  for ReactJS/ NextJS frontend
     CORS(app, supports_credentials=True, origins=["http://localhost:3000"])
+    # CORS(app, supports_credentials=True, origins=["http://localhost:3000"], allow_headers=["Authorization", "Content-Type"])
 
     # init extensions
     db.init_app(app)
@@ -95,5 +96,8 @@ def create_app():
 
     from app.routes.province_routes import province_bp
     app.register_blueprint(province_bp)
+
+    from app.routes.arrival_check_log_routes import arrival_check_log_bp
+    app.register_blueprint(arrival_check_log_bp)
 
     return app

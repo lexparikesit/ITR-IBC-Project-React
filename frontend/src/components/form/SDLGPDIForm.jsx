@@ -5,8 +5,6 @@ import {
     TextInput,
     Textarea,
     Button,
-    Paper,
-    Text,
     Grid,
     Card,
     Title,
@@ -41,7 +39,8 @@ export function SdlgPDIForm() {
 
     const form = useForm({
         initialValues: {
-            woNumber: null,
+            //woNumber: null,
+            woNumber: '',
             machineModel: null,
             vehicleNumber: '',
             preInspectionPersonnel: null,
@@ -210,6 +209,7 @@ export function SdlgPDIForm() {
                 color: "green",
             });
             form.reset();
+
         } catch (error) {
             console.error('Error submitting form:', error);
             notifications.show({
@@ -236,12 +236,17 @@ export function SdlgPDIForm() {
                     <Title order={3} mb="md" style={{ color: '#000000 !important' }}> Unit Information </Title>
                     <Grid gutter="xl">
                         <Grid.Col span={{ base: 12, md: 6, md: 3 }}>
-                            <Select
+                            {/* <Select
                                 label="WO Number"
                                 placeholder="Select WO Number"
                                 data={WoNumbers}
                                 searchable
                                 clearable
+                                {...form.getInputProps('woNumber')}
+                            /> */}
+                            <TextInput
+                                label="WO Number"
+                                placeholder="Input WO Number"
                                 {...form.getInputProps('woNumber')}
                             />
                         </Grid.Col>
@@ -266,7 +271,6 @@ export function SdlgPDIForm() {
                             <DateInput
                                 label="Date of Check"
                                 placeholder="Select Date"
-                                valueFormat="DD-MM-YYYY"
                                 {...form.getInputProps('inspectionDate')}
                                 rightSection={<IconCalendar size={16} />}
                             />

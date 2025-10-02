@@ -17,7 +17,7 @@ class ArrivalFormModel_RT(db.Model):
     noEngine = db.Column(db.String(50), nullable=False)
     noChassis = db.Column(db.String(50), nullable=False)
     VIN = db.Column(db.String(50), nullable=False, unique=True)
-    dateOfCheck = db.Column(db.Date, nullable=False)
+    dateOfCheck = db.Column(db.DateTime, nullable=False)
     technician = db.Column(db.String(200), nullable=False)
     approvalBy = db.Column(db.String(200), nullable=False)
 

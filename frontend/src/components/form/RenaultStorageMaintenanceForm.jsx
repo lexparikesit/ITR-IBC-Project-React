@@ -108,7 +108,8 @@ const initialRenaultValues = {
     transmissionTypeNo: '',
     hourMeter: '',
     mileage: '',
-    repairOrderNo: null,
+    // repairOrderNo: null,
+    repairOrderNo: '',
     dateOfCheck: null,
     technician: null,
     approvalBy: null,
@@ -410,13 +411,18 @@ export function RenaultStorageMaintenanceForm() {
                     <Title order={3} mb="md" style={{ color: '#000000 !important' }}> Unit Information </Title>
                     <Grid gutter="xl">
                         <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
-                            <Select
+                            {/* <Select
                                 label="WO Number"
                                 placeholder="Select WO Number"
                                 data={woNumbers}
                                 searchable
                                 clearable
                                 {...form.getInputProps('repairOrderNo')}
+                            /> */}
+                            <TextInput
+                                label="WO Number"
+                                placeholder="Input WO Number"
+                                {...form.getInputProps("repairOrderNo")}
                             />
                         </Grid.Col>
                         <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>

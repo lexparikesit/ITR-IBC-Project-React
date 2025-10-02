@@ -117,33 +117,18 @@ export function UnitArrivalInspectionForm() {
     const generateChecklistValidation = () => {
         let validationRules = {};
         Object.keys(manitouChecklistItemsDefinition).forEach(sectionKey => {
-            if (sectionKey === 'otherItems') {
-                manitouChecklistItemsDefinition[sectionKey].forEach(item => {
-                    const key = item.itemKey;
-                    validationRules[key] = (value) => {
-                        if ((value.status === 'Bad' || value.status === 'Missing') && !value.image) {
-                            return 'Image is Required for "Bad" or "Missing"!';
-                        }
-                        if (!value.status) {
-                            return 'Item is Required!';
-                        }
-                        return null;
-                    };
-                });
-            } else {
-                manitouChecklistItemsDefinition[sectionKey].forEach(item => {
-                    const key = `${sectionKey}.${item.itemKey}`;
-                    validationRules[key] = (value) => {
-                        if ((value.status === 'Bad' || value.status === 'Missing') && !value.image) {
-                            return 'Image is Required for Bad/ Missing!';
-                        }
-                        if (!value.status) {
-                            return 'This Field is Required!';
-                        }
-                        return null;
-                    };
-                });
-            }
+            manitouChecklistItemsDefinition[sectionKey].forEach(item => {
+                const key = `${sectionKey}.${item.itemKey}`;
+                validationRules[key] = (value) => {
+                    if ((value.status === 'Bad' || value.status === 'Missing') && !value.image) {
+                        return 'Image is Required for "Bad" or "Missing"!';
+                    }
+                    if (!value.status) {
+                        return 'This Field is Required!';
+                    }
+                    return null;
+                };
+            });
         });
         return validationRules;
     };
@@ -152,7 +137,8 @@ export function UnitArrivalInspectionForm() {
         initialValues: (() => {
             const initialManitouValues = {
                 model: null,
-                woNumber: null,
+                // woNumber: null,
+                woNumber: "",
                 serialNo: "",
                 hourMeter: "",
                 dateOfCheck: null,
@@ -162,16 +148,10 @@ export function UnitArrivalInspectionForm() {
             };
 
             Object.keys(manitouChecklistItemsDefinition).forEach(sectionKey => {
-                if (sectionKey === 'otherItems') {
-                    manitouChecklistItemsDefinition[sectionKey].forEach(item => {
-                        initialManitouValues[item.itemKey] = { status: "", image: null, caption: "" };
-                    });
-                } else {
-                    initialManitouValues[sectionKey] = {};
-                    manitouChecklistItemsDefinition[sectionKey].forEach(item => {
-                        initialManitouValues[sectionKey][item.itemKey] = { status: "", image: null, caption: "" };
-                    });
-                }
+                initialManitouValues[sectionKey] = {};
+                manitouChecklistItemsDefinition[sectionKey].forEach(item => {
+                    initialManitouValues[sectionKey][item.itemKey] = { status: "", image: null, caption: "" };
+                });
             });
             return initialManitouValues;
         })(),
@@ -276,6 +256,7 @@ export function UnitArrivalInspectionForm() {
             }
             const data = await response.json();
             return data.exists;
+
         } catch (error) {
             console.error("Network Error or Failed to Check VIN:", error);
             notifications.show({
@@ -312,6 +293,8 @@ export function UnitArrivalInspectionForm() {
             }
         }
         
+        console.log('Form Submitted (Frontend Data)', values);
+
         const payload = {
             brand: 'manitou',
             unitInfo: {
@@ -320,9 +303,9 @@ export function UnitArrivalInspectionForm() {
                 serialNo: values.serialNo,
                 hourMeter: values.hourMeter,
                 dateOfCheck: values.dateOfCheck,
+                technician: values.technician,
+                approver: values.approver,
             },
-            technician: values.technician,
-            approver: values.approver,
             generalRemarks: values.generalRemarks,
             checklistItems: {},
         };
@@ -333,18 +316,14 @@ export function UnitArrivalInspectionForm() {
             const items = manitouChecklistItemsDefinition[sectionKey];
             
             items.forEach(item => {
-                const formKey = sectionKey === 'otherItems' ? item.itemKey : `${sectionKey}.${item.itemKey}`;
-                const itemData = form.values[formKey] || (form.values[sectionKey] ? form.values[sectionKey][item.itemKey] : null);
+                const itemData = values[sectionKey]?.[item.itemKey];
                 
                 if (itemData && itemData.status) {
-                    if (sectionKey === 'otherItems') {
-                        payload.checklistItems[item.itemKey] = { status: itemData.status, caption: itemData.caption || "" };
-                    } else {
-                        if (!payload.checklistItems[sectionKey]) {
-                            payload.checklistItems[sectionKey] = {};
-                        }
-                        payload.checklistItems[sectionKey][item.itemKey] = { status: itemData.status, caption: itemData.caption || "" };
+                    if (!payload.checklistItems[sectionKey]) {
+                        payload.checklistItems[sectionKey] = {};
                     }
+                    
+                    payload.checklistItems[sectionKey][item.itemKey] = { status: itemData.status, caption: itemData.caption || "" };
                     
                     if (itemData.image) {
                         const imageKey = `image-${sectionKey}-${item.itemKey}`;
@@ -379,6 +358,7 @@ export function UnitArrivalInspectionForm() {
                 color: "green",
             });
             form.reset();
+
         } catch (error) {
             console.error('Error submitting form:', error);
             notifications.show({
@@ -399,7 +379,7 @@ export function UnitArrivalInspectionForm() {
                 <Stack gap="xs">
                     <Text size="sm" style={{ color: '#000000 !important', fontWeight: 500 }}>{label}</Text>
                     <Text size="xs" style={{ color: 'var(--mantine-color-gray-6)' }}>Select one option</Text>
-                    
+
                     <Radio.Group
                         {...form.getInputProps(formProps)}
                         value={itemData ? itemData.status : ""}
@@ -420,7 +400,7 @@ export function UnitArrivalInspectionForm() {
                             <Radio value="Missing" label={<Text style={{ color: '#000000 !important' }}>Missing</Text>} />
                         </Group>
                     </Radio.Group>
-
+                    
                     {showConditionalInputs && (
                         <>
                             <Dropzone
@@ -477,16 +457,16 @@ export function UnitArrivalInspectionForm() {
             </Grid.Col>
         );
     };
-
+    
     const renderChecklistSection = (sectionTitle, sectionKey, items) => {
         return (
             <Card shadow="sm" p="xl" withBorder mb="lg">
                 <Title order={3} mb="md" style={{ color: '#000000 !important' }}>{sectionTitle}</Title>
                 <Grid gutter="xl">
-                    {items.map((item) => (
+                    {items.map((item) => ( 
                         renderChecklistItem(
                             `${item.id}. ${item.label}`,
-                            sectionKey === 'otherItems' ? item.itemKey : `${sectionKey}.${item.itemKey}`,
+                            `${sectionKey}.${item.itemKey}`,
                             sectionKey,
                             item.itemKey,
                             `${sectionKey}-${item.itemKey}`
@@ -513,14 +493,19 @@ export function UnitArrivalInspectionForm() {
                     <Title order={3} mb="md" style={{ color: '#000000 !important' }}> Unit Information </Title>
                     <Grid gutter="xl">
                         <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
-                            <Select
+                            {/* <Select
                                 label="WO Number"
                                 placeholder="Select WO Number"
                                 data={woNumbers}
                                 searchable
                                 clearable
                                 {...form.getInputProps('woNumber')}
-                            />
+                            /> */}
+                            <TextInput
+								label="WO Number"
+								placeholder="Input WO Number"
+								{...form.getInputProps("woNumber")}
+							/>
                         </Grid.Col>
                         <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
                             <Select
@@ -552,7 +537,6 @@ export function UnitArrivalInspectionForm() {
                             <DateInput
                                 label="Date of Check"
                                 placeholder="Select Date"
-                                valueFormat="DD-MM-YYYY"
                                 {...form.getInputProps('dateOfCheck')}
                                 rightSection={<IconCalendar size={16} />}
                             />
@@ -588,20 +572,20 @@ export function UnitArrivalInspectionForm() {
                 </Group>
                 <Divider my="xl" />
 
-                {Object.keys(manitouChecklistItemsDefinition).filter(key => key !== 'otherItems').map(sectionKey => (
+                {Object.keys(manitouChecklistItemsDefinition).map(sectionKey => (
                     <div key={sectionKey}>
                         {renderChecklistSection(
                             {
                                 engine: "01. Engine",
                                 transmission: "02. Transmission",
-                                axleTransferBox: "03. Axles / Transfer Box",
-                                hydraulicHydrostaticCircuits: "04. Hydraulic / Hydrostatic Circuits",
+                                axleTransferBox: "03. Axles/ Transfer Box",
+                                hydraulicHydrostaticCircuits: "04. Hydraulic/ Hydrostatic Circuits",
                                 brakingCircuits: "05. Braking Circuits",
                                 lubrication: "06. Lubrication",
-                                boomMastManiscopicManicess: "07. Boom / Mast Maniscopic / Manices",
+                                boomMastManiscopicManicess: "07. Boom/ Mast Maniscopic/ Manices",
                                 mastUnit: "08. Mast Unit",
                                 accessories: "09. Accessories",
-                                cabProtectiveDeviceElectricCircuit: "10. Cab / Protective Device / Electric Circuit",
+                                cabProtectiveDeviceElectricCircuit: "10. Cab/ Protective Device/ Electric Circuit",
                                 wheels: "11. Wheels",
                                 otherItems: "12. Other Items",
                             }[sectionKey] || sectionKey,

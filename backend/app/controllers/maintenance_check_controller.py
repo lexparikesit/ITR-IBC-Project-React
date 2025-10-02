@@ -27,6 +27,61 @@ BRAND_MODELS = {
     'sdlg': StorageMaintenanceFormModel_SDLG,
 }
 
+def parse_date(date_string):
+    """handle date parsing"""
+    
+    if not date_string or not isinstance(date_string, str):
+        return None
+    formats_to_try = [
+        '%Y-%m-%d',
+        '%Y-%m-%dT%H:%M:%S.%fZ',
+    ]
+
+    for fmt in formats_to_try:
+        try:
+            return datetime.strptime(date_string, fmt)
+        except (ValueError, TypeError):
+            continue
+    return None
+
+def converted_manitou_status_to_int(status_str):
+    """handles conversion to tinyint - MA"""
+
+    if status_str and isinstance(status_str, str):
+        status_lower = status_str.lower()
+        if status_lower == "missing":
+            return 0
+        elif status_lower == "good":
+            return 1
+        elif status_lower == "bad":
+            return 2
+    return None
+
+def converted_renault_status_to_int(status):
+    """handles conversion to tinyint - RT"""
+
+    if status and isinstance(status, str):
+        status_lower = status.lower()
+        if status_lower == "checked":
+            return 1
+        elif status_lower == "recommended_repair":
+            return 2
+        elif status_lower == "immediately_repair":
+            return 3
+        elif status_lower == "not_applicable":
+            return 0
+    return None
+
+def convert_fault_code_status_to_int(status_str):
+    """Converts fault code status string to an integer value."""
+    
+    status_str = status_str.lower() if status_str else 'inactive'
+    
+    if status_str == 'active':
+        return 1
+    else:
+        return 0
+
 @jwt_required
 def submit_maintenance_checklist():
     """Handles form submissions for Commissioning for various brands."""
@@ -58,49 +113,9 @@ def submit_maintenance_checklist():
     storage_maintenance_entry = ModelClass()
 
     try:
-        storage_maintenance_entry.createdby = g.user_name
-        storage_maintenance_entry.createdon = datetime.utcnow()
-
-        def converted_manitou_status_to_int(status_str):
-            """handles conversion to tinyint - MA"""
-
-            if status_str and isinstance(status_str, str):
-                status_lower = status_str.lower()
-                if status_lower == "missing":
-                    return 0
-                elif status_lower == "good":
-                    return 1
-                elif status_lower == "bad":
-                    return 2
-            return None
-
-        def converted_renault_status_to_int(status):
-            """handles conversion to tinyint - RT"""
-
-            if status and isinstance(status, str):
-                status_lower = status.lower()
-                if status_lower == "checked":
-                    return 1
-                elif status_lower == "recommended_repair":
-                    return 2
-                elif status_lower == "immediately_repair":
-                    return 3
-                elif status_lower == "not_applicable":
-                    return 0
-            return None
+        storage_maintenance_entry.createdBy = g.user_name
+        storage_maintenance_entry.createdOn = datetime.utcnow()
         
-        def parse_date(date_string):
-            formats_to_try = [
-                '%Y-%m-%dT%H:%M:%S.%fZ',  # ISO format with milliseconds
-                '%Y-%m-%d'              # Simple date format
-            ]
-            for fmt in formats_to_try:
-                try:
-                    return datetime.strptime(date_string, fmt)
-                except (ValueError, TypeError):
-                    continue
-            return None
-
         # for Manitou
         if brand.lower() == 'manitou':
             unit_info = data.get('unitInfo', {})
@@ -157,12 +172,13 @@ def submit_maintenance_checklist():
             # mapping unit information from frontend to form model
             storage_maintenance_entry.brand = brand
             storage_maintenance_entry.woNumber = unit_info.get('repairOrderNo')
+            storage_maintenance_entry.model = unit_info.get('unitModel')
             storage_maintenance_entry.VIN = unit_info.get('vinNo')
             storage_maintenance_entry.engineType = unit_info.get('engineTypeNo')
             storage_maintenance_entry.transmissionType = unit_info.get('transmissionTypeNo')
             storage_maintenance_entry.hourMeter = unit_info.get('hourMeter')
             storage_maintenance_entry.mileage = unit_info.get('mileage')
-            storage_maintenance_entry.dateOfCheck = parse_date(unit_info.get())
+            storage_maintenance_entry.dateOfCheck = parse_date(unit_info.get('dateOfCheck'))
             storage_maintenance_entry.technician = unit_info.get('technician')
             storage_maintenance_entry.approvalBy = unit_info.get('approvalBy')
             storage_maintenance_entry.generalRemarks = remarks
@@ -187,24 +203,30 @@ def submit_maintenance_checklist():
                 db.session.add(new_item)
             
             # items iteration
-            for section_key, items in checklist_item_payloads.items():
-                for item_key, item_details in items.items():
-                    image_url = None # will None as long as GCS/ CDN is commenting
-                    
-                    save_items(
-                        section = section_key,
-                        item_name = item_key,
-                        status = converted_renault_status_to_int(item_details.get('status')),
-                        caption = item_details.get('notes'),
-                        image_url = image_url
-                    )
+            if isinstance(checklist_item_payloads, dict):
+                for section_key, items in checklist_item_payloads.items():
+                    if isinstance(items, dict):
+                        for item_key, item_details in items.items():
+                            if isinstance(item_details, dict):
+                                image_url = None
+                                save_items(
+                                    section = section_key,
+                                    item_name = item_key,
+                                    status = converted_renault_status_to_int(item_details.get('status')),
+                                    caption = item_details.get('notes'),
+                                    image_url = image_url
+                                )
+                            else:
+                                print(f"DEBUG: Skipping invalid item_details: {item_details}")
+                    else:
+                        print(f"DEBUG: Skipping invalid items object: {items}")
 
             # battery data
-            if battery_data:
+            if isinstance(battery_data, dict):
                 save_items(
                     section = 'battery_inspection',
                     item_name = 'front_battery_level',
-                    value = battery_data.get('frontBatteryLevel'),    
+                    value = battery_data.get('frontBatteryLevel'),
                 )
                 save_items(
                     section='battery_inspection',
@@ -225,12 +247,15 @@ def submit_maintenance_checklist():
             # fault codes information
             if fault_codes and isinstance(fault_codes, list):
                 for i, code_item in enumerate(fault_codes):
-                    save_items(
-                        section='fault_codes',
-                        item_name=f'fault_code_{i+1}',
-                        code=code_item.get('code'),
-                        caption=code_item.get('status')
-                    )
+                    if isinstance(code_item, dict):
+                        fault_code_status_int = convert_fault_code_status_to_int(code_item.get('status'))
+                        save_items(
+                            section='fault_codes',
+                            item_name=f'fault_code_{i+1}',
+                            status=fault_code_status_int,
+                            code=code_item.get('faultCode'),
+                            caption=code_item.get('status')
+                        )
 
             db.session.commit()
 

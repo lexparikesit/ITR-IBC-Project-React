@@ -132,7 +132,9 @@ export function ManitouStorageMaintenanceForm() {
         initialValues: (() => {
             const initialManitouValues = {
                 model: null,
-                woNumber: null,
+                serialNo: "",
+                //woNumber: null,
+                woNumber: "",
                 hourMeter: "",
                 dateOfCheck: null,
                 technician: null,
@@ -150,7 +152,7 @@ export function ManitouStorageMaintenanceForm() {
         })(),
 
         validate: {
-            woNumber: (value) => (value ? null: "WO Number is Required!"),
+            /* woNumber: (value) => (value ? null: "WO Number is Required!"), */
             model: (value) => (value ? null : "Model Type is Required!"),
             serialNo: (value) => (value ? null : "VIN is Required!"),
             hourMeter: (value) => (value ? null : "Hour Meter is Required!"),
@@ -432,13 +434,18 @@ export function ManitouStorageMaintenanceForm() {
                     <Title order={3} mb="md" style={{ color: '#000000 !important' }}> Unit Information </Title>
                     <Grid gutter="xl">
                         <Grid.Col span={{ base: 12, md: 6, md: 3 }}>
-                            <Select
+                            {/* <Select
                                 label="WO Number"
                                 placeholder="Select WO Number"
                                 data={woNumbers}
                                 searchable
                                 clearable
                                 {...form.getInputProps('woNumber')}
+                            /> */}
+                            <TextInput
+                                label="WO Number"
+                                placeholder="Input WO Number"
+                                {...form.getInputProps("woNumber")}
                             />
                         </Grid.Col>
                         <Grid.Col span={{ base: 12, md: 6, md: 3 }}>
@@ -469,7 +476,6 @@ export function ManitouStorageMaintenanceForm() {
                             <DateInput
                                 label="Date of Check"
                                 placeholder="Select Date"
-                                valueFormat="DD-MM-YYYY"
                                 {...form.getInputProps('dateOfCheck')}
                                 rightSection={<IconCalendar size={16} />}
                             />

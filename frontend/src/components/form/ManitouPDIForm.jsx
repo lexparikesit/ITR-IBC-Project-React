@@ -121,7 +121,8 @@ export function ManitouPDIForm() {
                 inspectorSignature: null,
                 approvalBy: null,
                 customer: null,
-                woNumber: null,
+                //woNumber: null,
+                woNumber: '',
                 deliveryRemarks: '',
                 generalRemarks: '',
                 checklistItems: initialChecklist,
@@ -139,7 +140,7 @@ export function ManitouPDIForm() {
             approvalBy: (value) => (value ? null : "Approval By is Required!"),
             customer: (value) => (value ? null : "Customer is Required!"),
             woNumber: (value) => (value ? null : "WO Number is Required!"),
-            ...generateChecklistValidation(),
+            // ...generateChecklistValidation(),
         },
     });
 
@@ -252,7 +253,7 @@ export function ManitouPDIForm() {
             brand: 'manitou',
             unitInfo: {
                 dealerCode: values.dealerCode,
-                customers: values.customer,
+                customer: values.customer,
                 machineType: values.machineType,
                 serialNumber: values.serialNumber,
                 deliveryDate: values.deliveryDate,
@@ -423,12 +424,17 @@ export function ManitouPDIForm() {
                             />
                         </Grid.Col>
                         <Grid.Col span={{ base: 12, md: 6, md: 3 }}>
-                            <Select 
+                            {/* <Select 
                                 label="WO Number"
                                 placeholder="Select WO Number"
                                 data={WoNumbers}
                                 searchable
                                 clearable
+                                {...form.getInputProps('woNumber')}
+                            /> */}
+                            <TextInput
+                                label="WO Number"
+                                placeholder="Input WO Number"
                                 {...form.getInputProps('woNumber')}
                             />
                         </Grid.Col>
@@ -453,7 +459,6 @@ export function ManitouPDIForm() {
                             <DateInput
                                 label="Delivery Date"
                                 placeholder="Select Date"
-                                valueFormat="DD-MM-YYYY"
                                 {...form.getInputProps('deliveryDate')}
                                 rightSection={<IconCalendar size={16} />}
                             />
@@ -462,7 +467,6 @@ export function ManitouPDIForm() {
                             <DateInput
                                 label="Date of Check"
                                 placeholder="Select Date"
-                                valueFormat="DD-MM-YYYY"
                                 {...form.getInputProps('checkingDate')}
                                 rightSection={<IconCalendar size={16} />}
                             />

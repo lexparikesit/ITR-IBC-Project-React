@@ -25,8 +25,8 @@ class StorageMaintenanceFormModel_RT(db.Model):
 
     # remarks and metadata
     generalRemarks = db.Column(db.Text(), nullable=True)
-    createdby = db.Column(db.String(200), nullable=False)
-    createdon = db.Column(db.DateTime, nullable=False)
+    createdBy = db.Column(db.String(200), nullable=False)
+    createdOn = db.Column(db.DateTime, nullable=False)
 
     # relational with others Table
     items = db.relationship('StorageMaintenanceChecklistItemModel_RT', backref='form', lazy=True)

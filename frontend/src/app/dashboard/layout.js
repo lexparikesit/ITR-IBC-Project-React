@@ -93,6 +93,10 @@ export default function DashboardLayout({ children }) {
             const segment = path.split('/').pop()
             const capitalizedSegment = segment.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
             return `Commissioning - ${capitalizedSegment}`
+        } else if (path.startsWith('/dashboard/kho-doc')) {
+            return `Key Hand Over Document`
+        } else if (path.startsWith('/dashboard/arrival-check-log')) {
+            return `Arrival Check View`
         }
         // to input another logic below this section
 

@@ -170,7 +170,7 @@ export function ManitouCommissioningForm() {
             customer: (value) => (value ? null : 'Customer is Required!'),
             inspectorSignature: (value) => (value ? null : 'Inspector Signature is Required!'),
             approvalBy: (value) => (value ? null : 'Approval By is Required!'),
-            /*...generateChecklistValidation(),*/ 
+            ...generateChecklistValidation(),
         },
     });
 

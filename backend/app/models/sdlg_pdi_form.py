@@ -40,7 +40,7 @@ class PDI_sdlg_defect_remarks(db.Model):
     __tablename__ = 'PDI_Sdlg_remarks'
 
     # primary key
-    defectID = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    defectID = db.Column(UNIQUEIDENTIFIER, primary_key=True, default=lambda: str(uuid.uuid4()))
     
     # foreign key
     pdiID = db.Column(UNIQUEIDENTIFIER, db.ForeignKey('PDI_Sdlg_header.pdiID', ondelete='CASCADE'), nullable=False)

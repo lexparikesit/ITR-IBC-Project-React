@@ -110,8 +110,8 @@ export function UnitArrivalChecklistForm() {
 	const form = useForm({
 		initialValues: (() => {
 			const initial = {
-				brand: "renault",
-				woNumber: null,
+				// woNumber: null,
+				woNumber: "",
 				typeModel: null,
 				vin: "",
 				noChassis: "",
@@ -141,7 +141,6 @@ export function UnitArrivalChecklistForm() {
 			technician: (value) => (value ? null : "Technician is Required!"),
 			approvalBy: (value) => (value ? null : "Approval By is Required!"), 
 
-			// form validation which every radio button must be fulfill
 			...Object.keys(CHECKLIST_DATA_RENAULT).reduce((acc, sectionKey) => {
 				CHECKLIST_DATA_RENAULT[sectionKey].forEach((item) => {
 					const statusFieldName = `${sectionKey}_${item.id}_status`;
@@ -251,8 +250,6 @@ export function UnitArrivalChecklistForm() {
 	const handleSubmit = async (values) => {
 		console.log("Form Submitted (Frontend Data)", values);
 
-		const brand = "renault";
-
 		const token = localStorage.getItem('access_token');
 		if (!token) {
 			notifications.show({
@@ -274,14 +271,14 @@ export function UnitArrivalChecklistForm() {
 		}
 
 		const payload = {
-			brand: brand,
+			brand: 'renault',
 			unitInfo: {
 				woNumber: values.woNumber,
-				UnitType: values.typeModel, 
+				typeModel: values.typeModel, 
 				VIN: values.vin,
-				EngineNo: values.noEngine,
+				noEngine: values.noEngine,
 				chassisNumber: values.noChassis,
-				arrivalDate: values.dateOfCheck,
+				dateOfCheck: values.dateOfCheck,
 				technician: values.technician,
 				approvalBy: values.approvalBy,
 			},
@@ -303,7 +300,7 @@ export function UnitArrivalChecklistForm() {
 		});
 
 		try {
-			const response = await fetch(`http://127.0.0.1:5000/api/arrival-check/${brand}/submit`, { 
+			const response = await fetch(`http://127.0.0.1:5000/api/arrival-check/renault/submit`, { 
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
@@ -370,11 +367,16 @@ export function UnitArrivalChecklistForm() {
 					<Title order={3} mb="md"> Unit Information </Title>
 					<Grid gutter="md">
 						<Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
-							<Select
+							{/* <Select
 								label="WO Number"
 								placeholder="Select WO Number"
 								data={woNumbers}
 								searchable
+								{...form.getInputProps("woNumber")}
+							/> */}
+							<TextInput
+								label="WO Number"
+								placeholder="Input WO Number"
 								{...form.getInputProps("woNumber")}
 							/>
 						</Grid.Col>
@@ -413,7 +415,6 @@ export function UnitArrivalChecklistForm() {
 							<DateInput
 								label="Date of Check"
 								placeholder="Select Date"
-								valueFormat="DD-MM-YYYY"
 								{...form.getInputProps("dateOfCheck")}
 								rightSection={<IconCalendar size={16} />}
 							/>

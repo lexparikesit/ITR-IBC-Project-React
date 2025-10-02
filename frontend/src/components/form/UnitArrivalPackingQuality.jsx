@@ -18,8 +18,7 @@ import {
 } from '@mantine/core';
 import { DateInput } from '@mantine/dates';
 import { useForm } from '@mantine/form';
-import { IconCalendar } from "@tabler/icons-react";
-import { IconCircleCheck, IconCircleDashed } from '@tabler/icons-react';
+import { IconCalendar, IconCircleCheck, IconCircleDashed } from "@tabler/icons-react";
 import { notifications } from '@mantine/notifications';
 
 export function ArrivingPackingQuality() {
@@ -127,11 +126,10 @@ export function ArrivingPackingQuality() {
             vin: (value) => (value ? null : 'VIN is Required!'),
             dateOfCheck: (value) => (value ? null : "Date of Check is Required!"),
             inspectorSignature: (value) => (value ? null : 'Inpsector Signature is Required!'),
-            approvers: (value) => (value ? null : 'Approver is Required!'),
             unitLanded: (value) => (value ? null : 'Unit Landed Date is Required!'),
             unitStripping: (value) => (value ? null : 'Unit Stripping Date is Required!'),
             clearanceCustom: (value) => (value ? null : 'Celarance & Custom is Required!'),
-            approverSignature: (value) => (value ? null : 'Approver Signature is Required!'),
+            approverSignature: (value) => (value ? null : 'Approver is Required!'),
         }
     });
 
@@ -237,14 +235,14 @@ export function ArrivingPackingQuality() {
                 containerNo: values.containerNo,
                 leadSealingNo: values.leadSealingNo,
                 VIN: values.vin,
-                dateOfCheck: values.dateOfCheck ? new Date(values.dateOfCheck).toISOString() : null,
+                dateOfCheck: values.dateOfCheck,
                 technician: values.inspectorSignature,
                 approvalBy: values.approverSignature,
             },
             importationInfo: {
-                unitLanded: values.unitLanded ? new Date(values.unitLanded).toISOString() : null,
+                unitLanded: values.unitLanded,
                 clearanceCustom: values.clearanceCustom === 'Yes',
-                unitStripping: values.unitStripping ? new Date(values.unitStripping).toISOString() : null,
+                unitStripping: values.unitStripping,
             },
             checklistItems: checklistItems,
             remarks: values.remarks,
@@ -351,7 +349,6 @@ export function ArrivingPackingQuality() {
                             <DateInput
                                 label="Date of Check"
                                 placeholder="Select Date"
-                                valueFormat="DD-MM-YYYY"
                                 {...form.getInputProps('dateOfCheck')}
                                 rightSection={<IconCalendar size={16} />}
                             />
@@ -360,7 +357,6 @@ export function ArrivingPackingQuality() {
                             <DateInput
                                 label="Unit Landed Date"
                                 placeholder="Select Unit Landed Date"
-                                valueFormat="DD-MM-YYYY"
                                 {...form.getInputProps('unitLanded')}
                                 rightSection={<IconCalendar size={16} />}
                             />
@@ -377,7 +373,6 @@ export function ArrivingPackingQuality() {
                             <DateInput
                                 label="Unit Stripping Date"
                                 placeholder="Select Unit Stripping Date"
-                                valueFormat="DD-MM-YYYY"
                                 {...form.getInputProps('unitStripping')}
                                 rightSection={<IconCalendar size={16} />}
                             />

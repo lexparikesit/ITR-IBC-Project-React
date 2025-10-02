@@ -9,6 +9,7 @@ from app.models.renault_arrival_items import ArrivalChecklistItemModel_RT
 from app.models.sdlg_arrival_form import ArrivalFormModel_SDLG
 from app.models.sdlg_arrival_items import ArrivalChecklistItemModel_SDLG
 from datetime import datetime, time
+from dateutil.parser import isoparse
 from app.controllers.auth_controller import jwt_required
 # from google.cloud import Storage
 
@@ -25,6 +26,52 @@ BRAND_MODELS = {
     'renault': ArrivalFormModel_RT,
     'sdlg': ArrivalFormModel_SDLG,
 }
+
+def parse_date(date_string):
+    """handle date parsing"""
+    
+    if not date_string or not isinstance(date_string, str):
+        return None
+    formats_to_try = [
+        '%Y-%m-%d',
+        '%Y-%m-%dT%H:%M:%S.%fZ',
+    ]
+
+    for fmt in formats_to_try:
+        try:
+            return datetime.strptime(date_string, fmt)
+        except (ValueError, TypeError):
+            continue
+    return None
+
+def convert_manitou_status_to_int(status_str):
+    """handles conversion to tinyint - MA"""
+    
+    if status_str and isinstance(status_str, str):
+        status_lower = status_str.lower()
+        if status_lower == "missing":
+            return 0
+        elif status_lower == "good":
+            return 1
+        elif status_lower == "bad":
+            return 2
+
+def convert_renault_status_to_boolean(status):
+    """handles conversion to Boolean - RT"""
+    
+    if status == "checked_without_remarks":
+        return 1
+    elif status == "checked_with_remarks":
+        return 0
+    return 0
+
+def convert_sdlg_status_to_int(status_bool):
+    """Handles conversion of boolean status to integer for SDLG."""
+    
+    if isinstance(status_bool, bool):
+        return 1 if status_bool else 0
+    
+    return 0
 
 @jwt_required
 def submit_arrival_checklist():
@@ -57,48 +104,13 @@ def submit_arrival_checklist():
     arrival_entry = ModelClass()
 
     try:
-        arrival_entry.createdby = g.user_name
-        arrival_entry.createdon = datetime.utcnow()
-
-        def convert_manitou_status_to_int(status_str):
-            """handles conversion to tinyint - MA"""
-            
-            if status_str and isinstance(status_str, str):
-                status_lower = status_str.lower()
-                if status_lower == "missing":
-                    return 0
-                elif status_lower == "good":
-                    return 1
-                elif status_lower == "bad":
-                    return 2
-
-        def convert_renault_status_to_boolean(status):
-            """handles conversion to Boolean - RT"""
-            
-            if status == "checked_without_remarks":
-                return 1
-            elif status == "checked_with_remarks":
-                return 0
-            return 0
-            
-        def parse_date(date_string):
-            """handle date parsing"""
-            
-            formats_to_try = [
-                '%Y-%m-%dT%H:%M:%S.%fZ',  # ISO format with milliseconds
-                '%Y-%m-%d'              # Simple date format
-            ]
-            for fmt in formats_to_try:
-                try:
-                    return datetime.strptime(date_string, fmt)
-                except (ValueError, TypeError):
-                    continue
-            return None
+        arrival_entry.createdBy = g.user_name
+        arrival_entry.createdOn = datetime.utcnow()
 
         # for Manitou
         if brand.lower() == 'manitou':
             unit_info = data.get('unitInfo', {})
-            general_remarks = data.get('generalRemarks', {})
+            general_remarks = data.get('generalRemarks', '')
             checklist_payload = data.get('checklistItems', {})
 
             # mapping unit information from frontend to form model
@@ -143,16 +155,16 @@ def submit_arrival_checklist():
         elif brand.lower() == 'renault':
             unit_info = data.get('unitInfo', {})
             general_remarks = data.get('remarks', '')
-            checklist_payload = data.get('checklistItems', [])
+            checklist_payload = data.get('checklistItems', {})
 
             # mapping unit information from frontend to form model
             arrival_entry.brand = brand
             arrival_entry.woNumber = unit_info.get('woNumber')
-            arrival_entry.model = unit_info.get('UnitType')
-            arrival_entry.noEngine = unit_info.get('EngineNo')
+            arrival_entry.model = unit_info.get('typeModel')
+            arrival_entry.noEngine = unit_info.get('noEngine')
             arrival_entry.noChassis = unit_info.get('chassisNumber')
             arrival_entry.VIN = unit_info.get('VIN')
-            arrival_entry.dateOfCheck = unit_info.get('arrivalDate')
+            arrival_entry.dateOfCheck = parse_date(unit_info.get('dateOfCheck'))
             arrival_entry.technician = unit_info.get('technician')
             arrival_entry.approvalBy = unit_info.get('approvalBy')
             arrival_entry.remarks = general_remarks
@@ -185,7 +197,7 @@ def submit_arrival_checklist():
         elif brand.lower() == 'sdlg':
             unit_info = data.get('unitInfo', {})
             importation_info = data.get('importationInfo', {})
-            checklist_payload = data.get('checklistItems', {})
+            checklist_payload = data.get('checklistItems', [])
             general_remarks = data.get('remarks', '')
 
             # mapping unit information from frontend to form model
@@ -194,8 +206,9 @@ def submit_arrival_checklist():
             arrival_entry.distributionName = unit_info.get('distributionName')
             arrival_entry.containerNo = unit_info.get('containerNo')
             arrival_entry.leadSealingNo = unit_info.get('leadSealingNo')
+            arrival_entry.model = unit_info.get('model')
             arrival_entry.VIN = unit_info.get('VIN')
-            arrival_entry.dateOfCheck = unit_info.get('dateOfCheck')
+            arrival_entry.dateOfCheck = parse_date(unit_info.get('dateOfCheck'))
             arrival_entry.technician = unit_info.get('technician')
             arrival_entry.approvalBy = unit_info.get('approvalBy')
             arrival_entry.unitLanded = parse_date(importation_info.get('unitLanded'))
@@ -207,15 +220,18 @@ def submit_arrival_checklist():
             db.session.add(arrival_entry)
             db.session.flush()
 
-            for item_name, item_details in checklist_payload.items():
+            for item in checklist_payload:
                 new_item = ArrivalChecklistItemModel_SDLG(
                     arrivalID=arrival_entry.arrivalID,
-                    ItemName=item_name,
-                    status=item_details.get('status'),
-                    remarks=item_details.get('remarks')
+                    ItemName=item.get('ItemName'),
+                    status=convert_sdlg_status_to_int(item.get('status')),
+                    remarks=item.get('remarks')
                 )
                 db.session.add(new_item)
-            
+
+            # Commit all changes to the database at once
+            db.session.commit()
+
             return jsonify({
                 'message': 'SDLG Arrival Checklist submitted successfully!',
                 'id': str(arrival_entry.arrivalID)
@@ -274,22 +290,15 @@ def check_vin_existence(vin):
     if not vin:
         return jsonify({"message": "VIN is required"}), 400
 
-    vin_exists = False
-    
-    for brand_key, ModelClass in BRAND_MODELS.items():
+    for ModelClass in BRAND_MODELS.values():
         if hasattr(ModelClass, 'VIN'):
-            if ModelClass.VIN.type.__class__.__name__ == 'UNIQUEIDENTIFIER':
-                try:
-                    existing_entry = db.session.query(ModelClass).filter(ModelClass.VIN == vin).first()
-                except ValueError:
-                    existing_entry = None
-            else:
-                existing_entry = db.session.query(ModelClass).filter(ModelClass.VIN == vin).first()
+            try:
+                existing_entry = db.session.query(ModelClass.VIN).filter(ModelClass.VIN == vin).first()
+                if existing_entry is not None:
+                    return jsonify({'exists': True}), 200
             
-            if existing_entry:
-                vin_exists = True
-                break
-        else:
-            print(f"DEBUG: Model {brand_key} does not have a 'VIN' column defined.")
-    
-    return jsonify({'exists': vin_exists}), 200
+            except Exception as e:
+                current_app.logger.warning(f"Failed to check VIN for a model: {e}")
+                continue
+
+    return jsonify({'exists': False}), 200
