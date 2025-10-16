@@ -77,6 +77,8 @@ export default function DashboardLayout({ children }) {
             const segment = path.split('/').pop()
             const capitalizedSegment = segment.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
             return `Arrival Check - ${capitalizedSegment}`
+        } else if (path.startsWith('/dashboard/maintenance-list-log')) {
+            return `Storage Maintenance View`
         } else if (path.startsWith('/dashboard/maintenance-list')) {
             const segment = path.split('/').pop()
             const capitalizedSegment = segment.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
@@ -97,6 +99,8 @@ export default function DashboardLayout({ children }) {
             return `Key Hand Over Document`
         } else if (path.startsWith('/dashboard/arrival-check-log')) {
             return `Arrival Check View`
+        } else if (path.startsWith('/dashboard/commissioning-log')) {
+            return `Commissioning Unit View`
         }
         // to input another logic below this section
 

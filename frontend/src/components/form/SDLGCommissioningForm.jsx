@@ -19,6 +19,38 @@ import { useForm } from '@mantine/form';
 import { notifications } from '@mantine/notifications';
 import { IconCalendar } from '@tabler/icons-react';
 
+const SDLG_CHECKLIST_ITEMS = [
+    // Check of Documents (4 items)
+    "Check Documents According to Packing List of Complete Machine",
+    "Check That Documents With the Complete Machine are Complete",
+    "Check That Tools With the Complete Machine are Complete",
+    "Check That the Documents and Tools With the Engine are Complete",
+
+    // Check of the Complete Machine (22 items → total jadi 26)
+    "Check That the Equipment of Complete Machine is in Good Condition",
+    "Check That Oil Level and Fluid Level of the Complete Machine are Normal",
+    "Check Engine Oil Level",
+    "Transmission Oil Level",
+    "Drive Axle Oil Level",
+    "Brake System Oil Level",
+    "Coolant Liquid Level",
+    "Hydraulic Oil Level",
+    "Check That the Hub Nuts are Tight",
+    "Check That Connecting Bolts of Drive Shaft are Tight",
+    "Check That Bolts in Other Important Positions (such as working mechanism) are Tight",
+    "Check That Each Lubrication Point is Greased as Specified.",
+    "Check That the Engine Speed is Normal",
+    "Check That Readings in Each Gauge are Normal",
+    "Check That the Steering System Works Normally",
+    "Check That Any Oil, Water or Gas is Leaking",
+    "Check That the Working Systems Work Normally",
+    "Check That the Traveling Mechanism Works Normally",
+    "Check That the Electrical System Works Normally",
+    "Check That the Control System Works Normally",
+    "Check That the Service Braking System and the Parking Braking System Work Normally",
+    "Check That Other Parts Work Normally",
+];
+
 export default function SDLGCommissioningForm() {
     const [unitModels, setUnitModels] = useState([]);
     const [woNumbers, setWoNumbers] = useState([]);
@@ -29,34 +61,17 @@ export default function SDLGCommissioningForm() {
     const form = useForm({
         initialValues: {
             machineModel: null,
-            engineNumber: "",
             vehicleNumber: "",
             woNumber: null,
             inspectionDate: null,
             customer: null,
             inspector: null,
             approvalBy: null,
-
-            checkOfDocuments: {
-                item1: false, item2: false, item3: false,
-                item4: false,
-            },
-
-            checkCompleteMachine: {
-                item5: false, item6: false, item7: false,
-                item8: false, item9: false, item10: false,
-                item11: false, item12: false, item13: false,
-                item14: false, item15: false, item16: false,
-                item18: false, item19: false, item20: false,
-                item21: false, item22: false, item23: false,
-                item24: false, item25: false, item26: false,
-                item27: false,
-            }
+            checklistItems: SDLG_CHECKLIST_ITEMS.map((_, i) => false),
         },
 
         validate: {
             woNumber: (value) => (value ? null: 'WO Number is Required!'),
-            engineNumber: (value) => (value ? null: "Engine Number is Required!"),
             machineModel: (value) => (value ? null: 'Type/ Model is Required!'),
             customer: (value) => (value ? null: 'Customer is Required!'),
             vehicleNumber: (value) => (value ? null: 'VIN is Required!'),
@@ -132,38 +147,6 @@ export default function SDLGCommissioningForm() {
         fetchData();
     }, []);
 
-    const checkOfDocumentsData = [
-        "Check Documents According to Packing List of Complete Machine",
-        "Check That Documents With the Complete Machine are Complete",
-        "Check That Tools With the Complete Machine are Complete",
-        "Check That the Documents and Tools With the Engine are Complete",
-    ];
-
-    const checkCompleteMachineData = [
-        "Check That the Equipment of Complete Machine is in Good Condition",
-        "Check That Oil Level and Fluid Level of the Complete Machine are Normal",
-        "Check Engine Oil Level",
-        "Transmission Oil Level",
-        "Drive Axle Oil Level",
-        "Brake System Oil Level",
-        "Coolant Liquid Level",
-        "Hydraulic Oil Level",
-        "Check That the Hub Nuts are Tight",
-        "Check That Connecting Bolts of Drive Shaft are Tight",
-        "Check That Bolts in Other Important Positions (such as working mechanism) are Tight",
-        "Check That Each Lubrication Point is Greased as Specified.",
-        "Check That the Engine Speed is Normal",
-        "Check That Readings in Each Gauge are Normal",
-        "Check That the Steering System Works Normally",
-        "Check That Any Oil, Water or Gas is Leaking",
-        "Check That the Working Systems Work Normally",
-        "Check That the Traveling Mechanism Works Normally",
-        "Check That the Electrical System Works Normally",
-        "Check That the Control System Works Normally",
-        "Check That the Service Braking System and the Parking Braking System Work Normally",
-        "Check That Other Parts Work Normally",
-    ];
-
     const formatDate = (date) => {
         if (!date) return null;
         const d = new Date(date);
@@ -198,16 +181,17 @@ export default function SDLGCommissioningForm() {
                 technician: values.inspector,
                 approvalBy: values.approvalBy,
             },
-            checklistItems: {
-                checkOfDocuments: values.checkOfDocuments,
-                checkCompleteMachine: values.checkCompleteMachine,
-            }
+            checklistItems: values.checklistItems.map((status, index) => ({
+                id: index + 1,
+                status: status ? 1 : 0,
+                itemName: SDLG_CHECKLIST_ITEMS[index],
+            })),
         };
 
         console.log("Payload sent to backend:", payload);
 
         try {
-            const response = await fetch(`http://127.0.0.1:5000/api/storage-maintenance/sdlg/submit`, {
+            const response = await fetch(`http://127.0.0.1:5000/api/commissioning/sdlg/submit`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -218,7 +202,7 @@ export default function SDLGCommissioningForm() {
 
             if (!response.ok) {
                 const errorData = await response.json();
-                throw new Error(errorData.message || "Failed to submit SDLG Storage Maintenance Checklist");
+                throw new Error(errorData.message || "Failed to submit SDLG Commissioning Checklist");
             }
 
             const result = await response.json();
@@ -284,7 +268,6 @@ export default function SDLGCommissioningForm() {
                             <DateInput
                                 label="Date of Check"
                                 placeholder="Select date"
-                                valueFormat="DD-MM-YYYY"
                                 {...form.getInputProps('inspectionDate')}
                                 rightSection={<IconCalendar size={16} />}
                             />
@@ -323,35 +306,7 @@ export default function SDLGCommissioningForm() {
                 </Card>
 
                 <Card shadow="sm" padding="lg" radius="md" withBorder mb="lg">
-                    <Title order={4} mb="md">1. Check of Documents</Title>
-                    <Table withRowBorders withColumnBorders>
-                        <Table.Thead>
-                            <Table.Tr>
-                                <Table.Th style={{ width: '50px' }}>SN</Table.Th>
-                                <Table.Th>Inspection Items</Table.Th>
-                                <Table.Th style={{ width: '120px', textAlign: 'left' }}>Perform or Not</Table.Th>
-                            </Table.Tr>
-                        </Table.Thead>
-                        <Table.Tbody>
-                            {checkOfDocumentsData.map((item, index) => (
-                                <Table.Tr key={`inspection-${index + 1}`}>
-                                    <Table.Td>{index + 1}</Table.Td>
-                                    <Table.Td>{item}</Table.Td>
-                                    <Table.Td>
-                                        <Group justify='center'>
-                                            <Checkbox
-                                                {...form.getInputProps(`checkOfDocuments.item${index + 1}`, { type: 'checkbox' })}
-                                            />
-                                        </Group>
-                                    </Table.Td>
-                                </Table.Tr>
-                            ))}
-                        </Table.Tbody>
-                    </Table>
-
-                    <Divider my="xl" />
-
-                    <Title order={4} mb="md">2. Check of the Complete Machine</Title>
+                    <Title order={4} mb="md">SDLG Commissioning Checklist</Title>
                     <Table withRowBorders withColumnBorders>
                         <Table.Thead>
                             <Table.Tr>
@@ -361,21 +316,21 @@ export default function SDLGCommissioningForm() {
                             </Table.Tr>
                         </Table.Thead>
                         <Table.Tbody>
-                            {checkCompleteMachineData.map((item, index) => (
-                                <Table.Tr key={`testing-${index + 10}`}>
-                                    <Table.Td>{index + 10}</Table.Td>
+                            {SDLG_CHECKLIST_ITEMS.map((item, index) => (
+                                <Table.Tr key={index}>
+                                    <Table.Td>{index + 1}</Table.Td>
                                     <Table.Td>{item}</Table.Td>
                                     <Table.Td>
-                                        <Group justify='center'>
+                                        <Group justify="center">
                                             <Checkbox
-                                                {...form.getInputProps(`checkCompleteMachine.item${index + 10}`, { type: 'checkbox' })}
+                                                {...form.getInputProps(`checklistItems.${index}`, { type: 'checkbox' })}
                                             />
                                         </Group>
                                     </Table.Td>
                                 </Table.Tr>
                             ))}
                         </Table.Tbody>
-                    </Table>
+                </Table>
                 </Card>
                 <Group justify="flex-end" mt="xl">
                     <Button type="submit">Submit</Button>

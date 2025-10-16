@@ -24,8 +24,8 @@ class CommissioningFormModel_MA(db.Model):
     
     # remarks and metadata
     remarks = db.Column(db.Text(), nullable=True)
-    createdby = db.Column(db.String(200), nullable=False)
-    createdon = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    createdBy = db.Column(db.String(200), nullable=False)
+    createdOn = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
     # relational with others Table
     items = db.relationship('CommissioningChecklistItemModel_MA', backref='form', lazy=True)

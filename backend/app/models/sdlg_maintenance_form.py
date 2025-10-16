@@ -29,12 +29,15 @@ class StorageMaintenanceFormModel_SDLG(db.Model):
     signatureApproverDate = db.Column(db.DateTime, nullable=False)
     
     # metadata
-    createdby = db.Column(db.String(200), nullable=False)
-    createdon = db.Column(db.DateTime, nullable=False)
+    createdBy = db.Column(db.String(200), nullable=False)
+    createdOn = db.Column(db.DateTime, nullable=False)
 
     # relation to support table
     defect = db.relationship('Maintenance_sdlg_defect_remarks', backref='sdlg_report', lazy=True, cascade="all, delete-orphan")
-    items = db.relationship('MaintenanceChecklistItemModel_SDLG', backref='sdlg_report', lazy=True, cascade="all, delete-orphan")
+    items = db.relationship('StorageMaintenanceChecklistItemModel_SDLG', backref='sdlg_report', lazy=True, cascade="all, delete-orphan")
+
+    def __repr__(self):
+        return f"<StorageMaintenanceFormModel_SDLG{self.smID}', WO='{self.woNumber}')>"
 
 # support table
 class Maintenance_sdlg_defect_remarks(db.Model):
@@ -42,7 +45,7 @@ class Maintenance_sdlg_defect_remarks(db.Model):
     __tablename__ = 'Maintenance_Sdlg_remarks'
 
     # primary key
-    defectID = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    defectID = db.Column(UNIQUEIDENTIFIER, primary_key=True, default=lambda: str(uuid.uuid4()))
     
     # foreign key
     smID = db.Column(UNIQUEIDENTIFIER, db.ForeignKey('Maintenance_Sdlg_header.smID', ondelete='CASCADE'), nullable=False)
@@ -52,4 +55,4 @@ class Maintenance_sdlg_defect_remarks(db.Model):
     remarks = db.Column(db.Text(), nullable=True)    
 
     def __repr__(self):
-        return f"<SDLGDefectsAndRemarksModel {self.smID}>"
+        return f"<Maintenance_sdlg_defect_remarks {self.smID}>"

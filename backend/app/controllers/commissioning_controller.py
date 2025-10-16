@@ -10,6 +10,7 @@ from app.models.sdlg_commissioning_form import CommissioningFormModel_SDLG
 from app.models.sdlg_commissioning_items import CommissioningChecklistItemModel_SDLG
 from datetime import datetime
 from app.controllers.auth_controller import jwt_required
+from app.controllers.province_controller import get_province_name_by_code
 # from google.cloud import Storage
 
 # configuartion of GCS Environment
@@ -55,8 +56,8 @@ def submit_commissioning_form(brand):
     commissioning_entry = ModelClass()
 
     try:
-        commissioning_entry.createdby = g.user_name
-        commissioning_entry.createdon = datetime.utcnow()
+        commissioning_entry.createdBy = g.user_name
+        commissioning_entry.createdOn = datetime.utcnow()
 
         def converted_manitou_status_to_int(status_str):
             """handles conversion to tinyint - MA"""
@@ -140,11 +141,15 @@ def submit_commissioning_form(brand):
             signatures_payload = data.get('signatures', {})
             major_components_payload = data.get('majorComponents', [])
             checklist_payload = data.get('checklist', {})
+            location_code = customer_info.get('location')
+            location_label = get_province_name_by_code(location_code)
 
             # mapping unit information from frontend to form model
             commissioning_entry.jobCardNo = report_info.get('jobCardNo')
             commissioning_entry.woNumber = report_info.get('woNumber')
             commissioning_entry.dealerCode = report_info.get('dealer')
+            commissioning_entry.technician = report_info.get('technician')
+            commissioning_entry.approvalBy = report_info.get('approvalBy')
             commissioning_entry.dateOfCheck = parse_date(report_info.get('date'))
             commissioning_entry.brand = brand
             commissioning_entry.typeModel = unit_info.get('vehicleType')
@@ -155,7 +160,7 @@ def submit_commissioning_form(brand):
             commissioning_entry.application = unit_info.get('application')
             commissioning_entry.reg_fleet_no = unit_info.get('regFleetNo')
             commissioning_entry.customer = customer_info.get('companyName')
-            commissioning_entry.location = customer_info.get('location')
+            commissioning_entry.location = location_label
             commissioning_entry.contactPerson = customer_info.get('contactPerson')
             commissioning_entry.inspectorSignature = signatures_payload.get('inspectorSignature')
             commissioning_entry.inspectorSignatureDate = parse_date(signatures_payload.get('inspectorSignatureDate'))
@@ -186,18 +191,21 @@ def submit_commissioning_form(brand):
             checklist_notes_payload = checklist_payload.get('notes', {})
             checklist_item_list = []
             
-            for item in checklist_items_payload:
-                checklist_status = item.get('checklist', False)
-                notes = checklist_notes_payload.get(item.get('itemName'))
+            for section_key, items_dict, in checklist_items_payload.items():
+                if not isinstance(items_dict, dict):
+                    continue
                 
-                new_item = CommissioningChecklistItemModel_RT(
-                    commID=commissioning_entry.commID,
-                    section=item.get('section'),
-                    itemName=item.get('itemName'),
-                    checklist=checklist_status,
-                    notes=notes,
-                )
-                checklist_item_list.append(new_item)
+                section_notes = checklist_notes_payload.get(section_key, '')
+
+                for item_id, status in items_dict.items():
+                    new_item = CommissioningChecklistItemModel_RT(
+                        commID = commissioning_entry.commID,
+                        section = section_key,
+                        itemName = item_id,
+                        checklist = bool(status),
+                        notes = section_notes
+                    )
+                    checklist_item_list.append(new_item)
 
             db.session.bulk_save_objects(checklist_item_list)
 
@@ -212,8 +220,7 @@ def submit_commissioning_form(brand):
         elif brand.lower() == 'sdlg':
             unit_info = data.get('unitInfo', {})
             checklist_payload = data.get('checklistItems', {})
-            check_of_docs = checklist_payload.get('checkOfDocuments', {})
-            check_complete_machine = checklist_payload.get('checkCompleteMachine', {})
+            checklist_items = data.get('checklistItems', [])
 
             # mapping unit information from frontend to form model
             commissioning_entry.brand = brand
@@ -232,20 +239,12 @@ def submit_commissioning_form(brand):
             # Use dynamic loop to assign checklist values
             all_checklist_items = []
 
-            for key, value in check_of_docs.items():
+            for item in checklist_items:
                 all_checklist_items.append(CommissioningChecklistItemModel_SDLG(
-                    commID = commissioning_entry.commID,
-                    section = "checkOfDocuments",
-                    itemName = key,
-                    status = value,
-                ))
-            
-            for key, value in check_complete_machine.items():
-                all_checklist_items.append(CommissioningChecklistItemModel_SDLG(
-                    commID = commissioning_entry.commID,
-                    section = "checkCompleteMachine",
-                    itemName = key,
-                    status = value
+                    commID=commissioning_entry.commID,
+                    section="sdlg",
+                    itemName=item.get('itemName'),
+                    status=item.get('status', 0)
                 ))
 
             # Add and commit to database

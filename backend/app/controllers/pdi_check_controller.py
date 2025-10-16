@@ -8,8 +8,9 @@ from app.models.renault_pdi_form import PDIFormModel_RT
 from app.models.renault_pdi_items import PDIChecklistItemModel_RT
 from app.models.sdlg_pdi_form import PDIFormModel_Sdlg, PDI_sdlg_defect_remarks
 from app.models.sdlg_pdi_items import PDIChecklistItemModel_SDLG
-from datetime import datetime
 from app.controllers.auth_controller import jwt_required
+from app.controllers.province_controller import get_province_name_by_code
+from datetime import datetime
 # from google.cloud import Storage
 
 # configuartion of GCS Environment
@@ -150,7 +151,7 @@ def submit_pdi_form(brand):
             db.session.commit()
 
             return jsonify({
-                'message': 'Manitou Commissioning Form submitted successfully!',
+                'message': 'Manitou Pre Delivery Inspection Form submitted successfully!',
                 'id': str(pdi_entry.pdiID)
             }), 201
 
@@ -160,6 +161,8 @@ def submit_pdi_form(brand):
             checklist_item_payloads = data.get('checklistItems', {})
             battery_status_data = data.get('batteryStatus', {})
             vehicle_damage_notes = data.get('vehicle_inspection', {})
+            province_code = unit_info.get('province')
+            province_label = get_province_name_by_code(province_code)
 
             # mapping unit information from frontend to form model
             pdi_entry.brand = brand
@@ -170,12 +173,12 @@ def submit_pdi_form(brand):
             pdi_entry.mileage = unit_info.get('mileageHourMeter')
             pdi_entry.chassisID = unit_info.get('chassisId')
             pdi_entry.registrationNo = unit_info.get('registrationNo')
-            pdi_entry.province = unit_info.get('province')
+            pdi_entry.province = province_label
             pdi_entry.model = unit_info.get('model')
             pdi_entry.engine = unit_info.get('engine')
             pdi_entry.technician = unit_info.get('technician')
             pdi_entry.approvalBy = unit_info.get('approvalBy')
-            pdi_entry.vehicleDamageNotes = vehicle_damage_notes
+            pdi_entry.vehicle_inspection = vehicle_damage_notes
 
             # session to add the payload
             db.session.add(pdi_entry)
@@ -185,27 +188,28 @@ def submit_pdi_form(brand):
                 if isinstance(items, dict):
                     for item_key, item_details in items.items():
                         if isinstance(item_details, dict):
-                            image_url = None # will None as long as GCS/ CDN is commenting
-
+                            image_url = None 
+                            item_status = converted_renault_status_to_int(item_details.get('value'))
                             new_item = PDIChecklistItemModel_RT(
                                 pdiID = pdi_entry.pdiID,
                                 section = section_key,
                                 itemName = item_key,
-                                status = converted_renault_status_to_int(item_details.get('value')),
+                                status = item_status,
+                                value = None,
                                 image_url = image_url,
                                 caption = item_details.get('notes'),
                             )
                             db.session.add(new_item)
             
-            for key, value in battery_status_data.items():
+            for key, data_value in battery_status_data.items():
                 new_item = PDIChecklistItemModel_RT(
                     pdiID = pdi_entry.pdiID,
                     section = 'battery_status',
                     itemName = key,
-                    value = value,
-                    status = None, # No specific value for regular items
-                    image_url = None, # No specific value for regular items
-                    caption = None # No specific value for regular items
+                    value = data_value,
+                    status = None,
+                    image_url = None,
+                    caption = None 
                 )
                 db.session.add(new_item)
             
@@ -213,12 +217,22 @@ def submit_pdi_form(brand):
             db.session.commit()
 
             return jsonify({
-                'message': 'Renault Commissioning Form submitted successfully!',
+                'message': 'Renault Pre Delivery Inspection Form submitted successfully!',
                 'id': str(pdi_entry.pdiID)
             }), 201
 
         # for sdlg
         elif brand.lower() == 'sdlg':
+            SDLG_ITEM_LABELS = {
+                1: "Visual inspection for paint damage and rust protection defects.",
+                2: "Check the coolant level in the radiator, check the engine oil level, and check the oil levels in the gearbox, drive axle, and hydraulic system. Check the water level in the front windshield washing system.",
+                3: "Remove the anti-fall device of the hydraulic cylinder and clean the rust inhibitor from the piston rod of the hydraulic cylinder.",
+                4: "Check the tire pressure, if necessary, adjust the pressure, and check the tightness of the track of the excavator.",
+                5: "Start the machine, run it to normal operating temperature, and check whether all system function normally:",
+                6: "Check for fuel, water, and oil leaks; if necessary, inspect and tighten all connections and clamps. Ensure that the routing of all hoses and pipes is reasonable without interference",
+                7: "Turn off the battery switch"
+            }
+
             unit_info = data.get('unitInfo', {})
             signatures = data.get('signatures', {})
             checklist = data.get('checklist', {})
@@ -240,14 +254,20 @@ def submit_pdi_form(brand):
             db.session.add(pdi_entry)
             db.session.flush()
 
-            for item_id, status in checklist.items():
+            for item_id_str, status in checklist.items():
+                try:
+                    item_id = int(item_id_str)
+                    item_label = SDLG_ITEM_LABELS.get(item_id, f"Unknown item ID: {item_id}")
+                except (ValueError, TypeError):
+                    item_label = f"Invalid item ID: {item_id_str}"
+                
                 new_item = PDIChecklistItemModel_SDLG(
-                    pdiID = pdi_entry.pdiID,
-                    itemName = item_id,
-                    status = status
+                    pdiID=pdi_entry.pdiID,
+                    itemName=item_label,
+                    status=status
                 )
                 db.session.add(new_item)
-            
+
             for defect_entry in defects:
                 description = defect_entry.get('description')
                 remarks = defect_entry.get('remarks')
@@ -264,7 +284,7 @@ def submit_pdi_form(brand):
             db.session.commit()
 
             return jsonify({
-                'message': 'SDLG PDI form submitted successfully!',
+                'message': 'SDLG Pre Delivery Inspection form submitted successfully!',
                 'id': str(pdi_entry.pdiID)
             }), 201
 

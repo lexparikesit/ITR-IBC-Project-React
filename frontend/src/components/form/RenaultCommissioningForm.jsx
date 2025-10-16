@@ -134,6 +134,7 @@ const renaultCommissioningItem = {
 
 const majorComponents = [
     { component: 'Engine Assembly', make: '', typeModel: '', serialNumber: '', partNumber: '', remarks: '' },
+    { component: 'Fuel Injection', make: '', typeModel: '', serialNumber: '', partNumber: '', remarks: '' },
     { component: 'Turbocharger', make: '', typeModel: '', serialNumber: '', partNumber: '', remarks: '' },
     { component: 'Steering Box', make: '', typeModel: '', serialNumber: '', partNumber: '', remarks: '' },
     { component: 'Transmission', make: '', typeModel: '', serialNumber: '', partNumber: '', remarks: '' },
@@ -258,9 +259,27 @@ export function RenaultCommissioningForm() {
 
                 // province API
                 const provincesResponse = await fetch("http://127.0.0.1:5000/api/provinces");
-                if (!provincesResponse.ok) throw new Error(`HTTP error! status: ${provincesResponse.status}`);
-                const provincesData = await provincesResponse.json();
-                setProvinces(provincesData);
+
+                if (!provincesResponse.ok) {
+                    console.error(`HTTP error! status: ${provincesResponse.status}`);
+                    setProvinces([]); 
+                    return;
+                }
+
+                const provincesObject = await provincesResponse.json();
+
+                if (typeof provincesObject === 'object' && provincesObject !== null) {
+                    const provincesArray = Object.keys(provincesObject).map(code => ({
+                        value: code,
+                        label: provincesObject[code]
+                    }));
+                    
+                    setProvinces(provincesArray);
+                
+                } else {
+                    console.error("API response is not a valid object for mapping:", provincesObject);
+                    setProvinces([]);
+                }
 
                 // dummy Technicians API
 				const dummyTechnicians = [
@@ -294,6 +313,7 @@ export function RenaultCommissioningForm() {
     }, []);
 
     const handleSubmit = async (values) => {
+        console.log("handleSubmit called with values:", values);
         const token = localStorage.getItem("access_token");
 
         if (!token) {
@@ -305,7 +325,7 @@ export function RenaultCommissioningForm() {
             console.log("Authentication token is missing.");
             return;
         }
-
+        
         const payload = {
             brand: 'renault',
             reportInfo: {
@@ -313,6 +333,8 @@ export function RenaultCommissioningForm() {
                 date: values.date,
                 dealer: values.dealer,
                 woNumber: values.woNumber,
+                technician: values.technician,
+                approvalBy: values.approvalBy,
             },
             unitInfo: {
                 VIN: values.VIN,
@@ -334,15 +356,17 @@ export function RenaultCommissioningForm() {
                 notes: values.checklistNotes,
             },
             signatures: {
-                inspectorSignature: values,
-                inspectorSignatureDate: values,
-                supervisorSignature: values,
-                supervisorSignatureDate: values,
+                inspectorSignature: values.inspectorSignature,
+                inspectorSignatureDate: values.inspectorSignatureDate,
+                supervisorSignature: values.supervisorSignature,
+                supervisorSignatureDate: values.supervisorSignatureDate,
             }
         };
 
+        console.log("handleSubmit called with values:", payload);
+
         try {
-            const response = await fetch(`http://127.0.0.1:5000/api/storage-maintenance/renault/submit`, {
+            const response = await fetch(`http://127.0.0.1:5000/api/commissioning/renault/submit`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -353,7 +377,7 @@ export function RenaultCommissioningForm() {
 
             if (!response.ok) {
                 const errorData = await response.json();
-                throw new Error(errorData.message || "Failed to submit Renault Storage Maintenance Checklist");
+                throw new Error(errorData.message || "Failed to submit Renault Commissioning Checklist");
             }
 
             const result = await response.json();
@@ -445,6 +469,24 @@ export function RenaultCommissioningForm() {
                                 placeholder="Select Date"
                                 leftSection={<IconCalendar size={18} />}
                                 {...form.getInputProps('date')}
+                            />
+                        </Grid.Col>
+                        <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
+                            <Select
+                                label="Technician"
+                                placeholder="Select Technician"
+                                data={technicians}
+                                searchable
+                                {...form.getInputProps('technician')}
+                            />
+                        </Grid.Col>
+                        <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
+                            <Select
+                                label="Approval By"
+                                placeholder="Select Approver"
+                                data={approvers}
+                                searchable
+                                {...form.getInputProps('approvalBy')}
                             />
                         </Grid.Col>
                     </Grid>
@@ -606,7 +648,6 @@ export function RenaultCommissioningForm() {
                             <DateInput
                                 label="Date"
                                 placeholder="Select Date"
-                                valueFormat="YYYY-MM-DD"
                                 mt="md"
                                 {...form.getInputProps('inspectorSignatureDate')}
                                 rightSection={<IconCalendar size={16} />}
@@ -624,7 +665,6 @@ export function RenaultCommissioningForm() {
                             <DateInput
                                 label="Date"
                                 placeholder="Select Date"
-                                valueFormat="YYYY-MM-DD"
                                 mt="md"
                                 {...form.getInputProps('supervisorSignatureDate')}
                                 rightSection={<IconCalendar size={16} />}

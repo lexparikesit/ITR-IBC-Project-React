@@ -100,4 +100,13 @@ def create_app():
     from app.routes.arrival_check_log_routes import arrival_check_log_bp
     app.register_blueprint(arrival_check_log_bp)
 
+    from app.routes.maintenance_check_log_routes import storage_maintenance_log_bp
+    app.register_blueprint(storage_maintenance_log_bp)
+
+    from app.routes.pdi_check_log_routes import pdi_check_log_bp
+    app.register_blueprint(pdi_check_log_bp)
+
+    from app.routes.commissioning_form_log_routes import commissioning_log_bp
+    app.register_blueprint(commissioning_log_bp)
+
     return app

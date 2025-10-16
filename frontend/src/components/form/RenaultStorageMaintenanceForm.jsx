@@ -122,11 +122,11 @@ const initialRenaultValues = {
     ],
 
     faultCodes: [
-        { faultCode: '', status: '' },
-        { faultCode: '', status: '' },
-        { faultCode: '', status: '' },
-        { faultCode: '', status: '' },
-        { faultCode: '', status: '' },
+        { faultCode: '', status: null },
+        { faultCode: '', status: null },
+        { faultCode: '', status: null },
+        { faultCode: '', status: null },
+        { faultCode: '', status: null },
     ],
 
     repairNotes: '',

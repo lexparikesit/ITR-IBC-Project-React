@@ -23,7 +23,7 @@ class StorageMaintenanceChecklistItemModel_RT(db.Model):
     status = db.Column(db.SmallInteger, nullable=False)
 
     # value (value for voltage, electrolyte level, etc)
-    value = db.Column(db.Float, nullable=True)
+    value = db.Column(db.String(50), nullable=True)
 
     # item code (fault code)
     code = db.Column(db.String(50), nullable=True)

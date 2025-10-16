@@ -115,7 +115,7 @@ const getStatusLabels = (brand, statusValue) => {
 
     if (normalizedBrand === 'sdlg') {
         if (isTrue) {
-            return { text: 'Yes', color: 'teal' }; 
+            return { text: 'Yes', color: 'green' }; 
         } else if (isFalse) {
             return { text: 'No', color: 'red' }; 
         } else {
@@ -131,15 +131,14 @@ const getStatusLabels = (brand, statusValue) => {
     } 
     else {
         if (isTrue) {
-            return { text: 'GOOD', color: 'green' };
+            return { text: 'Good', color: 'green' };
         } else if (isFalse) { 
-            return { text: 'BAD', color: 'orange' };
+            return { text: 'Bad', color: 'orange' };
         } else { 
-            return { text: 'MISSING', color: 'gray' };
+            return { text: 'Missing', color: 'gray' };
         }
     }
 }
-
 
 const formatLocalTime = (isoString) => {
     if (!isoString) return 'N/A';
@@ -169,7 +168,6 @@ const formatLocalTime = (isoString) => {
 
     const datePart = parts[0];
     const timePart = parts[1];
-
     const correctedTimePart = timePart.replace(/\./g, ':');
 
     return `${datePart}, ${correctedTimePart}`;
@@ -300,9 +298,9 @@ const LogData = ({ title, apiUrl }) => {
                     logData.map(log => BRAND_ID_MAP[(log.brand || '').toLowerCase()]).filter(id => id) 
                 )];
                 
-                const dummyTechnicians = [{ value: "tech1", label: "John Doe" }, { value: "tech2", label: "Jane Smith" }];
+                const dummyTechnicians = [{ value: "tech1", label: "John Doe" }, { value: "tech2", label: "Jane Smith" }, { value: "tech3", label: "Peter Jones" }];
                 const techLookup = dummyTechnicians.reduce((acc, item) => { acc[item.value] = item.label; return acc; }, {});
-                const dummyApprovers = [{ value: "app1", label: "Alice Brown" }, { value: "app2", label: "Bob White" }];
+                const dummyApprovers = [{ value: "app1", label: "Alice Brown" }, { value: "app2", label: "Bob White" }, { value: "app3", label: "John Green" }];
                 const approverLookup = dummyApprovers.reduce((acc, item) => { acc[item.value] = item.label; return acc; }, {});
 
                 let allModelLookup = {};
@@ -534,7 +532,7 @@ const LogData = ({ title, apiUrl }) => {
                 opened={modalOpened}
                 onClose={closeModal}
                 title="Detail Arrival Check Log"
-                size="1250px"
+                size="1350px"
                 styles={{ 
                     title: { flexGrow: 1, textAlign: 'center' }
                 }}
@@ -587,7 +585,7 @@ const LogData = ({ title, apiUrl }) => {
                             </Title>
                             
                             {selectedLogDetails.checklist_items && selectedLogDetails.checklist_items.length > 0 ? (
-                                <ScrollArea.Autosize mah={400} type="always">
+                                <>
                                     {selectedLogDetails.brand && selectedLogDetails.brand.toLowerCase() === 'sdlg' ? (
                                         <Table withRowBorders={true} striped highlightOnHover>
                                             <Table.Thead>
@@ -726,7 +724,7 @@ const LogData = ({ title, apiUrl }) => {
                                             </Table.Tbody>
                                         </Table>
                                     )}
-                                </ScrollArea.Autosize>
+                                </>
                             ) : (
                                 <Text c="gray">No detailed checklist items found for this unit.</Text>
                             )}

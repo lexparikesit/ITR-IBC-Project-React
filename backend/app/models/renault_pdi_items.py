@@ -20,7 +20,7 @@ class PDIChecklistItemModel_RT(db.Model):
     itemName = db.Column(db.String(100), nullable=False)
 
     # item status
-    status = db.Column(db.SmallInteger, nullable=False)
+    status = db.Column(db.SmallInteger, nullable=True)
 
     # URL Path of the image
     image_url = db.Column(db.String(255), nullable=True)

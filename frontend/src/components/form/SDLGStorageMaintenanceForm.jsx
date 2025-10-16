@@ -32,7 +32,7 @@ export default function SDLGStorageMaintenanceForm() {
         initialValues: {
             machineModel: null,
             vehicleNumber: "",
-            workingHours: null,
+            workingHours: "",
             // woNumber: null,
             woNumber: "",
             vehicleArrivalDate: null,
@@ -506,7 +506,7 @@ export default function SDLGStorageMaintenanceForm() {
                             placeholder="Select Inspector"
                             clearable
                             searchable
-                            data={approvers}
+                            data={technicians}
                             {...form.getInputProps('signatureInspectorName')}
                         />
                         <DateInput

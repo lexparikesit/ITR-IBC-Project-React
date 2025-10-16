@@ -1,0 +1,278 @@
+// Manitou Section
+const MANITOU_SECTION_MAP = {
+    engine: "01. Engine",
+    transmission: "02. Transmission",
+    axleTransferBox: "03. Axle & Transfer Box",
+    hydraulicHydrostaticCircuits: "04. Hydraulic & Hydrostatic Circuits",
+    brakingCircuits: "05. Braking Circuits",
+    lubrication: "06. Lubrication",
+    boomMastManiscopicManicess: "07. Boom, Mast, Maniscopic & Manicess",
+    mastUnit: "08. Mast Unit",
+    accessories: "09. Accessories",
+    cabProtectiveDeviceElectricCircuit: "10. Cab, Protective Device & Electric Circuit",
+    wheels: "11. Wheels",
+    otherItems: "12. Other Items",
+};
+
+// Manitou Item
+const MANITOU_ITEM_MAP = {
+    engine: [
+        { id: '01', label: 'Air Filter', itemKey: 'airFilter' },
+        { id: '02', label: 'Fuel Tank', itemKey: 'fuelTank' },
+        { id: '03', label: 'Fuel Pipes and Filters', itemKey: 'fuelPipeFilters' },
+        { id: '04', label: 'Injection / Carburation System', itemKey: 'injectionCarburationSystem' },
+        { id: '05', label: 'Radiator and Cooling Systems', itemKey: 'radiatorCoolingSystems' },
+        { id: '06', label: 'Belts', itemKey: 'belts' },
+        { id: '07', label: 'Hoses', itemKey: 'hosesEngine' },
+    ],
+    transmission: [
+        { id: '01', label: 'Reversing System', itemKey: 'reversingSystem' },
+        { id: '02', label: 'Control of Gears', itemKey: 'controlOfGears' },
+        { id: '03', label: 'Transmission Disconnect Pedal', itemKey: 'transmissionDisconnectPedal' },
+        { id: '04', label: 'Clutch', itemKey: 'clutch' },
+    ],
+    axleTransferBox: [
+        { id: '01', label: 'Operation and Tightness', itemKey: 'operationTightness' },
+        { id: '02', label: 'Adjustment of Stops', itemKey: 'adjustmentStops' },
+    ],
+    hydraulicHydrostaticCircuits: [
+        { id: '01', label: 'Oil Tank', itemKey: 'oilTank' },
+        { id: '02', label: 'Pumps and Coupling', itemKey: 'pumpsCoupling' },
+        { id: '03', label: 'Tightness of Unions', itemKey: 'tightnessOfUnions' },
+        { id: '04', label: 'Lifting Rams', itemKey: 'liftingRams' },
+        { id: '05', label: 'Tilting Rams', itemKey: 'tiltingRams' },
+        { id: '06', label: 'Accessory Rams', itemKey: 'accessoryRams' },
+        { id: '07', label: 'Telescope Rams', itemKey: 'telescopeRams' },
+        { id: '08', label: 'Compensating Rams', itemKey: 'compensatingRams' },
+        { id: '09', label: 'Steering Rams', itemKey: 'steeringRams' },
+        { id: '10', label: 'Control Valves', itemKey: 'controlValves' },
+        { id: '11', label: 'Counterbalance Valve', itemKey: 'counterBalanceValve' },
+    ],
+    brakingCircuits: [
+        { id: '01', label: 'Checking of Service Brake & Parking Brake Operation', itemKey: 'serviceBrakeParkingBrakeOperation' },
+        { id: '02', label: 'Checking Brake Fluid Level (as per assembly)', itemKey: 'brakeFluidLevel' },
+    ],
+    lubrication: [
+        { id: '01', label: 'Lubrication', itemKey: 'lubrication' },
+    ],
+    boomMastManiscopicManicess: [
+        { id: '01', label: 'Boom & Telescopes', itemKey: 'boomTelescopes' },
+        { id: '02', label: 'Wear Pads', itemKey: 'wearPads' },
+        { id: '03', label: 'Linkage', itemKey: 'linkage' },
+        { id: '04', label: 'Carriage', itemKey: 'carriageBooms' },
+        { id: '05', label: 'Forks', itemKey: 'forksBooms' }
+    ],
+    mastUnit: [
+        { id: '01', label: 'Fixed & Movable Masts', itemKey: 'fixedMovableMast' },
+        { id: '02', label: 'Carriage', itemKey: 'carriageMast' },
+        { id: '03', label: 'Chains', itemKey: 'chains' },
+        { id: '04', label: 'Rollers', itemKey: 'rollers' },
+        { id: '05', label: 'Forks', itemKey: 'forksMastUnit' },
+    ],
+    accessories: [
+        { id: '01', label: 'Adaptation to Machine', itemKey: 'adaptationToMachine' },
+        { id: '02', label: 'Hydraulic Connections', itemKey: 'hydraulicConnections' },
+    ],
+    cabProtectiveDeviceElectricCircuit: [
+        { id: '01', label: 'Seat', itemKey: 'seat' },
+        { id: '02', label: 'Control Panel & Radio', itemKey: 'controlPanelRadio' },
+        { id: '03', label: 'Horn & Warning Light, Safety Device', itemKey: 'hornWarningLightSafetyDevice' },
+        { id: '04', label: 'Heating / Air Conditioning', itemKey: 'heatingAirConditioning' },
+        { id: '05', label: 'Windscreen Wiper / Washer', itemKey: 'windscreenWiperWasher' },
+        { id: '06', label: 'Horns', itemKey: 'horns' },
+        { id: '07', label: 'Backup Alarm', itemKey: 'backupAlarm' },
+        { id: '08', label: 'Head Lighting', itemKey: 'headLighting' },
+        { id: '09', label: 'Additional Lighting', itemKey: 'additionalLighting' },
+        { id: '10', label: 'Rotating Beacon', itemKey: 'rotatingBeacon' },
+        { id: '11', label: 'Battery', itemKey: 'battery' },
+    ],
+    wheels: [
+        { id: '01', label: 'Rims', itemKey: 'rims' },
+        { id: '02', label: 'Tires & Pressure', itemKey: 'tiresPressure' },
+    ],
+    otherItems: [
+        { id: '01', label: 'Screws and Nuts', itemKey: 'screwsNuts' },
+        { id: '02', label: 'Frame and Body', itemKey: 'frameBody' },
+        { id: '03', label: 'Paint', itemKey: 'paint' },
+        { id: '04', label: 'General Operation', itemKey: 'generalOperation' },
+        { id: '05', label: 'Operator\'s Manual', itemKey: 'operatorsManual' },
+        { id: '06', label: 'Instructions for Customer', itemKey: 'instructionsForCustomer' },
+    ],
+};
+
+// Renault Section
+const RENAULT_SECTION_MAP = {
+    vehiclePhysicalCondition: 'I. Vehicle Physical Condition',
+    bodyCarresoryAssembledCondition: 'II. Body Carresory Assembled Condition',
+    vehicleEquipmentAvailability: 'III. Vehicle Equipment Availability',
+    checkLevels: 'IV. Check Levels',
+    majorUnitForLeaks: 'V. Major Unit For Leaks',
+    generalChecking: 'VI. General Checking',
+    roadTest: 'VII. Road Test',
+};
+
+export const RENAULT_SECTION_ORDER = [
+    'vehiclePhysicalCondition',
+    'bodyCarresoryAssembledCondition',
+    'vehicleEquipmentAvailability',
+    'checkLevels',
+    'majorUnitForLeaks',
+    'generalChecking',
+    'roadTest'
+];
+
+// Renault Item
+const RENAULT_ITEM_MAP = {
+    vehiclePhysicalCondition: [
+        { id: '001', label: 'Remove & Clean the Protecting Plastic on Window Glass Bottom Side (Right & Left Door Panel)' },
+        { id: '002', label: 'Check the Vehicle General View of Paint Condition (Probably Any Scratching During Transportation)' },
+        { id: '003', label: 'Check the Cab Condition' },
+        { id: '004', label: 'Check the Windscreen Condition' },
+        { id: '005', label: 'Check the Windscreen Glass Condition' },
+        { id: '006', label: 'Check the Rear View Mirror Condition' },
+        { id: '007', label: 'Check the Head Light lens Condition' },
+        { id: '008', label: 'Check the Side Light lens Condition' },
+        { id: '009', label: 'Remove & Take away all the Paper-sheet labels (Ex-Factory Works Labeling)' },
+    ],
+    bodyCarresoryAssembledCondition: [
+        { id: '010', label: 'Remove & Clean the Protecting Plastic on Window Glass Bottom Side (Right & Left Door Panel)' },
+        { id: '011', label: 'Check, There\'s No Any Parts of Body Carresory on Touching Condition with Moving Component Parts of RENAULT Assembly' },
+        { id: '012', label: 'Check Attachment Body with Chassis (Bolts & Nuts)' },
+    ],
+    vehicleEquipmentAvailability: [
+        { id: '013', label: 'Spare Starting Key' },
+        { id: '014', label: 'Spare Door Panel Key' },
+        { id: '015', label: 'Hydraulic Jack and Bar Handle' },
+        { id: '016', label: 'Wheel Nut Wrench' },
+        { id: '017', label: 'Safety Triangle' },
+        { id: '018', label: 'Tyre Inflate Flexible Hose' },
+        { id: '019', label: 'Drivers Manual Hand Book' },
+        { id: '020', label: 'Spare Wheel' },
+        { id: '021', label: 'Tools Kit + Bag' },
+    ],
+    checkLevels: [
+        { id: '022', label: 'Engine Oil Level' },
+        { id: '023', label: 'Engine Coolant Level' },
+        { id: '024', label: 'Clutch Hydraulic Oil Level' },
+        { id: '025', label: 'Gearbox Oil Level' },
+        { id: '026', label: 'Transfer Box Oil Level' },
+        { id: '027', label: 'Steering Hydraulic Oil Level' },
+        { id: '028', label: 'Front Drive Axle + Hub Reduction Oil Level' },
+        { id: '029', label: 'Middle Drive Axle + Hub Reduction Oil Level' },
+        { id: '030', label: 'Rear Drive Axle + Hub Reduction Oil Level' },
+        { id: '031', label: 'Rear Suspension Boogie-Pivot Oil Level' },
+        { id: '032', label: 'Cab Tilting Hydraulic Oil Level' },
+        { id: '033', label: 'Battery Electrolyte Level' },
+        { id: '034', label: 'Windscreen Washer Tank Water Level' },
+    ],
+    majorUnitForLeaks: [
+        { id: '035', label: 'Engine: Oil' },
+        { id: '036', label: 'Engine: Coolant' },
+        { id: '037', label: 'Engine: Fuel' },
+        { id: '038', label: 'Clutch Hydraulic Oil' },
+        { id: '039', label: 'Transmission Gearbox/ PTO/ Oil-Cooler/ Oil-Coolant' },
+        { id: '040', label: 'Transferbox Oil/ Oil-Cooler/ Oil-Coolant' },
+        { id: '041', label: 'Power Steering Hydraulic Oil' },
+        { id: '042', label: 'Front Drive Axle & Hub Reduction Oil' },
+        { id: '043', label: 'Middle Axle & Hub Reduction Oil' },
+        { id: '044', label: 'Rear Axle & Hub Reduction Oil' },
+        { id: '045', label: 'Brake Air System' },
+        { id: '046', label: 'Cab Tilting Hydraulic Oil' },
+    ],
+    generalChecking: [
+        { id: '047', label: 'Front & Rear Suspension Spring Leaf Condition' },
+        { id: '048', label: 'Front Shock Absorber Condition and Attachment' },
+        { id: '049', label: 'Front Anti-Roll Bar Condition and Attachment' },
+        { id: '050', label: 'Torque Rod Condtion and Attachment' },
+        { id: '051', label: 'Condition and Tension of All Drive Belts' },
+        { id: '052', label: 'Fuel Piping Condition and Attachment' },
+        { id: '053', label: 'Water Piping Condition and Attachment' },
+        { id: '054', label: 'Radiator Mounting Condition and Attachment' },
+        { id: '055', label: 'Air Intake Piping Condition and Attachment' },
+        { id: '056', label: 'Front & Rear Engine Mounting Condition and Attachment' },
+        { id: '057', label: 'Clutch Hydraulic Circuit Condition and Attachment' },
+        { id: '058', label: 'Clutch Wear Indicator/ Clutch Fork Position' },
+        { id: '059', label: 'Transmission Gearbox belt housing: Bolt Tightness' },
+        { id: '060', label: 'Clutch Pedal Correct Adjustment (Free Play)' },
+        { id: '061', label: 'Transmission Gearbox Mounting' },
+        { id: '062', label: 'Transferbox Mounting' },
+        { id: '063', label: 'Steering Piping Condition and Attachment' },
+        { id: '064', label: 'Tyre Condition and Inflate Air Pressure' },
+        { id: '065', label: 'Wheel Nut Tightness' },
+        { id: '066', label: 'Position of Control Arm & Operating Clearanceof Automatic Brake Slack Adjuster' },
+        { id: '067', label: 'Brake Pedal Correct Adjustment (Free Play)' },
+        { id: '068', label: 'Braking Circuit & Air-System for Leaks' },
+        { id: '069', label: 'Condition of Front Brake Cylinder for Leaks' },
+        { id: '070', label: 'Condition of Middle Brake Cylinder for Leaks' },
+        { id: '071', label: 'Condition of Rear Brake Cylinder for Leaks' },
+        { id: '072', label: 'Grease All Point' },
+        { id: '073', label: 'Drain the Fuel Prefilter Sediment Bowl' },
+        { id: '074', label: 'Clean and Apply Grease on Batteries Terminal' },
+        { id: '075', label: 'Cab Tilting Device Correct Condition and Leaks' },
+        { id: '076', label: 'Setting of Headlights' },
+        { id: '077', label: 'Correct Operation of Air Filter Clogged Indicator Warning Light by Closing Method Through the Engine Air Intake' },
+        { id: '078', label: 'Check Head Light Operation' },
+        { id: '079', label: 'Check Signal Lighting Operation' },
+        { id: '080', label: 'Check Stop and Reversing Light' },
+        { id: '081', label: 'Check Horn Operation' },
+        { id: '082', label: 'Check the Working Operation of Power Window' },
+        { id: '083', label: 'Check the Working Operation of Driver-Seat Adjustment' },
+        { id: '085', label: 'Correct Operation of Engine Exhaust Brake' },
+    ],
+    roadTest: [
+        { id: '086', label: 'Check the Working Operation of Inter-Axle Differential Lock' },
+        { id: '087', label: 'Check the Working Operation of Inter-Wheel Differential Lock' },
+        { id: '088', label: 'Check the Working Operation of "LOW SPEED" range of Transferbox' },
+        { id: '089', label: 'Check the Working Operation of Power Take Off (PTO)' },
+        { id: '090', label: 'Check the FUSE BOX equipment, the FUSE Element must be Complete Condition' },
+    ],
+};
+
+const SDLG_REQUIREMENTS = [
+    "Check Documents According to Packing List of Complete Machine",
+    "Check That Documents With the Complete Machine are Complete",
+    "Check That Tools With the Complete Machine are Complete",
+    "Check That the Documents and Tools With the Engine are Complete",
+
+    "Check That the Equipment of Complete Machine is in Good Condition",
+    "Check That Oil Level and Fluid Level of the Complete Machine are Normal",
+    "Check Engine Oil Level",
+    "Transmission Oil Level",
+    "Drive Axle Oil Level",
+    "Brake System Oil Level",
+    "Coolant Liquid Level",
+    "Hydraulic Oil Level",
+    "Check That the Hub Nuts are Tight",
+    "Check That Connecting Bolts of Drive Shaft are Tight",
+    "Check That Bolts in Other Important Positions (such as working mechanism) are Tight",
+    "Check That Each Lubrication Point is Greased as Specified.",
+    "Check That the Engine Speed is Normal",
+    "Check That Readings in Each Gauge are Normal",
+    "Check That the Steering System Works Normally",
+    "Check That Any Oil, Water or Gas is Leaking",
+    "Check That the Working Systems Work Normally",
+    "Check That the Traveling Mechanism Works Normally",
+    "Check That the Electrical System Works Normally",
+    "Check That the Control System Works Normally",
+    "Check That the Service Braking System and the Parking Braking System Work Normally",
+    "Check That Other Parts Work Normally",
+];
+
+export const BRAND_CHECKLIST_MAP = {
+    // Brand Manitou
+    manitou: {
+        sections: MANITOU_SECTION_MAP,
+        items: MANITOU_ITEM_MAP,
+    },
+
+    // Brand Renault Trucks
+    renault: {
+        sections: RENAULT_SECTION_MAP,
+        items: RENAULT_ITEM_MAP,
+    },
+
+    // Brand SDLG
+    sdlg: {
+        requirements: SDLG_REQUIREMENTS,
+    },
+};

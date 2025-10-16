@@ -3,7 +3,7 @@ from datetime import datetime
 from sqlalchemy.dialects.mssql import UNIQUEIDENTIFIER
 import uuid
 
-class MaintenanceChecklistItemModel_SDLG(db.Model):
+class StorageMaintenanceChecklistItemModel_SDLG(db.Model):
 
     __tablename__ = 'Maintenance_Sdlg_items'
 
@@ -13,6 +13,9 @@ class MaintenanceChecklistItemModel_SDLG(db.Model):
     # foreign key
     smID = db.Column(UNIQUEIDENTIFIER, db.ForeignKey('Maintenance_Sdlg_header.smID'), nullable=False)
 
+    # section
+    section = db.Column(db.String(100), nullable=False)
+
     # items detail
     itemName = db.Column(db.String(100), nullable=False)
 
@@ -20,5 +23,5 @@ class MaintenanceChecklistItemModel_SDLG(db.Model):
     status = db.Column(db.Boolean(), nullable=True)
 
     def __repr__(self):
-        return f"<MaintenanceChecklistItemModel_SDLG {self.smID} Item: {self.itemName}>"
+        return f"<StorageMaintenanceChecklistItemModel_SDLG {self.smID} Item: {self.itemName}>"
 

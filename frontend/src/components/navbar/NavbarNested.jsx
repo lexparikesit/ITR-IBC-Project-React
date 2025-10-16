@@ -78,10 +78,10 @@ const mockdata = [
     {
         label: 'Log Activity',
         links: [
-            { label: 'Arrival Check Log', icon: IconFolder, link: '/dashboard/arrival-check-log/' },
-            { label: 'Maintenance Log', icon: IconFolder, link: '/dashboard/logs/maintenance' },
-            { label: 'Pre-Delivery Log', icon: IconFolder, link: '/dashboard/logs/pre-delivery' },
-            { label: 'Delivery Unit Log', icon: IconFolder, link: '/dashboard/logs/delivery-unit' },
+            { label: 'Arrival Check Log', icon: IconFolder, link: '/dashboard/arrival-check-log' },
+            { label: 'Maintenance Log', icon: IconFolder, link: '/dashboard/maintenance-list-log' },
+            { label: 'Pre-Delivery Log', icon: IconFolder, link: '/dashboard/pre-delivery-log' },
+            { label: 'Commissioning Log', icon: IconFolder, link: '/dashboard/commissioning-log' },
         ],
     },
     {

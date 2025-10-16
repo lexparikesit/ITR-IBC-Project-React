@@ -263,7 +263,7 @@ export function ManitouPDIForm() {
                 approvalBy: values.approvalBy,
                 woNumber: values.woNumber,
             },
-            remarksTransport: values.deliveryRemarks,
+            deliveryRemarks: values.deliveryRemarks,
             generalRemarks: values.generalRemarks,
             checklistItems: checklistItemsPayload,
         };

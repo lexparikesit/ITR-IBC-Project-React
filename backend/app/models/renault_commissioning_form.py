@@ -15,6 +15,8 @@ class CommissioningFormModel_RT(db.Model):
     woNumber = db.Column(db.String(50), nullable=False)
     dealerCode = db.Column(db.String(50), nullable=False)
     dateOfCheck = db.Column(db.DateTime, nullable=False)
+    technician = db.Column(db.String(200), nullable=False)
+    approvalBy = db.Column(db.String(200), nullable=False)
 
     # unit Information
     brand = db.Column(db.String(50), nullable=False)

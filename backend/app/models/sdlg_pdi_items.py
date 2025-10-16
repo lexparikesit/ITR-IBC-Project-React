@@ -14,7 +14,7 @@ class PDIChecklistItemModel_SDLG(db.Model):
     pdiID = db.Column(UNIQUEIDENTIFIER, db.ForeignKey('PDI_Sdlg_header.pdiID'), nullable=False)
 
     # items detail
-    itemName = db.Column(db.String(100), nullable=False)
+    itemName = db.Column(db.String(500), nullable=False)
 
     # status
     status = db.Column(db.Boolean(), nullable=True)

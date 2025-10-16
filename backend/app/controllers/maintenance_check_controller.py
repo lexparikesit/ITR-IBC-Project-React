@@ -7,7 +7,7 @@ from app.models.manitou_maintenance_items import StorageMaintenanceChecklistItem
 from app.models.renault_maintenance_form import StorageMaintenanceFormModel_RT
 from app.models.renault_maintenance_items import StorageMaintenanceChecklistItemModel_RT
 from app.models.sdlg_maintenance_form import StorageMaintenanceFormModel_SDLG
-from app.models.sdlg_maintenance_items import MaintenanceChecklistItemModel_SDLG
+from app.models.sdlg_maintenance_items import StorageMaintenanceChecklistItemModel_SDLG
 from app.models.sdlg_maintenance_form import Maintenance_sdlg_defect_remarks
 from datetime import datetime, time, date
 from app.controllers.auth_controller import jwt_required
@@ -160,12 +160,11 @@ def submit_maintenance_checklist():
                 'id': str(storage_maintenance_entry.smID)
             }), 201
 
-
         # for Renault
         elif brand.lower() == 'renault':
             unit_info = data.get('unitInfo', {})
             remarks = data.get('repairNotes')
-            checklist_item_payloads = data.get('checklistItem', {})
+            checklist_item_payloads = data.get('checklistItems', {}) 
             battery_data = data.get('batteryInspection', {})
             fault_codes = data.get('faultCodes', {})
 
@@ -189,7 +188,7 @@ def submit_maintenance_checklist():
 
             def save_items(section, item_name, status=None, value=None, code=None, caption=None, image_url=None):
                 """handles generic Data"""
-
+                
                 new_item = StorageMaintenanceChecklistItemModel_RT(
                     smID = storage_maintenance_entry.smID,
                     section = section,
@@ -202,57 +201,78 @@ def submit_maintenance_checklist():
                 )
                 db.session.add(new_item)
             
-            # items iteration
+            def get_safe_value(val):
+                return str(val) if val is not None else None
+            
             if isinstance(checklist_item_payloads, dict):
                 for section_key, items in checklist_item_payloads.items():
                     if isinstance(items, dict):
                         for item_key, item_details in items.items():
-                            if isinstance(item_details, dict):
-                                image_url = None
+                            status_string = item_details.get('value')
+                            
+                            if isinstance(item_details, dict) and status_string is not None:
+                                image_url = item_details.get('image_url')
+
                                 save_items(
                                     section = section_key,
                                     item_name = item_key,
-                                    status = converted_renault_status_to_int(item_details.get('status')),
+                                    status = converted_renault_status_to_int(status_string),
+                                    value = None,
+                                    code = None,
                                     caption = item_details.get('notes'),
                                     image_url = image_url
                                 )
-                            else:
-                                print(f"DEBUG: Skipping invalid item_details: {item_details}")
-                    else:
-                        print(f"DEBUG: Skipping invalid items object: {items}")
 
-            # battery data
-            if isinstance(battery_data, dict):
+            if isinstance(battery_data, list) and len(battery_data) >= 2:
+                default_status = 1 
+                front_battery = battery_data[0]
+                
                 save_items(
                     section = 'battery_inspection',
                     item_name = 'front_battery_level',
-                    value = battery_data.get('frontBatteryLevel'),
+                    status = default_status, 
+                    value = get_safe_value(front_battery.get('electrolyteLevel')),
+                    caption = front_battery.get('statusOnBatteryAnalyzer'),
+                    code = None
                 )
                 save_items(
                     section='battery_inspection',
                     item_name='front_battery_voltage',
-                    value=battery_data.get('frontBatteryVoltage'),
+                    status = default_status, 
+                    value=get_safe_value(front_battery.get('voltage')),
+                    caption = front_battery.get('statusOnBatteryAnalyzer'),
+                    code = None
                 )
+                
+                rear_battery = battery_data[1]
+                
                 save_items(
                     section='battery_inspection',
                     item_name='rear_battery_level',
-                    value=battery_data.get('rearBatteryLevel'),
+                    status = default_status, 
+                    value=get_safe_value(rear_battery.get('electrolyteLevel')),
+                    caption = rear_battery.get('statusOnBatteryAnalyzer'),
+                    code = None
                 )
                 save_items(
                     section='battery_inspection',
                     item_name='rear_battery_voltage',
-                    value=battery_data.get('rearBatteryVoltage'),
+                    status = default_status, 
+                    value=get_safe_value(rear_battery.get('voltage')),
+                    caption = rear_battery.get('statusOnBatteryAnalyzer'),
+                    code = None
                 )
             
-            # fault codes information
             if fault_codes and isinstance(fault_codes, list):
                 for i, code_item in enumerate(fault_codes):
                     if isinstance(code_item, dict):
                         fault_code_status_int = convert_fault_code_status_to_int(code_item.get('status'))
+                        
                         save_items(
                             section='fault_codes',
                             item_name=f'fault_code_{i+1}',
                             status=fault_code_status_int,
+                            value=None,
                             code=code_item.get('faultCode'),
                             caption=code_item.get('status')
                         )
@@ -273,14 +293,14 @@ def submit_maintenance_checklist():
             storage_maintenance_entry.model = unit_info.get('model')
             storage_maintenance_entry.VIN = unit_info.get('vehicleNumber')
             storage_maintenance_entry.hourMeter = unit_info.get('workingHours')
-            storage_maintenance_entry.vehicleArrivalDate = parse_date(unit_info.get('vehicleArrivalDate'))
+            storage_maintenance_entry.vehicleArrivalDate = parse_date(unit_info.get('vehicleArrival'))
             storage_maintenance_entry.dateOfCheck = parse_date(unit_info.get('inspectionDate'))
             storage_maintenance_entry.technician = unit_info.get('inspector')
             storage_maintenance_entry.approvalBy = unit_info.get('approvalBy')
-            storage_maintenance_entry.signatureTechnician = unit_info.get('signatureInspectorName')
+            storage_maintenance_entry.signatureTechnician = unit_info.get('signatureInspector')
             storage_maintenance_entry.signatureTechnicianDate = parse_date(unit_info.get('signatureInspectorDate'))
             storage_maintenance_entry.signatureApprover = unit_info.get('signatureSupervisor')
-            storage_maintenance_entry.supervisorNameDate = parse_date(unit_info.get('signatureSupervisorDate'))           
+            storage_maintenance_entry.signatureApproverDate = parse_date(unit_info.get('signatureSupervisorDate'))           
 
             # session to add the payload
             db.session.add(storage_maintenance_entry)
@@ -300,8 +320,14 @@ def submit_maintenance_checklist():
                 status_value = unit_info.get(item_name)
                 
                 if status_value is not None:
-                    new_item = MaintenanceChecklistItemModel_SDLG(
+                    if item_name.startswith('inspection'):
+                        item_section = 'Inspection'
+                    elif item_name.startswith('testing'):
+                        item_section = 'Testing'
+                    
+                    new_item = StorageMaintenanceChecklistItemModel_SDLG(
                         smID = storage_maintenance_entry.smID,
+                        section = item_section,
                         itemName = item_name,
                         status = status_value
                     )

@@ -92,10 +92,10 @@ const initialRenaultPdiValues = {
     chassisId: '',
     registrationNo: '',
     vinNo: '',
-    customer: '',
-    province: '',
+    customer: null,
+    province: null,
     model: null,
-    engine: '',
+    engine: null,
     technician: null,
     approvalBy: null,
     checklistItems: initialChecklistValues,
@@ -185,9 +185,27 @@ export function RenaultPDIForm() {
 
                 // province API
                 const provincesResponse = await fetch("http://127.0.0.1:5000/api/provinces");
-                if (!provincesResponse.ok) throw new Error(`HTTP error! status: ${provincesResponse.status}`);
-                const provincesData = await provincesResponse.json();
-                setProvinces(provincesData);
+
+                if (!provincesResponse.ok) {
+                    console.error(`HTTP error! status: ${provincesResponse.status}`);
+                    setProvinces([]); 
+                    return;
+                }
+
+                const provincesObject = await provincesResponse.json();
+
+                if (typeof provincesObject === 'object' && provincesObject !== null) {
+                    const provincesArray = Object.keys(provincesObject).map(code => ({
+                        value: code,
+                        label: provincesObject[code]
+                    }));
+                    
+                    setProvinces(provincesArray);
+                
+                } else {
+                    console.error("API response is not a valid object for mapping:", provincesObject);
+                    setProvinces([]);
+                }
 
                  // dummy Technicians API
                 const dummyTechniciansData = [
@@ -252,9 +270,13 @@ export function RenaultPDIForm() {
         } = values.checklistItems;
         
         const processChecklistItems = (section, sectionKey) => {
+            checklistPayload[sectionKey] = {}; 
             Object.entries(section).forEach(([itemKey, itemValue]) => {
-                checklistPayload[`${sectionKey}.${itemKey}.value`] = itemValue.value;
-                checklistPayload[`${sectionKey}.${itemKey}.notes`] = itemValue.notes;
+                checklistPayload[sectionKey][itemKey] = {
+                    value: itemValue.value,
+                    notes: itemValue.notes,
+                };
+                
                 if (itemValue.image) {
                     formData.append(`${sectionKey}.${itemKey}.image`, itemValue.image);
                 }
@@ -292,10 +314,11 @@ export function RenaultPDIForm() {
                 batt_outer_rear: values.batteryStatus[1].battery,
                 test_code_batt_outer_rear: values.batteryStatus[1].testCode,
             },
-            vehicle_innspection: values.vehicleDamageNotes,
+            vehicle_inspection: values.vehicleDamageNotes,
         };
 
         formData.append('data', JSON.stringify(payload));
+        console.log("Payload to be sent:", payload);
 
         try {
             const response = await fetch(`http://localhost:5000/api/pre-delivery-inspection/renault/submit`, {

@@ -5,22 +5,27 @@ def get_provinces():
     """Fetches province data from an external API, formats it, and returns it as a JSON response."""
 
     api_url = 'https://wilayah.id/api/provinces.json'
-
+    province_map = {}
+    
     try:
         response = requests.get(api_url)
         response.raise_for_status()
-
         provinces_data = response.json()
-
-        formatted_data = [
-            {"value": p.get("code"), "label": p.get("name")}
+        
+        # Membuat kamus { "kode": "label" }
+        province_map = {
+            p.get("code"): p.get("name")
             for p in provinces_data.get("data", [])
-        ]
-
-        return jsonify(formatted_data)
-    
+        }
+        return province_map
+        
     except requests.exceptions.RequestException as e:
-        return jsonify({"error": "Failed to fetch data from external API."}), 500
+        print(f"Error fetching province data: {e}")
+        return {}
+
+PROVINCE_CACHE = get_provinces()
+
+def get_province_name_by_code(code):
+    """Fetches province API by code"""
     
-    except Exception as e:
-        return jsonify({"error": "An internal server error occurred."}), 500
+    return PROVINCE_CACHE.get(code, code)

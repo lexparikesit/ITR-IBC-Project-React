@@ -393,7 +393,7 @@ export function SdlgPDIForm() {
                                 placeholder="Select Inspector"
                                 clearable
                                 searchable
-                                data={approvers}
+                                data={technicians}
                                 {...form.getInputProps('inspectorSignature')}
                             />
                             <DateInput
