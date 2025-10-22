@@ -109,4 +109,7 @@ def create_app():
     from app.routes.commissioning_form_log_routes import commissioning_log_bp
     app.register_blueprint(commissioning_log_bp)
 
+    from app.routes.ibc_log_routes import ibc_log_bp
+    app.register_blueprint(ibc_log_bp)
+
     return app

@@ -179,6 +179,7 @@ export function MultiStepIbcForm() {
                             label: item.label,
                         }));
                     setUnitModels(formattedModels);
+
                 } catch (error) {
                     console.error("Failed to Fetch Unit Types:", error);
                     notifications.show({
@@ -190,6 +191,7 @@ export function MultiStepIbcForm() {
                 }
             };
             fetchModel();
+            
         } else {
             setUnitModels([]);
         }

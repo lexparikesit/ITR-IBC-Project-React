@@ -80,6 +80,7 @@ const mockdata = [
         links: [
             { label: 'Arrival Check Log', icon: IconFolder, link: '/dashboard/arrival-check-log' },
             { label: 'Maintenance Log', icon: IconFolder, link: '/dashboard/maintenance-list-log' },
+            { label: 'IBC Form Log', icon: IconFolder, link: '/dashboard/ibc-log' },
             { label: 'Pre-Delivery Log', icon: IconFolder, link: '/dashboard/pre-delivery-log' },
             { label: 'Commissioning Log', icon: IconFolder, link: '/dashboard/commissioning-log' },
         ],

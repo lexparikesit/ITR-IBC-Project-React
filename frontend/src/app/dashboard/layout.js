@@ -101,6 +101,8 @@ export default function DashboardLayout({ children }) {
             return `Arrival Check View`
         } else if (path.startsWith('/dashboard/commissioning-log')) {
             return `Commissioning Unit View`
+        } else if (path.startsWith('/dashboard/pre-delivery-log')) {
+            return `Pre-Delivery View`
         }
         // to input another logic below this section
 

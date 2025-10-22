@@ -351,11 +351,14 @@ const LogData = ({ title, apiUrl }) => {
     const toTitleCase = (str) => {
         if (!str) return 'N/A';
 
+        const ptRegex = /^(pt\.?|p\.?t\.?)$/i;
         const words = str.split(' ');
-
         const formattedWords = words.map(word => {
-            if (word.toUpperCase() === 'PT') {
-                return 'PT';
+        const cleanWord = word.replace(/[.,;:!?]+$/, '');
+
+            if (ptRegex.test(cleanWord)) {
+                const punctuation = word.match(/[.,;:!?]+$/) ? word.match(/[.,;:!?]+$/)[0] : '';
+                return 'PT' + punctuation;
             } else {
                 return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
             }
@@ -574,7 +577,7 @@ const LogData = ({ title, apiUrl }) => {
                             <TextInput
                                 label="Search Unit"
                                 icon={<IconSearch size={14} />}
-                                placeholder="by WO Number, VIN Number, Brand/ Product, or Unit Type)"
+                                placeholder="by WO Number, VIN Number, Brand/ Product, or Unit Type"
                                 value={searchQuery}
                                 onChange={(event) => {
                                     setSearchQuery(event.currentTarget.value);
