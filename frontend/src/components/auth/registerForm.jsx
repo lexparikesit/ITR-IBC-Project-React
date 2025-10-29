@@ -1,20 +1,49 @@
 "use client";
 
-import { useState } from "react";
-import { TextInput, PasswordInput, Button, Stack } from "@mantine/core";
-import { useRouter } from "next/navigation";
+import { 
+	TextInput,
+	Button, 
+	Stack,
+	Select,
+	Text, 
+} from "@mantine/core";
+import { useState, useEffect } from "react";
+import { IconAt, IconLock, IconUser, IconMail, IconShield } from "@tabler/icons-react"
 import { notifications } from "@mantine/notifications";
 import apiClient from "@/libs/api";
 
-export default function RegisterForm() {
-	const router = useRouter();
+export default function RegisterForm({ onSuccess }) {
 	const [username, setUsername] = useState("");
 	const [firstName, setFirstName] = useState("");
 	const [lastName, setLastName] = useState("");
 	const [email, setEmail] = useState("");
 	const [password, setPassword] = useState("");
 	const [confirmPassword, setConfirmPassword] = useState("");
+	const [selectedRole, setSelectedRole] = useState("");
+	const [availableRoles, setAvailableRoles] = useState([]);
 	const [isLoading, setIsLoading] = useState(false);
+
+	useEffect(() => {
+		const fetchRoles = async () => {
+			try {
+				const response = await apiClient.get("/roles");
+				setAvailableRoles(response.data);
+				
+				if (response.data.length > 0) {
+					setSelectedRole(response.data[0].name);
+				}
+				
+			} catch (error) {
+				console.error("Failed to fetch roles", error);
+				notifications.show({
+					title: "Error",
+					message: "Failed to load roles",
+					color: "red"
+			});
+		}
+	};
+		fetchRoles();
+	}, []);
 
 	const handleRegister = async (e) => {
 		e.preventDefault();
@@ -23,6 +52,16 @@ export default function RegisterForm() {
 			notifications.show({
 				title: "Validation Error",
 				message: "Password Don't Match!",
+				color: "red",
+				autoClose: 5000,
+			});
+			return;
+		}
+
+		if (!selectedRole) {
+			notifications.show({
+				title: "Validation Error",
+				message: "Please select a role!",
 				color: "red",
 				autoClose: 5000,
 			});
@@ -39,6 +78,7 @@ export default function RegisterForm() {
 				email,
 				password,
 				confirmPassword,
+				role: selectedRole
 			});
 
 			if (response.status == 201) {
@@ -48,7 +88,11 @@ export default function RegisterForm() {
                     color: "green",
                     autoClose: 5000,
 				});
-				router.push('/login');
+
+				if (onSuccess) {
+					onSuccess();
+				}
+
 			} else {
 				notifications.show({
                     title: "Registration Failed",
@@ -57,20 +101,20 @@ export default function RegisterForm() {
                     autoClose: 5000,
                 });
 			}
+
 		} catch (error) {
 			console.error("Registration Error!", error);
+			
 			let errorMessage = "An unexpected error occurred during registration. Please try again.";
 			let errorTitle = "Registration Title";
 			let errorColor = "red";
 
 			if (error.response) {
-				// error from backend (ex: status 409)
 				if (error.response.status === 409) {
 					errorMessage = error.response.data.message || "Username or Email already exists.";
                     errorTitle = "Duplicate Entry";
                     errorColor = "orange";
 				} else {
-					// other's of error from backend
                     errorMessage = error.response.data.message || errorMessage;
 				}
 			} else if (error.request) {
@@ -93,52 +137,58 @@ export default function RegisterForm() {
 		<form onSubmit={handleRegister}>
 			<Stack>
 				<TextInput
-					label="Username"
 					placeholder="Username"
 					value={username}
 					onChange={(e) => setUsername(e.currentTarget.value)}
 					required
+					mt="sm"
+					leftSection={<IconAt size={16} />}
 				/>
 				<TextInput
-					label="First Name"
 					placeholder="First Name"
 					value={firstName}
 					onChange={(e) => setFirstName(e.currentTarget.value)}
 					required
-					mt={"sm"}
+					mt="sm"
+					leftSection={<IconUser size={16} />}
 				/>
 				<TextInput
-					label="Last Name"
 					placeholder="Last Name"
 					value={lastName}
 					onChange={(e) => setLastName(e.currentTarget.value)}
-					mt={"sm"}
+					mt="sm"
+					leftSection={<IconUser size={16} />}
 				/>
 				<TextInput
-					label="Email"
 					placeholder="you@example.com"
 					value={email}
 					onChange={(e) => setEmail(e.currentTarget.value)}
 					required
-					mt={"sm"}
+					mt="sm"
+					leftSection={<IconMail size={16} />}
 				/>
-				<PasswordInput
-					label="Password"
-					placeholder="••••••••"
-					value={password}
-					onChange={(e) => setPassword(e.currentTarget.value)}
+				<Select
+					placeholder="Select user role"
+					data={availableRoles.map(role => ({ value: role.name, label: role.name }))}
+					value={selectedRole}
+					onChange={setSelectedRole}
 					required
-					mt={"sm"}
+					mt="sm"
+					leftSection={<IconShield size={16} />}
 				/>
-				<PasswordInput
-					label="Confirm Password"
-					placeholder="••••••••"
-					value={confirmPassword}
-					onChange={(e) => setConfirmPassword(e.currentTarget.value)}
-					required
-					mt={"sm"}
-				/>
-				<Button fullWidth mt="md" onClick={handleRegister} color="#A91D3A" loading={isLoading}>
+				
+				<Text size="sm" c="dimmed" ta="center">
+					User will receive an email with instructions to set their password.
+				</Text>
+
+				<Button 
+					fullWidth 
+					mt="md" 
+					onClick={handleRegister} 
+					color="#A91D3A" 
+					loading={isLoading}
+					type="submit"
+				>
 					Register
 				</Button>
 			</Stack>

@@ -20,7 +20,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata = {
-  title: "ITR IBC",
+  title: "Indotraktor IBC Portal",
   description: "PT Indotraktor Utama",
 };
 
@@ -30,9 +30,9 @@ export default function RootLayout({ children }) {
       <body className={`${geistSans.variable} ${geistMono.variable}`}>
         <MantineProviders>
           <Notifications />
-          <UserProvider> 
-            {children}
-          </UserProvider>
+            <UserProvider> 
+              {children}
+            </UserProvider>
         </MantineProviders>
       </body>
     </html>

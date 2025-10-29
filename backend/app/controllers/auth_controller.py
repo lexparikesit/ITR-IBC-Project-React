@@ -1,5 +1,5 @@
 from werkzeug.security import generate_password_hash, check_password_hash
-from app.models.models import db, User, UserOtp, PasswordResetToken
+from app.models.models import db, User, UserOtp, PasswordResetToken, IBCPermissionRoles, IBCRolesPermission, IBCRoles, IBCUserRoles
 from app.service.email_service import EmailService
 from datetime import timedelta
 from functools import wraps
@@ -10,12 +10,13 @@ import datetime
 import jwt
 import os
 import uuid
+import string
 
 # configure the JWT
-FLASK_JWT_SECRET_KEY = os.environ.get("FLASK_JWT_SECRET_KEY")
+JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY")
 
-if not FLASK_JWT_SECRET_KEY:
-    raise ValueError("Error: FLASK_JWT_SECRET_KEY environment Variable not set. "
+if not JWT_SECRET_KEY:
+    raise ValueError("Error: JWT_SECRET_KEY environment Variable not set. "
                     "Please set a strong secret key for JWT in your .env file or server environment")
 
 JWT_ALGORITHM = "HS256"
@@ -31,14 +32,14 @@ def generate_jwt_token(user_id, email, name):
         'exp': datetime.datetime.utcnow() + timedelta(days=JWT_EXPIRATION_DAYS),
         'iat': datetime.datetime.utcnow()
     }
-    token = jwt.encode(payload, FLASK_JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
+    token = jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
     return token
 
 def verify_jwt_token(token):
     """Verifies the JWT token and returns its payload if valid. Returns None if invalid or expired."""
     
     try:
-        payload = jwt.decode(token, FLASK_JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
         return payload
     except jwt.ExpiredSignatureError:
         current_app.logger.warning("JWT Token Has Expired")
@@ -46,6 +47,18 @@ def verify_jwt_token(token):
     except jwt.InvalidTokenError:
         current_app.logger.warning("JWT Token is Invalid")
         return None
+
+def get_user_permissions(user_id):
+    """Retrieve the list of permissions (list[str]) for a user based on their user ID (UUID string)."""
+
+    permissions = db.session.query(IBCPermissionRoles.permission_name)\
+        .join(IBCRolesPermission, IBCPermissionRoles.permission_id == IBCRolesPermission.permission_id)\
+        .join(IBCRoles, IBCRolesPermission.role_id == IBCRoles.role_id)\
+        .join(IBCUserRoles, IBCRoles.role_id == IBCUserRoles.role_id)\
+        .filter(IBCUserRoles.userid == user_id)\
+        .all()
+    
+    return [perm.permission_name for perm in permissions]
 
 def jwt_required(f):
     """ Decorator to protect the API route, requires a valid JWT token to be present in the HttpOnly 'session_token' cookie.
@@ -78,6 +91,27 @@ def jwt_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+def require_permission(permission_name):
+    """Decorator to ensure users have certain permissions.Must be used AFTER @jwt_required."""
+
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            
+            if not hasattr(g, 'user_id'):
+                return jsonify({"message": "Authentication required"}), 401
+            
+            # get permission user
+            user_permissions = get_user_permissions(g.user_id)
+
+            # Check whether the required permissions are available
+            if permission_name not in user_permissions:
+                return jsonify({"message": "Insufficient permissions"}), 403
+            
+            return f(*args, **kwargs)
+        return decorated_function
+    return decorator
+
 class AuthController:
     
     def __init__(self):
@@ -88,8 +122,7 @@ class AuthController:
         """Verifies user credentials. Returns the User object if valid, None otherwise."""
 
         user = User.query.filter_by(username=username).first()
-
-        if user and check_password_hash(user.password, password):
+        if user and user.is_active and check_password_hash(user.password, password):
             return user
         return None
 
@@ -123,18 +156,82 @@ class AuthController:
 
         if not user_otp:
             return False
-        
+
         # remarks OTP which is used
         user_otp.used_at = datetime.datetime.now()
         db.session.commit()
         return True
 
     def send_otp_email(self, email, otp):
-        """Sends the OTP code to the user's email address."""
+        """Sends a professional OTP code to the user's email address."""
 
-        subject = "Your OTP Code for ITR IBC Web Apps"
-        body = f"Hello,\n\nYour One-Time Password (OTP) for login is: {otp}\n\nThis OTP is valid for 5 minutes.\n\nIf you did not request this, please ignore this email.\n\nRegards,\nITR IBC Team"
-        self.email_service.send_email(email, subject, body)
+        subject = "Your OTP Code for Indotraktor IBC Portal Login"
+        body_text = f"""
+            Hello,
+
+            Your One-Time Password (OTP) for logging into the Indotraktor IBC Portal is:
+
+            {otp}
+
+            This OTP is valid for 5 minutes.
+
+            If you did not request this login, please ignore this email or contact your administrator immediately.
+
+            Thank you,
+            Indotraktor Command Data Center
+        """
+
+        body_html = f"""
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                <div style="background: linear-gradient(135deg, #A91D3A 0%, #EE4266 100%); padding: 20px; text-align: center; border-radius: 8px; color: white;">
+                    <h1 style="margin: 0; font-size: 24px;">Indotraktor IBC Portal</h1>
+                    <p style="margin: 8px 0 0; font-size: 16px;">Secure Login Verification</p>
+                </div>
+                
+                <div style="padding: 20px; background: #f9f9f9; border-radius: 8px; margin-top: 20px;">
+                    <p style="font-size: 16px; color: #333; line-height: 1.6;">
+                        Hello,
+                    </p>
+                    
+                    <p style="font-size: 16px; color: #333; line-height: 1.6;">
+                        Your One-Time Password (OTP) for logging in is:
+                    </p>
+                    
+                    <div style="text-align: center; margin: 25px 0;">
+                        <div style="background: #e8f4fd; color: #A91D3A; font-size: 28px; font-weight: bold; padding: 15px; border-radius: 8px; letter-spacing: 4px; display: inline-block;">
+                            {otp}
+                        </div>
+                    </div>
+                    
+                    <p style="font-size: 14px; color: #666; text-align: center; margin-top: 10px;">
+                        ⏱️ This code is valid for <strong>5 minutes</strong>.
+                    </p>
+                    
+                    <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;">
+                    
+                    <p style="font-size: 14px; color: #888; line-height: 1.6;">
+                        If you did not request this login, please ignore this email or contact your administrator immediately.
+                    </p>
+                    
+                    <p style="font-size: 14px; color: #888; text-align: center; margin-top: 20px;">
+                        Thank you,<br>
+                        <strong>Indotraktor Command Data Center</strong>
+                    </p>
+                </div>
+            </div>
+        """
+
+        try:
+            self.email_service.send_email(
+                to=email,
+                subject=subject,
+                body=body_text,
+                html_body=body_html
+            )
+            current_app.logger.info(f"✅ OTP email sent to {email}")
+        
+        except Exception as e:
+            current_app.logger.error(f"❌ Failed to send OTP email to {email}: {str(e)}")
 
     def create_user(self, data):
         """Creates a new user. Returns the User object on success, None if email or username already exists."""
@@ -142,12 +239,29 @@ class AuthController:
         existing_user = User.query.filter_by(email=data["email"]).first()
         existing_user_by_username = User.query.filter_by(username=data["username"]).first()
         
-        if existing_user:
-            return None
-        if existing_user_by_username:
+        if existing_user or existing_user_by_username:
             return None
         
-        hashed_password = generate_password_hash(data["password"])
+        role_name = data.get("role")
+        
+        if not role_name:
+            current_app.logger.warning("Registration attempt without role")
+            return None
+        
+        role = IBCRoles.query.filter_by(role_name=role_name).first()
+        
+        if not role:
+            current_app.logger.warning(f"Registration attempt with invalid role: {role_name}")
+            return None
+        
+        def generate_secure_password(length=12):
+            """function to create random password"""
+            
+            characters = string.ascii_letters + string.digits + "!@#$%^&*"
+            return ''.join(random.choice(characters) for i in range(length))
+
+        generated_password = generate_secure_password()
+        hashed_password = generate_password_hash(generated_password)
 
         user = User(
             username=data["username"],
@@ -155,12 +269,111 @@ class AuthController:
             lastName=data["lastName"],
             email=data["email"],
             password=hashed_password,
+            is_active=True,
         )
 
         db.session.add(user)
         db.session.commit()
 
-        return user
+        user_role = IBCUserRoles(userid=user.userid, role_id=role.role_id)
+        db.session.add(user_role)
+
+        try:
+            db.session.commit()
+            current_app.logger.info(f"User {user.username} registered successfully with role {role_name}")
+            return user
+        
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Failed to register user: {e}")
+            return None
+        
+    def send_registration_email(self, user):
+        """Send professional registration email without password."""
+        
+        subject = "Welcome to Indotraktor IBC Portal - Account Created"
+        body_text = f"""
+            Hello {user.firstName} {user.lastName},
+
+            Your account has been successfully created by the Super Admin.
+
+            Account Details:
+            Username: {user.username}
+            Email: {user.email}
+
+            To set your password, please visit:
+            http://localhost:3000/forgot-password
+
+            Note: For security reasons, your initial password is not included in this email. You must set your own password using the link above.
+
+            This message was sent to you by the Super Admin using the ITR IBC Portal.
+            If you did not request this account, please contact your administrator immediately.
+        """
+        
+        body_html = f"""
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                <div style="background: linear-gradient(135deg, #A91D3A 0%, #EE4266 100%); padding: 20px; text-align: center; border-radius: 8px; color: white;">
+                    <h1 style="margin: 0; font-size: 24px;">Welcome to Indotraktor IBC Portal</h1>
+                </div>
+                
+                <div style="padding: 20px; background: #f9f9f9; border-radius: 8px; margin-top: 20px;">
+                    <p style="font-size: 16px; color: #333; line-height: 1.6;">
+                        Hello <strong>{user.firstName} {user.lastName}</strong>,
+                    </p>
+                    
+                    <p style="font-size: 16px; color: #333; line-height: 1.6;">
+                        Your account has been successfully created by the Super Admin.
+                    </p>
+                    
+                    <div style="background: #e8f4fd; padding: 15px; border-radius: 6px; margin: 20px 0;">
+                        <p style="margin: 0; font-weight: bold; color: #A91D3A;">
+                            Account Details:
+                        </p>
+                        <p style="margin: 5px 0;">
+                            <strong>Username:</strong> {user.username}
+                        </p>
+                        <p style="margin: 5px 0;">
+                            <strong>Email:</strong> {user.email}
+                        </p>
+                    </div>
+                    
+                    <p style="font-size: 16px; color: #333; line-height: 1.6;">
+                        To set your password, please click the button below:
+                    </p>
+                    
+                    <div style="text-align: center; margin: 25px 0;">
+                        <a href="http://localhost:3000/forgot-password" 
+                            style="background: #A91D3A; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">
+                            Set Your Password
+                        </a>
+                    </div>
+                    
+                    <p style="font-size: 14px; color: #666; line-height: 1.6;">
+                        <strong>Note:</strong> For security reasons, your initial password is not included in this email. 
+                        You must set your own password using the link above.
+                    </p>
+                    
+                    <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;">
+                    
+                    <p style="font-size: 14px; color: #888; text-align: center;">
+                        This message was sent to you by the Super Admin using the ITR IBC Portal.<br>
+                        If you did not request this account, please contact your administrator immediately.
+                    </p>
+                </div>
+            </div>
+        """
+        
+        try:
+            self.email_service.send_email(
+                to=user.email,
+                subject=subject,
+                body=body_text,
+                html_body=body_html
+            )
+            current_app.logger.info(f"✅ Registration email sent to {user.email}")
+        
+        except Exception as e:
+            current_app.logger.error(f"❌ Failed to send registration email to {user.email}: {str(e)}")
 
     def forgot_password_request_otp(self, email):
         """Handles OTP requests for password reset. Searches for users, generates OTP, and sends it via email."""
@@ -274,12 +487,16 @@ def request_otp_for_login(email):
         return False
 
 def verify_otp_and_login(email, otp_code):
-    """ Verifies the OTP and authenticates the user.Returns a User object on success, None on failure."""
+    """Verifies the OTP and authenticates the user. Returns a User object on success, None on failure."""
     
     user = User.query.filter_by(email=email).first()
     
     if not user:
         current_app.logger.warning(f"Login attempt with non-existent email: {email}")
+        return None
+
+    if not user.is_active:
+        current_app.logger.warning(f"Login attempt with deactivated account: {email}")
         return None
 
     if auth_controller_instance.verify_otp(user.userid, otp_code):

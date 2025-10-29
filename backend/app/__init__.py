@@ -18,9 +18,9 @@ def create_app():
     if not app.config['SECRET_KEY']:
         raise ValueError("SECRET_KEY environment variable not set. This is critical for Flask security.")
 
-    app.config['FLASK_JWT_SECRET_KEY'] = os.getenv("FLASK_JWT_SECRET_KEY")
-    if not app.config['FLASK_JWT_SECRET_KEY']:
-        raise ValueError("FLASK_JWT_SECRET_KEY environment variable not set. This is critical for JWT security.")
+    app.config['JWT_SECRET_KEY'] = os.getenv("JWT_SECRET_KEY")
+    if not app.config['JWT_SECRET_KEY']:
+        raise ValueError("JWT_SECRET_KEY environment variable not set. This is critical for JWT security.")
     
     # Default to 'development'
     app.config['FLASK_ENV'] = os.getenv('FLASK_ENV', 'development')
@@ -111,5 +111,8 @@ def create_app():
 
     from app.routes.ibc_log_routes import ibc_log_bp
     app.register_blueprint(ibc_log_bp)
+
+    from app.routes.user_routes import user_bp
+    app.register_blueprint(user_bp)
 
     return app

@@ -103,6 +103,8 @@ export default function DashboardLayout({ children }) {
             return `Commissioning Unit View`
         } else if (path.startsWith('/dashboard/pre-delivery-log')) {
             return `Pre-Delivery View`
+        } else if (path.startsWith('/dashboard/user-management')) {
+            return `User Management & Account Settings`
         }
         // to input another logic below this section
 

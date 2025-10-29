@@ -1,7 +1,18 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Paper, Text, PasswordInput, Button, Divider, Stack, TextInput, Title, Box, Group } from '@mantine/core';
+import { 
+    Paper, 
+    Text, 
+    PasswordInput, 
+    Button, 
+    Divider, 
+    Stack, 
+    TextInput, 
+    Title, 
+    Box, 
+    Group, 
+} from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import apiClient from '@/libs/api';
 
@@ -32,8 +43,9 @@ export default function UserSettingsPage() {
     useEffect(() => {
         const fetchUserData = async () => {
             try {
-                const response = await apiClient.get('/profile');
+                const response = await apiClient.get('/user/me');
                 setUserData(response.data);
+
             } catch (error) {
                 console.error('Failed to fetch user data:', error);
                 notifications.show({
@@ -46,32 +58,58 @@ export default function UserSettingsPage() {
         fetchUserData();
     }, []);
 
-    const handleFirstNameChange = async (e) => {
-        e.preventDefault();
-        if (!newFirstName || !firstNamePassword) return;
+    const updateUserField = async (field, value, password, successMessage) => {
+        if (!value || !password) return;
 
         setIsLoading(true);
-        
         try {
-            const response = await apiClient.post('/update-first-name', {
-                new_first_name: newFirstName,
-                password: firstNamePassword,
-            });
+            const payload = { password };
+            if (field === 'password') {
+                payload.old_password = password;
+                payload.new_password = value;
+            } else {
+                payload[field] = value;
+            }
+
+            const response = await apiClient.patch('/user/me', payload);
             notifications.show({
                 title: 'Success',
-                message: response.data.message || 'First name updated.',
+                message: response.data.message || successMessage,
                 color: 'green',
             });
-            setNewFirstName('');
-            setFirstNamePassword('');
-            setUserData(prev => ({ ...prev, first_name: newFirstName }));
-            setIsEditingFirstName(false);
+
+            // Update local state
+            if (field === 'password') {
+                setOldPassword('');
+                setNewPassword('');
+                setConfirmPassword('');
+                setIsEditingPassword(false);
+            } else {
+                setUserData(prev => ({ ...prev, [field === 'first_name' ? 'firstName' : field === 'last_name' ? 'lastName' : field]: value }));
+                if (field === 'first_name') {
+                    setNewFirstName('');
+                    setFirstNamePassword('');
+                    setIsEditingFirstName(false);
+                } else if (field === 'last_name') {
+                    setNewLastName('');
+                    setLastNamePassword('');
+                    setIsEditingLastName(false);
+                } else if (field === 'username') {
+                    setNewUsername('');
+                    setUsernamePassword('');
+                    setIsEditingUsername(false);
+                } else if (field === 'email') {
+                    setNewEmail('');
+                    setEmailPassword('');
+                    setIsEditingEmail(false);
+                }
+            }
 
         } catch (error) {
-            console.error('First name update failed:', error);
+            console.error(`${field} update failed:`, error);
             notifications.show({
                 title: 'Failed',
-                message: error.response?.data?.message || 'Failed to update first name.',
+                message: error.response?.data?.message || `Failed to update ${field}.`,
                 color: 'red',
             });
 
@@ -80,110 +118,29 @@ export default function UserSettingsPage() {
         }
     };
 
-    const handleLastNameChange = async (e) => {
+    const handleFirstNameChange = (e) => {
         e.preventDefault();
-        if (!newLastName || !lastNamePassword) return;
+        updateUserField('first_name', newFirstName, firstNamePassword, 'First name updated.');
+    };
 
-        setIsLoading(true);
+    const handleLastNameChange = (e) => {
+        e.preventDefault();
+        updateUserField('last_name', newLastName, lastNamePassword, 'Last name updated.');
+    };
+
+    const handleUsernameChange = (e) => {
+        e.preventDefault();
+        updateUserField('username', newUsername, usernamePassword, 'Username updated.');
+    };
+
+    const handleEmailChange = (e) => {
+        e.preventDefault();
+        updateUserField('email', newEmail, emailPassword, 'Email updated.');
+    };
+
+    const handlePasswordChange = (e) => {
+        e.preventDefault();
         
-        try {
-            const response = await apiClient.post('/update-last-name', {
-                new_last_name: newLastName,
-                password: lastNamePassword,
-            });
-            notifications.show({
-                title: 'Success',
-                message: response.data.message || 'Last name updated.',
-                color: 'green',
-            });
-            setNewLastName('');
-            setLastNamePassword('');
-            setUserData(prev => ({ ...prev, last_name: newLastName }));
-            setIsEditingLastName(false);
-
-        } catch (error) {
-            console.error('Last name update failed:', error);
-            notifications.show({
-                title: 'Failed',
-                message: error.response?.data?.message || 'Failed to update last name.',
-                color: 'red',
-            });
-
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    const handleUsernameChange = async (e) => {
-        e.preventDefault();
-        if (!newUsername || !usernamePassword) return;
-
-        setIsLoading(true);
-
-        try {
-            const response = await apiClient.post('/update-username', {
-                new_username: newUsername,
-                password: usernamePassword,
-            });
-            notifications.show({
-                title: 'Success',
-                message: response.data.message || 'Username updated.',
-                color: 'green',
-            });
-            setNewUsername('');
-            setUsernamePassword('');
-            setUserData(prev => ({ ...prev, username: newUsername }));
-            setIsEditingUsername(false);
-
-        } catch (error) {
-        console.error('Username update failed:', error);
-        notifications.show({
-            title: 'Failed',
-            message: error.response?.data?.message || 'Failed to update username.',
-            color: 'red',
-        });
-
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    const handleEmailChange = async (e) => {
-        e.preventDefault();
-        if (!newEmail || !emailPassword) return;
-
-        setIsLoading(true);
-        
-        try {
-            const response = await apiClient.post('/update-email', {
-                new_email: newEmail,
-                password: emailPassword,
-            });
-            notifications.show({
-                title: 'Success',
-                message: response.data.message || 'Email updated.',
-                color: 'green',
-            });
-            setNewEmail('');
-            setEmailPassword('');
-            setUserData(prev => ({ ...prev, email: newEmail }));
-            setIsEditingEmail(false);
-
-        } catch (error) {
-            console.error('Email update failed:', error);
-            notifications.show({
-                title: 'Failed',
-                message: error.response?.data?.message || 'Failed to update email.',
-                color: 'red',
-            });
-
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    const handlePasswordChange = async (e) => {
-        e.preventDefault();
         if (newPassword !== confirmPassword) {
             notifications.show({ 
                 title: 'Failed', 
@@ -193,34 +150,7 @@ export default function UserSettingsPage() {
             return;
         }
         
-        setIsLoading(true);
-
-        try {
-            const response = await apiClient.post('/update-password', {
-                old_password: oldPassword,
-                new_password: newPassword,
-            });
-            notifications.show({
-                title: 'Success',
-                message: response.data.message || 'Password updated.',
-                color: 'green',
-            });
-            setOldPassword('');
-            setNewPassword('');
-            setConfirmPassword('');
-            setIsEditingPassword(false);
-
-        } catch (error) {
-            console.error('Password change failed:', error);
-            notifications.show({ 
-                title: 'Failed', 
-                message: error.response?.data?.message || 'Failed to change password.', 
-                color: 'red' 
-            });
-
-        } finally {
-            setIsLoading(false);
-        }
+        updateUserField('password', newPassword, oldPassword, 'Password updated.');
     };
 
     return (
@@ -234,28 +164,28 @@ export default function UserSettingsPage() {
                     <Text size="sm" style={{ fontWeight: 500 }}>First Name</Text>
                     {isEditingFirstName ? (
                         <form onSubmit={handleFirstNameChange}>
-                        <TextInput
-                            placeholder="Enter new first name"
-                            value={newFirstName}
-                            onChange={(e) => setNewFirstName(e.currentTarget.value)}
-                            required
-                            mb="sm"
-                        />
-                        <PasswordInput
-                            placeholder="Confirm with password"
-                            value={firstNamePassword}
-                            onChange={(e) => setFirstNamePassword(e.currentTarget.value)}
-                            required
-                        />
-                        <Group mt="md">
-                            <Button type="submit" loading={isLoading}>Save</Button>
-                            <Button variant="subtle" onClick={() => setIsEditingFirstName(false)}>Cancel</Button>
-                        </Group>
+                            <TextInput
+                                placeholder="Enter new first name"
+                                value={newFirstName}
+                                onChange={(e) => setNewFirstName(e.currentTarget.value)}
+                                required
+                                mb="sm"
+                            />
+                            <PasswordInput
+                                placeholder="Confirm with password"
+                                value={firstNamePassword}
+                                onChange={(e) => setFirstNamePassword(e.currentTarget.value)}
+                                required
+                            />
+                            <Group mt="md">
+                                <Button type="submit" loading={isLoading}>Save</Button>
+                                <Button variant="subtle" onClick={() => setIsEditingFirstName(false)}>Cancel</Button>
+                            </Group>
                         </form>
                     ) : (
                         <Group justify="space-between" align="center">
-                        <Text c="dimmed">{userData?.first_name || 'Loading...'}</Text>
-                        <Button variant="subtle" onClick={() => setIsEditingFirstName(true)}>Change</Button>
+                            <Text c="dimmed">{userData?.firstName || 'Loading...'}</Text>
+                            <Button variant="subtle" onClick={() => setIsEditingFirstName(true)}>Change</Button>
                         </Group>
                     )}
                 </Stack>
@@ -287,7 +217,7 @@ export default function UserSettingsPage() {
                         </form>
                     ) : (
                         <Group justify="space-between" align="center">
-                            <Text c="dimmed">{userData?.last_name || 'Loading...'}</Text>
+                            <Text c="dimmed">{userData?.lastName || 'Loading...'}</Text>
                             <Button variant="subtle" onClick={() => setIsEditingLastName(true)}>Change</Button>
                         </Group>
                     )}

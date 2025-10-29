@@ -1,33 +1,47 @@
 from flask import Blueprint, request, jsonify, make_response, session, current_app, g
+from flask_limiter import Limiter
+from werkzeug.security import generate_password_hash
 from datetime import datetime, timedelta
+from app import db
 from app.models.models import User
 from uuid import UUID
-from app.controllers.auth_controller import AuthController, generate_jwt_token, jwt_required, verify_otp_and_login, request_otp_for_login, register_user, auth_controller_instance
+from app.controllers.auth_controller import AuthController, generate_jwt_token, jwt_required, verify_otp_and_login, request_otp_for_login, register_user, auth_controller_instance, get_user_permissions, require_permission
 import threading
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/api')
 
 # Post /api/register
 @auth_bp.route('/register', methods=['POST'])
+@jwt_required
+@require_permission("manage_users")
 def register():
     """endpoint to register new account"""
 
     data = request.get_json()
 
-    if not data or not all(key in data for key in ["username", "firstName", "lastName", "email", "password", "confirmPassword"]):
-        return jsonify({"message": "Missing required fields"}), 400
-
-    if data['password'] != data['confirmPassword']:
-        return jsonify({"message": "Passwords do not match!"}), 400
+    required_fields = ["username", "firstName", "lastName", "email", "role"]
+    
+    if not data or not all(key in data for key in required_fields):
+        return jsonify({"message": "Missing Required Fields"}), 400
     
     user = register_user(data)
 
     if user:
-        current_app.logger.info(f"User registered successfully: {user.email}")
-        return jsonify({"message": "User registered successfully. Please proceed to login with OTP."}), 201
+        try:
+            # ✅ SOLUSI: Panggil fungsi pengirim email di sini!
+            auth_controller_instance.send_registration_email(user)
+            current_app.logger.info(f"User registered successfully: {user.email}. Registration email sent.")
+            return jsonify({"message": "User registered successfully, welcome email sent."}), 201
+        
+        except Exception as e:
+            # Jika pengiriman email gagal, log error tetapi tetap kembalikan 201 
+            # (karena pengguna sudah berhasil dibuat di DB).
+            current_app.logger.error(f"User {user.email} created, but failed to send registration email: {e}")
+            return jsonify({"message": "User registered successfully, but failed to send welcome email."}), 201
+            
     else:
         current_app.logger.warning(f"Registration failed for email: {data.get('email')} or username: {data.get('username')}")
-        return jsonify({"message": "User with this email or username already exists"}), 409
+        return jsonify({"message": "Registration failed. User may already exist or role is invalid."}), 409
 
 # Post /api/login
 @auth_bp.route('/login', methods=['POST'])
@@ -175,11 +189,110 @@ def forgot_password_reset():
 def get_current_user():
     """Endpoint to get the information of the user who is logged in. Requires a valid ‘session_token’ cookie. User information is already available in `g` thanks to the `jwt_required` decorator."""
     
+    user = User.query.filter_by(userid=g.user_id).first()
+    
+    if not user:
+        return jsonify({"message": "User not found"}), 404
+    
+    permissions = get_user_permissions(g.user_id)
+
     return jsonify({
-        "id": g.user_id,
-        "email": g.user_email,
-        "name": g.user_name 
+        "id": str(user.userid),
+        "username": user.username,
+        "firstName": user.firstName,
+        "lastName": user.lastName,
+        "email": user.email,
+        "permissions": permissions
     }), 200
+
+# PATCH /api/user/me
+@auth_bp.route('/user/me', methods=['PATCH'])
+@jwt_required
+def update_user():
+    """Endpoint to update current user's profile (first name, last name, username, email, password)."""
+    
+    data = request.get_json()
+    if not data:
+        return jsonify({"message": "No data provided"}), 400
+    
+    # Get current user from g
+    user = User.query.filter_by(userid=g.user_id).first()
+    if not user:
+        return jsonify({"message": "User not found"}), 404
+    
+    # Validate password for all updates
+    password = data.get('password') or data.get('old_password')
+    if not password:
+        return jsonify({"message": "Password is required to update profile"}), 400
+    
+    # Verify password
+    from werkzeug.security import check_password_hash
+    if not check_password_hash(user.password, password):
+        return jsonify({"message": "Invalid password"}), 401
+    
+    # Update fields if provided
+    try:
+        updated_fields = []
+        
+        # First Name
+        if 'first_name' in data:
+            user.firstName = data['first_name']
+            updated_fields.append('first name')
+        
+        # Last Name
+        if 'last_name' in data:
+            user.lastName = data['last_name']
+            updated_fields.append('last name')
+        
+        # Username
+        if 'username' in data:
+            # Check if username already exists
+            existing_user = User.query.filter_by(username=data['username']).first()
+            
+            if existing_user and existing_user.userid != user.userid:
+                return jsonify({"message": "Username already exists"}), 409
+            
+            user.username = data['username']
+            updated_fields.append('username')
+        
+        # Email
+        if 'email' in data:
+            # Check if email already exists
+            existing_user = User.query.filter_by(email=data['email']).first()
+            
+            if existing_user and existing_user.userid != user.userid:
+                return jsonify({"message": "Email already exists"}), 409
+            
+            user.email = data['email']
+            updated_fields.append('email')
+        
+        # Password
+        if 'new_password' in data:
+            new_password = data['new_password']
+            user.password = generate_password_hash(new_password)
+            updated_fields.append('password')
+        
+        # Commit changes
+        db.session.commit()
+        
+        # Log success
+        current_app.logger.info(f"User {user.email} updated profile: {', '.join(updated_fields)}")
+        
+        return jsonify({
+            "message": f"Profile updated successfully: {', '.join(updated_fields)}",
+            "user": {
+                "id": str(user.userid),
+                "username": user.username,
+                "firstName": user.firstName,
+                "lastName": user.lastName,
+                "email": user.email
+            }
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Failed to update user profile: {e}")
+        return jsonify({"message": "Failed to update profile. Please try again."}), 500
 
 # POST /api/logout (Endpoint for logout)
 @auth_bp.route('/logout', methods=['POST'])

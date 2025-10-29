@@ -86,19 +86,33 @@ export default function OtpForm() {
 
 			if (data.user_id && data.email && data.user && data.access_token) {
                 localStorage.setItem("access_token", data.access_token);
-                localStorage.setItem("user_data", JSON.stringify(data.user));
 
-				login(data.user);
+				try {
+					const userRes = await apiClient.get("/user/me");
+					const userData = userRes.data;
 
-				localStorage.removeItem("user_email_for_otp");
+					localStorage.setItem("user_data", JSON.stringify(userData));
+					login(userData);
+					localStorage.removeItem("user_email_for_otp");
 
-				notifications.show({
-					title: "OTP Verified Successfully",
-					message: "You can now access your account.",
-					color: "green",
-					autoClose: 5000,
-				});
-				router.push("/dashboard");
+					notifications.show({
+						title: "OTP Verified Successfully",
+						message: "You can now access your account.",
+						color: "green",
+						autoClose: 5000,
+					});
+					router.push("/dashboard");
+
+				} catch (userError) {
+					console.error("Failed to fetch user data after OTP:", userError);
+					notifications.show({
+						title: "Login Partially Failed",
+						message: "User authenticated but profile data unavailable. Please contact support.",
+						color: "orange"
+					});
+					router.push("/dashboard");
+				}
+
 			} else {
 				console.error("OTP verification was successful but the required data was incomplete in the response:", data);
 				notifications.show({
@@ -108,6 +122,7 @@ export default function OtpForm() {
                     autoClose: 5000,
                 });
 			}
+			
 		} catch (error) {
 			console.error("Network error during OTP verification:", error);
             const errorMessage = error.response?.data?.message || "Network Error! Please Retry";
@@ -117,6 +132,7 @@ export default function OtpForm() {
                 color: "red",
                 autoClose: 5000,
             });
+
 		} finally {
 			setIsLoading(false);
 		}
@@ -157,6 +173,7 @@ export default function OtpForm() {
                 color: "red",
                 autoClose: 5000,
             });
+			
 		} finally {
 			setIsLoading(false);
 		}

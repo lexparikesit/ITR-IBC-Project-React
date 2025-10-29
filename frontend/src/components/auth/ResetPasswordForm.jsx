@@ -2,6 +2,7 @@
 
 import { useState, useEffect, use } from "react";
 import { PasswordInput, Button, Stack, Title, Text } from "@mantine/core";
+import { IconLock } from "@tabler/icons-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { notifications } from "@mantine/notifications";
 import apiClient from "@/libs/api";
@@ -62,6 +63,7 @@ export default function ResetPasswordForm() {
         } catch (error) {
             console.error("Error resetting password:", error);
             let errorMessage = "Token is invalid or has expired.";
+            
             if (error.response) {
                 errorMessage = error.response.data.message || errorMessage;
             }
@@ -71,6 +73,7 @@ export default function ResetPasswordForm() {
                 color: "red",
                 autoClose: 5000,
             });
+
         } finally {
             setIsLoading(false);
         }
@@ -80,21 +83,27 @@ export default function ResetPasswordForm() {
         <form onSubmit={handleResetPassword}>
             <Stack>
                 <PasswordInput
-                    label="New Password"
-                    placeholder="••••••••"
+                    placeholder="New Password"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.currentTarget.value)}
                     required
+                    leftSection={<IconLock size={16} />}
                 />
                 <PasswordInput
-                    label="Confirm New Password"
-                    placeholder="••••••••"
+                    placeholder="Confirm New Password"
                     value={confirmNewPassword}
                     onChange={(e) => setConfirmNewPassword(e.currentTarget.value)}
                     required
                     mt="sm"
+                    leftSection={<IconLock size={16} />}
                 />
-                <Button fullWidth mt="md" type="submit" color="#A91D3A" loading={isLoading}>
+                <Button 
+                    fullWidth 
+                    mt="md" 
+                    type="submit" 
+                    color="#A91D3A" 
+                    loading={isLoading}
+                >
                     Reset Password
                 </Button>
             </Stack>

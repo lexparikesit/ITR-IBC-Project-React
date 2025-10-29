@@ -4,7 +4,9 @@ import {
 	Flex,
 	PasswordInput,
 	TextInput,
+	Box,
 } from "@mantine/core";
+import { IconAt, IconLock } from "@tabler/icons-react";
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { notifications } from "@mantine/notifications";
@@ -32,7 +34,6 @@ const LoginForm = () => {
 
 			if (response.status === 200 && data.message === "OTP Sent to Your Email!" && data.email) {
 				localStorage.setItem("user_email_for_otp", data.email);
-				
 				notifications.show({
                     title: "OTP is sent!",
                     message: "Check your email for the OTP.",
@@ -41,6 +42,7 @@ const LoginForm = () => {
                     color: "orange",
                 });
 				router.push("/otp");
+
 			} else {
 				console.error(
                     "Unexpected Response From /api/login",
@@ -53,6 +55,7 @@ const LoginForm = () => {
                     autoClose: 5000,
                 });
 			}
+
 		} catch (error) {
 			console.error("Network error during login:", error);
             const errorMessage = error.response?.data?.message || "Network error. Please try again.";
@@ -62,6 +65,7 @@ const LoginForm = () => {
                 color: "red",
                 autoClose: 5000,
             });
+
 		} finally {
 			setIsLoading(false);
 		}
@@ -69,33 +73,42 @@ const LoginForm = () => {
 	
 	return (
 		<div>
-			<TextInput
-				label="Username"
-				placeholder="Username"
-				value={username}
-				onChange={(e) => setUsername(e.currentTarget.value)}
-				required
-				mt="sm"
-			/>
+			<Box component="form" onSubmit={handleLogin}>
+				<TextInput
+					placeholder="Username"
+					value={username}
+					onChange={(e) => setUsername(e.currentTarget.value)}
+					required
+					mt="sm"
+					leftSection={<IconAt size={16} />}
+				/>
 
-			<PasswordInput
-				label="Password"
-				placeholder="••••••••"
-				value={password}
-				onChange={(e) => setPassword(e.currentTarget.value)}
-				required
-				mt="sm"
-			/>
+				<PasswordInput
+					placeholder="Password"
+					value={password}
+					onChange={(e) => setPassword(e.currentTarget.value)}
+					required
+					mt="sm"
+					leftSection={<IconLock size={16} />}
+				/>
 
-			<Flex justify="space-between" w="100%" mt="lg">
-				<Anchor href="/forgot-password" size="sm">
-					Forget Password
-				</Anchor>
-			</Flex>
+				<Flex justify="space-between" w="100%" mt="lg">
+					<div></div>
+					<Anchor href="/forgot-password" size="sm">
+						Forget Password
+					</Anchor>
+				</Flex>
 
-			<Button fullWidth mt="lg" onClick={handleLogin} color="#A91D3A" loading={isLoading}>
-				Login
-			</Button>
+				<Button 
+					fullWidth 
+					mt="lg" 
+					color="#A91D3A" 
+					type="submit"
+					loading={isLoading}
+					>
+						Login
+				</Button>
+			</Box>
 		</div>
 	);
 };

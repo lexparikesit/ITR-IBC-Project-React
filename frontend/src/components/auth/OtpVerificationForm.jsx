@@ -156,7 +156,7 @@ export default function OtpVerificationForm() {
                 type="number"
                 my={12}
             />
-            <Button color="#A91D3A" onClick={handleVerify} loading={isLoading}>
+            <Button color="#A91D3A" onClick={handleVerify} loading={isLoading} type="submit">
 				Verify OTP
 			</Button>
             <p className="text-sm mt-2" style={{ color: "#7E99A3" }}>

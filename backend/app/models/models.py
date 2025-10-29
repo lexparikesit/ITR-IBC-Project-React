@@ -20,8 +20,10 @@ class User(db.Model):
     lastName = db.Column(db.String(150))
     email = db.Column(db.String(150), unique=True, nullable=False)
     password = db.Column(db.String(200), nullable=False)
+    is_active = db.Column(db.Boolean, nullable=False)
     otps: Mapped[List["UserOtp"]] = relationship(back_populates="user")
     reset_tokens: Mapped[List["PasswordResetToken"]] = relationship(back_populates="user")
+    user_roles = db.relationship("IBCUserRoles", back_populates="user") 
 
 class UserOtp(db.Model):
 
@@ -46,3 +48,40 @@ class PasswordResetToken(db.Model):
     used_at = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
     user: Mapped[User] = relationship(back_populates="reset_tokens")
+
+class IBCRoles(db.Model):
+
+    __tablename__ = 'IBC_Roles'
+
+    role_id = db.Column(UNIQUEIDENTIFIER, primary_key=True, default=uuid.uuid4)
+    role_name = db.Column(db.String(50), unique=True, nullable=False)
+    description = db.Column(db.String(255), nullable=False)
+    user_roles = db.relationship("IBCUserRoles", back_populates="role")
+    role_permissions = db.relationship("IBCRolesPermission", back_populates="role")
+
+class IBCPermissionRoles(db.Model):
+
+    __tablename__ = 'IBC_Permission_Roles'
+
+    permission_id = db.Column(UNIQUEIDENTIFIER, primary_key=True, default=uuid.uuid4)
+    permission_name = db.Column(db.String(100), unique=True, nullable=False)
+    description = db.Column(db.String(255), nullable=False)
+    role_permissions = db.relationship("IBCRolesPermission", back_populates="permission")
+    
+class IBCRolesPermission(db.Model):
+
+    __tablename__ = 'IBC_Roles_Permission'
+
+    role_id = db.Column(UNIQUEIDENTIFIER, db.ForeignKey('IBC_Roles.role_id'), nullable=False, primary_key=True)
+    permission_id = db.Column(UNIQUEIDENTIFIER, db.ForeignKey('IBC_Permission_Roles.permission_id'), nullable=False, primary_key=True)
+    role = db.relationship("IBCRoles", back_populates="role_permissions")
+    permission = db.relationship("IBCPermissionRoles", back_populates="role_permissions")
+
+class IBCUserRoles(db.Model):
+
+    __tablename__ = 'IBC_User_Roles'
+
+    userid = db.Column(UNIQUEIDENTIFIER, db.ForeignKey('IBC_Users.userid'), nullable=False, primary_key=True)
+    role_id = db.Column(UNIQUEIDENTIFIER, db.ForeignKey('IBC_Roles.role_id'), nullable=False, primary_key=True)
+    user = db.relationship("User", back_populates="user_roles")
+    role = db.relationship("IBCRoles", back_populates="user_roles")

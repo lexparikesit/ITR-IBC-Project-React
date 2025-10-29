@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { TextInput, Button, Stack, Title, Text } from "@mantine/core";
+import { IconMail } from "@tabler/icons-react";
 import { useRouter } from "next/navigation";
 import { notifications } from "@mantine/notifications";
 import apiClient from "@/libs/api";
@@ -30,9 +31,11 @@ export default function ForgetPasswordForm() {
                 localStorage.setItem("otp_sent", "true");
                 router.push("/otp-verify");
             }
+
         } catch (error) {
             console.error("Error requesting OTP:", error);
             let errorMessage = "Network error. Please try again.";
+            
             if (error.response) {
                 errorMessage = error.response.data.message || errorMessage;
             }
@@ -42,6 +45,7 @@ export default function ForgetPasswordForm() {
                 color: "red",
                 autoClose: 5000,
             });
+
         } finally {
             setIsLoading(false);
         }
@@ -51,14 +55,20 @@ export default function ForgetPasswordForm() {
         <form onSubmit={handleRequestOtp}>
             <Stack>
                 <TextInput
-                    label="Email"
-                    placeholder="you@example.com"
+                    placeholder="Email"
                     value={email}
                     onChange={(e) => setEmail(e.currentTarget.value)}
                     required
+                    leftSection={<IconMail size={16} />}
                 />
             </Stack>
-            <Button fullWidth mt="md" type="submit" color="#A91D3A" loading={isLoading}>
+            <Button 
+                fullWidth 
+                mt="md" 
+                type="submit" 
+                color="#A91D3A" 
+                loading={isLoading}
+            >
                 Send OTP Code
             </Button>
         </form>
