@@ -20,6 +20,7 @@ import { DateInput } from "@mantine/dates";
 import { useForm } from "@mantine/form";
 import { IconCalendar } from "@tabler/icons-react";
 import { notifications } from "@mantine/notifications";
+import apiClient from "@/libs/api";
 
 const CHECKLIST_DATA_RENAULT = {
 	chassisAndCab: [
@@ -105,6 +106,7 @@ export function UnitArrivalChecklistForm() {
 	const [technicians, setTechnicians] = useState([]);
 	const [approvers, setApprovers] = useState([]);
 	const [woNumbers, setWoNumbers] = useState([]);
+	const [loading, setLoading] = useState(true);
 	const currentChecklistData = CHECKLIST_DATA_RENAULT;
 
 	const form = useForm({
@@ -154,41 +156,28 @@ export function UnitArrivalChecklistForm() {
 
 	useEffect(() => {
 		const fetchData = async () => {
+			setLoading(true)
 			try {
 				const brandId = "RT"; // 'RT' for Renault Trucks
                 const groupId = "AI"; // 'AI' for Arrival Inspection
+				const [
+					modelRes,
+					woRes,
+					techRes,
+					supervisorRes,
+					techHeadRes,
+				] = await Promise.all([
+					apiClient.get(`/unit-types/${brandId}`),
+					apiClient.get(`/work-orders?brand_id=${brandId}&group_id=${groupId}`),
+					apiClient.get("/users/by-role/Technician"),
+					apiClient.get("/users/by-role/Supervisor"),
+					apiClient.get("/users/by-role/Technical Head")
+				])
 
-				// model/ type RT API
-				const modelResponse = await fetch(`http://127.0.0.1:5000/api/unit-types/RT`);
-				if (!modelResponse.ok) throw new Error(`HTTP error! status: ${modelResponse.status}`);
-				const modelData = await modelResponse.json();
-				setUnitModels(modelData);
-
-				// wo Number API
-				const woResponse = await fetch(`http://127.0.0.1:5000/api/work-orders?brand_id=${brandId}&group_id=${groupId}`);
-				if (!woResponse.ok) throw new Error(`HTTP error! status: ${woResponse.status}`);
-				const woData = await woResponse.json();
-				const formattedWoData = woData.map(wo => ({ 
-					value: wo.WONumber, 
-					label: wo.WONumber 
-				}));
-				setWoNumbers(formattedWoData);
-				
-				// dummy Technicians API
-				const dummyTechnicians = [
-					{ value: "tech1", label: "John Doe" },
-					{ value: "tech2", label: "Jane Smith" },
-					{ value: "tech3", label: "Peter Jones" }
-				];
-				setTechnicians(dummyTechnicians);
-
-				// dummy Approvers API
-				const dummyApprovers = [
-					{ value: "app1", label: "Alice Brown" },
-					{ value: "app2", label: "Bob White" },
-					{ value: "app3", label: "John Green" }
-				];
-				setApprovers(dummyApprovers);
+				setUnitModels(modelRes.data);
+				setWoNumbers(woRes.data.map(wo => ({ value: wo.WONumber, label: wo.WONumber })));
+				setTechnicians(techRes.data);
+				setApprovers([...supervisorRes.data, ...techHeadRes.data]);
 
 			} catch (error) {
 				console.error("Error fetching data:", error);
@@ -197,51 +186,25 @@ export function UnitArrivalChecklistForm() {
 					message: `Failed to load data: ${error.message}. Please try again.`,
 					color: "red",
 				});
+			
+			} finally {
+				setLoading(false);
 			}
 		};
 		fetchData();
 	}, []);
 
 	const checkVinExists = async (vin) => {
-		const token = localStorage.getItem('access_token');
-		
-		if (!token) {
-			console.warn("No authentication token found for VIN check.");
-			notifications.show({
-				title: "Authentication Required",
-				message: "Please log in to perform VIN check.",
-				color: "red",
-			});
-			return false; 
-		}
-
 		try {
-			const response = await fetch(`http://127.0.0.1:5000/api/arrival-check/check-vin/${vin}`, {
-				method: "GET",
-				headers: {
-					"Content-Type": "application/json",
-					"Authorization": `Bearer ${token}`
-				},
-			});
-
-			if (!response.ok) {
-				const errorText = await response.text();
-				notifications.show({
-					title: "VIN Check Failed",
-					message: `Server error during VIN verification. Please try again.`,
-					color: "red",
-				});
-				return true;
-			}
-			const data = await response.json();
+			const response = await apiClient.get(`/arrival-check/check-vin/${vin}`);
+			const data = response.data;
 			return data.exists;
-
+		
 		} catch (error) {
-			console.error("Network Error or Failed to Check VIN:", error);
 			notifications.show({
-				title: "Network Error",
-                message: "Failed to verify VIN. Check your internet connection.",
-                color: "red",
+				title: "VIN Check Failed",
+				message: "Unable to verify VIN. Please try again.",
+				color: "red",
 			});
 			return true;
 		}
@@ -292,7 +255,7 @@ export function UnitArrivalChecklistForm() {
 				const statusFieldName = `${sectionKey}_${item.id}_status`;
 				const remarksFieldName = `${sectionKey}_${item.id}_remarks`;
 				
-				payload.checklistItems[sectionKey][`RT_${sectionKey}_${item.id}`] = { // Kunci baru
+				payload.checklistItems[sectionKey][`RT_${sectionKey}_${item.id}`] = {
 					status: values[statusFieldName],
 					remarks: values[remarksFieldName] || "",
 				};
@@ -300,24 +263,10 @@ export function UnitArrivalChecklistForm() {
 		});
 
 		try {
-			const response = await fetch(`http://127.0.0.1:5000/api/arrival-check/renault/submit`, { 
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-					"Authorization": `Bearer ${token}`
-				},
-				body: JSON.stringify(payload),
-			});
-
-			if (!response.ok) {
-				const errorData = await response.json();
-				throw new Error(errorData.message || "Failed to submit checklist");
-			}
-
-			const result = await response.json();
+			const response = await apiClient.post("/arrival-check/renault/submit", payload);
 			notifications.show({
 				title: "Success!",
-				message: result.message ||"Form Submitted Successfully!",
+				message: "Form Submitted Successfully!",
 				color: "green",
 			})
 			form.reset();

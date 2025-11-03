@@ -8,17 +8,10 @@ from app.models.renault_arrival_form import ArrivalFormModel_RT
 from app.models.renault_arrival_items import ArrivalChecklistItemModel_RT
 from app.models.sdlg_arrival_form import ArrivalFormModel_SDLG
 from app.models.sdlg_arrival_items import ArrivalChecklistItemModel_SDLG
-from datetime import datetime, time
-from dateutil.parser import isoparse
 from app.controllers.auth_controller import jwt_required
-# from google.cloud import Storage
-
-# configuartion of GCS Environment
-# GCS_Bucket_Name = os.environ.get('GCS_BUCKET_NAME')
-# CDN_BASE_URL = os.environ.get('CDN_BASE_URL', 'https://cdn.example.com')
-
-# initiate GCS Client
-# storage_client = storage.Client()
+from app.utils.gcs_utils import upload_arrival_check_file, generate_signed_url
+from datetime import datetime, time
+from dateutil.parser import isoparse 
 
 # mapping brand to model database
 BRAND_MODELS = {
@@ -128,23 +121,103 @@ def submit_arrival_checklist():
             db.session.add(arrival_entry)
             db.session.flush()
 
+            missing_photos = []
+
             for section_key, items in checklist_payload.items():
                 if isinstance(items, dict):
-                    for item_name, item_details, in items.items():
-                        image_url = None # will None as long as GCS/ CDN is commenting
+                    for item_name, item_details in items.items():
+                        status = item_details.get('status')
+                        file_key = f"image-{section_key}-{item_name}"
 
+                        if status in ['Bad', 'Missing']:
+                            if file_key not in uploaded_files or not uploaded_files[file_key].filename:
+                                missing_photos.append(f"{section_key} - {item_name}")
+                        
+                        image_url = None
+                        caption = item_details.get('caption')
+
+                        if file_key in uploaded_files and uploaded_files[file_key].filename:
+                            file = uploaded_files[file_key]
+                            file.seek(0, 2)
+                            file_size = file.tell()
+                            file.seek(0)
+
+                            if file_size > 2 * 1024 * 1024:
+                                db.session.rollback()
+                                return jsonify({
+                                    'message': f'File {section_key} - {item_name} exceeds 2MB limit'
+                                }), 400
+                            
+                            allowed_types = {'image/jpeg', 'image/png', 'image/jpg'}
+
+                            if file.content_type not in allowed_types:
+                                db.session.rollback()
+                                return jsonify({
+                                    'message': f'Invalid file type for {section_key} - {item_name}. Only JPG/PNG allowed.'
+                                }), 400
+                            
+                            try:
+                                blob_name = upload_arrival_check_file(
+                                    file=file,
+                                    brand=brand.lower(),
+                                    user_id=str(g.user_id),
+                                )
+                                
+                                if not blob_name:
+                                    db.session.rollback()
+                                    current_app.logger.error(f"Blob name is None for {section_key} - {item_name}")
+                                    return jsonify({
+                                        'message': f'Failed to upload photo for {section_key} - {item_name}'
+                                    }), 500
+                                
+                                current_app.logger.debug(f"Generating signed URL for blob: {blob_name}")
+
+                                try:
+                                    image_url = generate_signed_url(blob_name, expiration_hours=24)
+                                    current_app.logger.debug(f"Signed URL generated: {image_url[:50]}...")
+                                
+                                except Exception as e:
+                                    db.session.rollback()
+                                    current_app.logger.error(f"Error generating signed URL for {section_key} - {item_name}: {str(e)}")
+                                    return jsonify({
+                                        'message': f'Failed to generate signed URL for {section_key} - {item_name}'
+                                    }), 500
+                                
+                            except Exception as e:
+                                db.session.rollback()
+                                current_app.logger.error(f"Upload error for {section_key} - {item_name}: {str(e)}")
+                                return jsonify({
+                                    'message': f'Upload failed for {section_key} - {item_name}'
+                                }), 500
+                    
                         new_item = ArrivalChecklistItemModel_MA(
-                            arrivalID = arrival_entry.arrivalID,
-                            section = section_key,
-                            itemName = item_name,
-                            status = convert_manitou_status_to_int(item_details.get('status')),
-                            image_url = image_url,
-                            caption = item_details.get('caption')
+                            arrivalID=arrival_entry.arrivalID,
+                            section=section_key,
+                            itemName=item_name,
+                            status=convert_manitou_status_to_int(status),
+                            image_url=image_url,
+                            caption=caption
                         )
                         db.session.add(new_item)
             
-            # Commit all changes to the database at once
-            db.session.commit()
+            if missing_photos:
+                db.session.rollback()
+                current_app.logger.error(f"Missing photos for items: {missing_photos}")
+                return jsonify({
+                    'message': 'Photos are required for items with "Bad" or "Missing" status',
+                    'missing_items': missing_photos
+                }), 400
+            
+            current_app.logger.debug("All files processed successfully, attempting database commit...")
+            
+            try:
+                db.session.commit()
+                current_app.logger.info("Database commit successful!")
+            
+            except Exception as e:
+                db.session.rollback()
+                current_app.logger.error(f"Database commit failed: {str(e)}")
+                return jsonify({'message': f'Database error: {str(e)}'}), 500
 
             return jsonify({
                 'message': 'Manitou Arrival Checklist submitted successfully!',
@@ -284,6 +357,7 @@ def get_arrival_checklist_by_brand_and_id(brand, item_id):
     
     return jsonify({'message': 'Checklist not found for this brand and ID'}), 404
 
+@jwt_required
 def check_vin_existence(vin):
     """Checks if a given VIN already exists in either Renault or Manitou checklists."""
 

@@ -20,6 +20,7 @@ import { DateInput } from '@mantine/dates';
 import { useForm } from '@mantine/form';
 import { IconCalendar, IconCircleCheck, IconCircleDashed } from "@tabler/icons-react";
 import { notifications } from '@mantine/notifications';
+import apiClient from "@/libs/api";
 
 export function ArrivingPackingQuality() {
     const theme = useMantineTheme();
@@ -27,50 +28,43 @@ export function ArrivingPackingQuality() {
     const [technicians, setTechnicians] = useState([]);
     const [approvers, setApprovers] = useState([]);
     const [woNumbers, setWoNumbers] = useState([]);
+    const [loading, setLoading] = useState(true);
     
     useEffect(() => {
         const fetchData = async () => {
             try {
                 const brandId = "SDLG"; // 'SDLG' for SDLG
                 const groupId = "AI"; // 'AI' for Arrival Inspection
-                
-                // model/ Type SDLG API
-                const modelResponse = await fetch(`http://127.0.0.1:5000/api/unit-types/${brandId}`);
-                if (!modelResponse.ok) throw new Error(`HTTP error! status: ${modelResponse.status}`);
-                const modelData = await modelResponse.json();
-                const formattedModels = modelData
-                    .filter(item => item.value !== null && item.value !== undefined && item.label !== null && item.label !== undefined)
-                    .map(item => ({
-                        value: item.value,
-                        label: item.label
-                    }));
+                const [
+                    modelRes,
+                    woRes,
+                    techRes,
+                    supervisorRes,
+                    techHeadRes,
+                ] = await Promise.all([
+                    apiClient.get(`/unit-types/${brandId}`),
+                    apiClient.get(`/work-orders?brand_id=${brandId}&group_id=${groupId}`),
+                    apiClient.get("/users/by-role/Technician"),
+                    apiClient.get("/users/by-role/Supervisor"),
+                    apiClient.get("/users/by-role/Technical Head")
+                ])
+
+                const formattedModels = modelRes.data
+                    .filter(item => item.value !== null & item.label !== null)
+                    .map(item => ({ value: item.value, label: item.label }));
                 setUnitModels(formattedModels);
 
-                // wo Number API
-				const woResponse = await fetch(`http://127.0.0.1:5000/api/work-orders?brand_id=${brandId}&group_id=${groupId}`);
-				if (!woResponse.ok) throw new Error(`HTTP error! status: ${woResponse.status}`);
-				const woData = await woResponse.json();
-				const formattedWoData = woData.map(wo => ({ 
-					value: wo.WONumber, 
-					label: wo.WONumber 
-				}));
-				setWoNumbers(formattedWoData);
+                const formattedWO = woRes.data.map(wo => ({
+                    value: wo.WONumber, 
+                    label: wo.WONumber,
+                }));
+                setWoNumbers(formattedWO);
 
-                // dummy Technicians API
-                const dummyTechniciansData = [
-                    { value: "tech1", label: "John Doe" },
-                    { value: "tech2", label: "Jane Smith" },
-                    { value: "tech3", label: "Peter Jones" }
-                ];
-                setTechnicians(dummyTechniciansData);
-
-                // dummy Approvers API
-                const dummyApproverData = [
-                    { value: "app1", label: "Alice Brown" },
-                    { value: "app2", label: "Bob White" },
-                    { value: "app3", label: "John Green" }
-                ];
-                setApprovers(dummyApproverData);
+                setTechnicians(techRes.data);
+                setApprovers([
+                    ...supervisorRes.data,
+                    ...techHeadRes.data,
+                ]);
 
             } catch (error) {
                 console.error("Failed to fetch models:", error);
@@ -79,6 +73,9 @@ export function ArrivingPackingQuality() {
                     message: "Failed to load models. Please try again!",
                     color: "red",
                 });
+
+            } finally {
+                setLoading(false);
             }
         };
         fetchData();
@@ -161,33 +158,17 @@ export function ArrivingPackingQuality() {
 		}
 
 		try {
-			const response = await fetch(`http://127.0.0.1:5000/api/arrival-check/check-vin/${vin}`, {
-				method: "GET",
-				headers: {
-					"Content-Type": "application/json",
-					"Authorization": `Bearer ${token}`
-				},
-			});
+			const response = await apiClient.get(`/arrival-check/check-vin/${vin}`);
+            return response.data.exists;
 
-			if (!response.ok) {
-				const errorText = await response.text();
-				notifications.show({
-					title: "VIN Check Failed",
-					message: `Server error during VIN verification. Please try again.`,
-					color: "red",
-				});
-				return true;
-			}
-			const data = await response.json();
-			return data.exists;
 		} catch (error) {
-			console.error("Network Error or Failed to Check VIN:", error);
-			notifications.show({
-				title: "Network Error",
-                message: "Failed to verify VIN. Check your internet connection.",
+			console.error("VIN check failed:", error);
+            notifications.show({
+                title: "VIN Check Failed",
+                message: "Unable to verify VIN. Please try again.",
                 color: "red",
-			});
-			return true;
+            });
+            return true;
 		}
 	};
 
@@ -249,34 +230,21 @@ export function ArrivingPackingQuality() {
         };
 
         try {
-            const response = await fetch('http://127.0.0.1:5000/api/arrival-check/sdlg/submit', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify(payload),
-            });
+            const response = await apiClient.post('/arrival-check/sdlg/submit', payload);
 
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.message || "Failed to submit SDLG Arrival Check");
-            }
-
-            const result = await response.json();
             notifications.show({
                 title: "Submission Successful!",
                 message: result.message || "Form Submitted Successfully.",
                 color: "green",
             })
-            
             form.reset();
 
         } catch (error) {
             console.log('Error submitting form:', error);
+            const errorMessage = error.response?.data?.message || error.message || "Failed to submit SDLG Arrival Check";
             notifications.show({
                 title: "Submission Error",
-                message: `Failed to submit form: ${error.message}`,
+                message: `Error: ${errorMessage}`,
                 color: "red",
             });
         }

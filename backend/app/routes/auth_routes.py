@@ -28,14 +28,11 @@ def register():
 
     if user:
         try:
-            # ✅ SOLUSI: Panggil fungsi pengirim email di sini!
             auth_controller_instance.send_registration_email(user)
             current_app.logger.info(f"User registered successfully: {user.email}. Registration email sent.")
             return jsonify({"message": "User registered successfully, welcome email sent."}), 201
         
         except Exception as e:
-            # Jika pengiriman email gagal, log error tetapi tetap kembalikan 201 
-            # (karena pengguna sudah berhasil dibuat di DB).
             current_app.logger.error(f"User {user.email} created, but failed to send registration email: {e}")
             return jsonify({"message": "User registered successfully, but failed to send welcome email."}), 201
             

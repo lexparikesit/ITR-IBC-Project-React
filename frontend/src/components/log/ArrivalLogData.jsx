@@ -20,10 +20,12 @@ import {
     Stack,
     SimpleGrid,
 } from '@mantine/core';
-import { IconSearch, IconEye, IconAlertCircle } from '@tabler/icons-react';
+import * as XLSX from 'xlsx';
+import { IconSearch, IconEye, IconAlertCircle, IconDownload } from '@tabler/icons-react';
 import { useDisclosure } from '@mantine/hooks';
 import { notifications } from "@mantine/notifications";
-import { BRAND_CHECKLIST_MAP } from '@/config/ArrivalMap'; 
+import { BRAND_CHECKLIST_MAP } from '@/config/ArrivalMap';
+import { useUser } from '@/context/UserContext'; 
 
 const EXCLUDED_KEYS = ['remarks', 'notes', 'checklist_items', 'id', 'arrivalId', 'details'];
 const formatKeyToLabel = (key) => {
@@ -173,10 +175,8 @@ const formatLocalTime = (isoString) => {
     return `${datePart}, ${correctedTimePart}`;
 };
 
-
 const LogData = ({ title, apiUrl }) => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null; 
-    
     const [logs, setLogs] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -190,6 +190,43 @@ const LogData = ({ title, apiUrl }) => {
         technicians: {},
         approvers: {}
     });
+    const { user } = useUser()
+
+    const downloadExcel = () => {
+        if (!user?.permissions?.includes('download_arrival_log')) {
+            notifications.show({
+                title: "Permission Denied",
+                message: "You don't have permission to download this log.",
+                color: "red",
+            });
+            return;
+        }
+
+        const excelData = logs.map((log, index) => ({
+            No: index + 1,
+            'WO Number': log.woNumber || 'N/A',
+            'Type/Model': lookupTables.models[log.model] || log.model || 'N/A',
+            Brand: log.brand === 'manitou' 
+                ? 'Manitou' 
+                : log.brand === 'renault' 
+                    ? 'Renault Trucks' 
+                    : log.brand || 'N/A',
+            VIN: log.VIN || 'N/A',
+            'Date of Check': log.dateOfCheck 
+                ? new Date(log.dateOfCheck).toLocaleDateString('id-ID') 
+                : 'N/A',
+            Technician: lookupTables.technicians[log.technician] || log.technician || 'N/A',
+            'Approval By': lookupTables.approvers[log.approvalBy] || log.approvalBy || 'N/A',
+            'Created By': log.createdBy || 'N/A',
+            'Created On': formatLocalTime(log.createdOn)
+        }));
+
+        const ws = XLSX.utils.json_to_sheet(excelData);
+        const wb = XLSX.utils.book_new();
+        
+        XLSX.utils.book_append_sheet(wb, ws, "Arrival Check Log");
+        XLSX.writeFile(wb, `arrival_check_log_${new Date().toISOString().split('T')[0]}.xlsx`);
+    };
 
     const getUnitInformationData = (details, lookupTables) => {
         if (!details) return [];
@@ -270,6 +307,44 @@ const LogData = ({ title, apiUrl }) => {
         return modelLookup;
     };
 
+    const fetchUserLookup = async (token) => {
+        if (!token) return { technicians: {}, approvers: {} };
+        
+        try {
+            const baseUrl = 'http://127.0.0.1:5000/api';
+            const [techRes, supervisorRes, techHeadRes] = await Promise.all([
+                fetch(`${baseUrl}/users/by-role/Technician`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                }),
+                fetch(`${baseUrl}/users/by-role/Supervisor`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                }),
+                fetch(`${baseUrl}/users/by-role/Technical Head`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                })
+            ]);
+
+            const techData = techRes.ok ? await techRes.json() : [];
+            const supervisorData = supervisorRes.ok ? await supervisorRes.json() : [];
+            const techHeadData = techHeadRes.ok ? await techHeadRes.json() : [];
+            const allApprovers = [...supervisorData, ...techHeadData];
+            const techLookup = techData.reduce((acc, user) => {
+                acc[user.value] = user.label;
+                return acc;
+            }, {});
+            const approverLookup = allApprovers.reduce((acc, user) => {
+                acc[user.value] = user.label;
+                return acc;
+            }, {});
+
+            return { technicians: techLookup, approvers: approverLookup };
+        
+        } catch (error) {
+            console.error("Error fetching user lookup data:", error);
+            return { technicians: {}, approvers: {} };
+        }
+    };
+
     useEffect(() => {
         const fetchAllData = async () => {
             if (!token) {
@@ -285,7 +360,9 @@ const LogData = ({ title, apiUrl }) => {
             try {
                 setLoading(true);
                 
-                const logsResponse = await fetch(apiUrl, { headers: { 'Authorization': `Bearer ${token}` }});
+                const logsResponse = await fetch(apiUrl, { 
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
 
                 if (!logsResponse.ok) {
                     throw new Error('Failed to fetch the Log Data.');
@@ -298,22 +375,18 @@ const LogData = ({ title, apiUrl }) => {
                     logData.map(log => BRAND_ID_MAP[(log.brand || '').toLowerCase()]).filter(id => id) 
                 )];
                 
-                const dummyTechnicians = [{ value: "tech1", label: "John Doe" }, { value: "tech2", label: "Jane Smith" }, { value: "tech3", label: "Peter Jones" }];
-                const techLookup = dummyTechnicians.reduce((acc, item) => { acc[item.value] = item.label; return acc; }, {});
-                const dummyApprovers = [{ value: "app1", label: "Alice Brown" }, { value: "app2", label: "Bob White" }, { value: "app3", label: "John Green" }];
-                const approverLookup = dummyApprovers.reduce((acc, item) => { acc[item.value] = item.label; return acc; }, {});
-
                 let allModelLookup = {};
-
                 for (const brandId of uniqueBrandIds) {
                     const modelLookupForBrand = await fetchLookupData(brandId);
                     allModelLookup = { ...allModelLookup, ...modelLookupForBrand }; 
                 }
 
+                const { technicians, approvers } = await fetchUserLookup(token);
+
                 setLookupTables({
                     models: allModelLookup,
-                    technicians: techLookup,
-                    approvers: approverLookup
+                    technicians: technicians,
+                    approvers: approvers
                 });
 
             } catch (err) {
@@ -323,7 +396,7 @@ const LogData = ({ title, apiUrl }) => {
                     message: `Failed to Fetch the Data: ${err.message}`, 
                     color: "red" 
                 });
-            
+
             } finally {
                 setLoading(false);
             }
@@ -333,7 +406,6 @@ const LogData = ({ title, apiUrl }) => {
             fetchAllData();
         }
     }, [apiUrl, token]);
-
 
     const filteredLogs = useMemo(() => {
         const query = searchQuery.toLowerCase();
@@ -398,16 +470,24 @@ const LogData = ({ title, apiUrl }) => {
         }
     }
 
-    const rows = paginatedLogs.map((log) => {
+    const rows = paginatedLogs.map((log, index) => {
         const modelLabel = lookupTables.models[log.model] || log.model || 'N/A';
         const technicianLabel = lookupTables.technicians[log.technician] || log.technician || 'N/A';
         const approverLabel = lookupTables.approvers[log.approvalBy] || log.approvalBy || 'N/A';
+        const globalIndex = (activePage - 1) * parseInt(rowsPerPage, 10) + index + 1;
         
         return (
-            <Table.Tr key={log.id}> 
+            <Table.Tr key={log.id}>
+                <Table.Td>{globalIndex}</Table.Td>
                 <Table.Td>{log.woNumber || 'N/A'}</Table.Td>
                 <Table.Td>{modelLabel}</Table.Td> 
-                <Table.Td>{log.brand || 'N/A'}</Table.Td>
+                <Table.Td>
+                    {log.brand === 'manitou'
+                        ? 'Manitou'
+                        : log.brand == 'renault'
+                            ? 'Renault Trucks'
+                            : log.brand || 'N/A'}
+                </Table.Td>
                 <Table.Td>{log.VIN || 'N/A'}</Table.Td>
                 <Table.Td>
                     {log.dateOfCheck 
@@ -473,7 +553,7 @@ const LogData = ({ title, apiUrl }) => {
                             <TextInput
                                 label="Search Unit"
                                 icon={<IconSearch size={14} />}
-                                placeholder="by WO Number, VIN Number, Brand/ Product, or Unit Type)"
+                                placeholder="by WO Number, VIN Number, Brand/ Product, or Unit Type"
                                 value={searchQuery}
                                 onChange={(event) => {
                                     setSearchQuery(event.currentTarget.value);
@@ -482,17 +562,39 @@ const LogData = ({ title, apiUrl }) => {
                                 w={400}
                                 style={{ alignSelf: 'center' }} 
                             />
-                            <Select
-                                label="Show Rows"
-                                placeholder="10"
-                                data={['10', '20', '30', '40', '50']}
-                                value={rowsPerPage}
-                                onChange={(value) => {
-                                    setRowsPerPage(value);
-                                    setActivePage(1);
-                                }}
-                                w={80}
-                            />
+                            <Group gap="xs">
+                                {user?.permissions?.includes('download_arrival_log') && (
+                                    <Button 
+                                        onClick={downloadExcel}
+                                        variant="outline"
+                                        color="#A91D3A"
+                                        size="lg"
+                                        p={0}
+                                        w={32}
+                                        h={32}
+                                        style={{
+                                            height: '100%',
+                                            width: '40px',
+                                            paddingTop: '2px',
+                                            paddingBottom: '2px',
+                                            marginTop: '23px'
+                                        }}
+                                    >
+                                        <IconDownload size={16} />
+                                    </Button>
+                                )}
+                                <Select
+                                    label="Show Rows"
+                                    placeholder="10"
+                                    data={['10', '20', '30', '40', '50']}
+                                    value={rowsPerPage}
+                                    onChange={(value) => {
+                                        setRowsPerPage(value);
+                                        setActivePage(1);
+                                    }}
+                                    w={80}
+                                />
+                            </Group>
                         </Group>
                     </Paper>
 
@@ -500,6 +602,7 @@ const LogData = ({ title, apiUrl }) => {
                         <Table stickyHeader striped highlightOnHover>
                             <Table.Thead>
                                 <Table.Tr>
+                                    <Table.Th>No.</Table.Th>
                                     <Table.Th>WO Number</Table.Th>
                                     <Table.Th>Type/Model</Table.Th>
                                     <Table.Th>Brand</Table.Th>
@@ -709,13 +812,26 @@ const LogData = ({ title, apiUrl }) => {
                                                                     </Text>
                                                                 </Table.Td>
 
-                                                                <Table.Td>{item.remarks || item.caption || '-'}</Table.Td> 
+                                                                <Table.Td>
+                                                                    {selectedLogDetails.brand.toLowerCase() === 'manitou' 
+                                                                        ? (item.caption || '-') 
+                                                                        : (item.remarks || '-')
+                                                                    }
+                                                                </Table.Td>
                                                                 
                                                                 <Table.Td>
-                                                                    {item.image_url ? (
-                                                                        <Anchor href={item.image_url} target="_blank" rel="noopener noreferrer">
-                                                                            Picture
-                                                                        </Anchor>
+                                                                    {item.image_url && item.image_url.startsWith('https://') ? (
+                                                                        <Box style={{ width: '100px', height: '100px', overflow: 'hidden' }}>
+                                                                            <img 
+                                                                                src={item.image_url} 
+                                                                                alt="Inspection" 
+                                                                                style={{ width: '100%', height: 'auto', objectFit: 'cover' }}
+                                                                                onError={(e) => {
+                                                                                e.target.style.display = 'none';
+                                                                                e.target.parentElement.innerHTML = '<span style="color: red">Image Failed to Load</span>';
+                                                                                }}
+                                                                            />
+                                                                        </Box>
                                                                     ) : '-'}
                                                                 </Table.Td>
                                                             </Table.Tr>

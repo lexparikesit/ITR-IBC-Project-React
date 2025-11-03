@@ -111,3 +111,33 @@ def assign_roles(user_id):
     except Exception as e:
         print(f"Error assigning roles: {e}")
         return jsonify({"message": "Internal Server Error"}), 500
+
+@user_bp.route('/users/by-role/<role_name>', methods=['GET'])
+@jwt_required
+def get_users_by_role(role_name):
+    """Get list of user by role name"""
+
+    try:
+        role = IBCRoles.query.filter_by(role_name=role_name).first()
+
+        if not role:
+            return jsonify({"message":f"Role '{role_name}' not Found"}), 404
+
+        users = db.session.query(User)\
+            .join(IBCUserRoles, User.userid == IBCUserRoles.userid)\
+            .filter(IBCUserRoles.role_id == role.role_id)\
+            .filter(User.is_active == True)\
+            .all()
+        
+        user_list = [
+            {
+                "value": str(user.userid),
+                "label": f"{user.firstName} {user.lastName}".strip() or user.username
+            }
+            for user in users
+        ]
+
+        return jsonify(user_list), 200
+
+    except Exception as e:
+        return jsonify({"message": "Internal server error"}), 500

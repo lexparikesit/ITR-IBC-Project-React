@@ -7,6 +7,7 @@ class ArrivalChecklistItemSchema_MA(Schema):
     itemName = fields.Str()
     status = fields.Int()
     image_url = fields.Str()
+    caption = fields.Str()
 
 class ArrivalChecklistItemSchema_RT(Schema):
 

@@ -17,11 +17,13 @@ import {
     Radio,
 } from "@mantine/core";
 import { DateInput } from "@mantine/dates";
-import { IconCalendar, IconUpload, IconX, IconFile, IconPencil } from "@tabler/icons-react";
+import { IconCalendar, IconUpload, IconX, IconFile, IconPencil, IconRefresh } from "@tabler/icons-react";
 import { useForm } from "@mantine/form";
 import { notifications } from "@mantine/notifications";
 import { Dropzone, MIME_TYPES } from "@mantine/dropzone";
 import { rem } from "@mantine/core";
+import apiClient from "@/libs/api";
+import imageCompression from "browser-image-compression";
 
 const manitouChecklistItemsDefinition = {
     engine: [
@@ -108,11 +110,78 @@ const manitouChecklistItemsDefinition = {
     ],
 };
 
+const MAX_FILE_SIZE = 2 * 1024 * 1024;
+const MAX_ACCEPTED_SIZE = 5 * 1024 * 1024;
+const COMPRESS_OPTIONS = {
+    maxSizeMB: 1.8,
+    maxWidthOrHeight: 1920,
+    useWebWorker: true,
+    fileType: 'image/jpeg',
+}
+
 export function UnitArrivalInspectionForm() {
     const [unitModels, setUnitModels] = useState([]);
     const [woNumbers, setWoNumbers] = useState([]);
     const [technicians, setTechnicians] = useState([]);
     const [approvers, setApprovers] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [uploading, setUploading] = useState(false);
+
+    const processImage = async (file, sectionKey, itemKey) => {
+        try {
+            if (file.size > MAX_ACCEPTED_SIZE) {
+                notifications.show({
+                    title: "File Too Large",
+                    message: "Maximum file size is 10MB. Please choose a smaller file.",
+                    color: "red",
+                });
+                return null;
+            }
+
+            let processedFile = file;
+
+            if (file.size > MAX_FILE_SIZE) {
+                notifications.show({
+                    title: "Optimizing Image",
+                    message: `Compressing ${file.name}...`,
+                    color: "blue",
+                    autoClose: false,
+                    id: `compress-${sectionKey}-${itemKey}`
+                });
+            
+                processedFile = await imageCompression(file, COMPRESS_OPTIONS);
+
+                if (processedFile.size > MAX_FILE_SIZE) {
+                    notifications.update({
+                        id: `compress-${sectionKey}-${itemKey}`,
+                        title: "Compression Failed",
+                        message: "Unable to compress below 2MB. Please choose a different image.",
+                        color: "red",
+                        autoClose: 5000
+                    });
+                    return null;
+                }
+
+                notifications.update({
+                    id: `compress-${sectionKey}-${itemKey}`,
+                    title: "Image Optimized",
+                    message: `Compressed to ${(processedFile.size / 1024 / 1024).toFixed(2)} MB`,
+                    color: "green",
+                    autoClose: 3000
+                });
+            }
+            return processedFile;
+
+        } catch (error) {
+            console.error("Image processing error:", error);
+            notifications.show({
+                title: "Processing Error",
+                message: "Failed to process image. Please try again.",
+                color: "red",
+            });
+            return null;
+        }
+    };
 
     const generateChecklistValidation = () => {
         let validationRules = {};
@@ -170,47 +239,40 @@ export function UnitArrivalInspectionForm() {
 
     useEffect(() => {
         const fetchData = async () => {
+            setLoading(true);
             try {
                 const brandId = "MA"; // 'MA' for Manitou
                 const groupId = "AI"; // 'AI' for Arrival Inspection
+                const [
+                    modelRes,
+                    woRes,
+                    techRes,
+                    supervisorRes,
+                    techHeadRes,
+                ] = await Promise.all([
+                    apiClient.get(`/unit-types/${brandId}`),
+                    apiClient.get(`/work-orders?brand_id=${brandId}&group_id=${groupId}`),
+                    apiClient.get("/users/by-role/Technician"),
+                    apiClient.get("/users/by-role/Supervisor"),
+                    apiClient.get("/users/by-role/Technical Head")
+                ])
 
-                // model/ type MA API
-                const modelResponse = await fetch('http://127.0.0.1:5000/api/unit-types/MA');
-                if (!modelResponse.ok) throw new Error(`HTTP error! status: ${modelResponse.status}`);
-                const modelData = await modelResponse.json();
-                const formattedModels = modelData
-                    .filter(item => item.value !== null && item.value !== undefined && item.label !== null && item.label !== undefined)
-                    .map(item => ({
-                        value: item.value,
-                        label: item.label
-                    }));
+                const formattedModels = modelRes.data
+                    .filter(item => item.value !== null & item.label !== null)
+                    .map(item => ({ value: item.value, label: item.label }));
                 setUnitModels(formattedModels);
-                
-                // wo Number API
-				const woResponse = await fetch(`http://127.0.0.1:5000/api/work-orders?brand_id=${brandId}&group_id=${groupId}`);
-				if (!woResponse.ok) throw new Error(`HTTP error! status: ${woResponse.status}`);
-				const woData = await woResponse.json();
-				const formattedWoData = woData.map(wo => ({ 
-					value: wo.WONumber, 
-					label: wo.WONumber 
-				}));
-				setWoNumbers(formattedWoData);
 
-                // dummy Technicians API
-                const dummyTechniciansData = [
-                    { value: "tech1", label: "John Doe" },
-                    { value: "tech2", label: "Jane Smith" },
-                    { value: "tech3", label: "Peter Jones" }
-                ];
-                setTechnicians(dummyTechniciansData);
+                const formattedWO = woRes.data.map(wo => ({
+                    value: wo.WONumber, 
+                    label: wo.WONumber,
+                }));
+                setWoNumbers(formattedWO);
 
-                // dummy Approvers API
-                const dummyApproverData = [
-                    { value: "app1", label: "Alice Brown" },
-                    { value: "app2", label: "Bob White" },
-                    { value: "app3", label: "John Green" }
-                ];
-                setApprovers(dummyApproverData);
+                setTechnicians(techRes.data);
+                setApprovers([
+                    ...supervisorRes.data,
+                    ...techHeadRes.data,
+                ]);
 
             } catch (error) {
                 console.error("Failed to fetch models:", error);
@@ -219,57 +281,50 @@ export function UnitArrivalInspectionForm() {
                     message: "Failed to load models. Please try again!",
                     color: "red",
                 });
+            
+            } finally {
+                setLoading(false);
             }
         };
         fetchData();
     }, []);
 
     const checkVinExists = async (vin) => {
-        const token = localStorage.getItem('access_token');
-        if (!token) {
-            console.warn("No authentication token found for VIN check.");
-            notifications.show({
-                title: "Authentication Required",
-                message: "Please log in to perform VIN check.",
-                color: "red",
-            });
-            return false;
-        }
-
         try {
-            const response = await fetch(`http://127.0.0.1:5000/api/arrival-check/check-vin/${vin}`, {
-                method: "GET",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${token}`
-                },
-            });
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                notifications.show({
-                    title: "VIN Check Failed",
-                    message: `Server error during VIN verification. Please try again.`,
-                    color: "red",
-                });
-                return true;
-            }
-            const data = await response.json();
-            return data.exists;
-
+            const response = await apiClient.get(`/arrival-check/check-vin/${vin}`);
+            return response.data.exists;
+        
         } catch (error) {
-            console.error("Network Error or Failed to Check VIN:", error);
+            console.error("VIN check failed:", error);
             notifications.show({
-                title: "Network Error",
-                message: "Failed to verify VIN. Check your internet connection.",
+                title: "VIN Check Failed",
+                message: "Unable to verify VIN. Please try again.",
                 color: "red",
             });
             return true;
         }
     };
 
+    const retryUpload = async (sectionKey, itemKey) => {
+        const currentFile = form.values[sectionKey]?.[itemKey]?.image;
+        if (!currentFile) return;
+
+        setUploading(true);
+        
+        try {
+            const processedFile = await processImage(currentFile, sectionKey, itemKey);
+            if (processedFile) {
+                form.setFieldValue(`${sectionKey}.${itemKey}.image`, processedFile);
+            }
+        } finally {
+            setUploading(false);
+        }
+    };
+
     const handleSubmit = async (values) => {
         console.log('Form Submitted (Frontend Data)', values);
+
+        setUploading(true);
 
         const token = localStorage.getItem('access_token');
         if (!token) {
@@ -311,61 +366,81 @@ export function UnitArrivalInspectionForm() {
         };
 
         const formData = new FormData();
+
+        let missingPhotos = [];
         
         Object.keys(manitouChecklistItemsDefinition).forEach(sectionKey => {
             const items = manitouChecklistItemsDefinition[sectionKey];
             
             items.forEach(item => {
-                const itemData = values[sectionKey]?.[item.itemKey];
+                const itemData = values[sectionKey]?.[item.itemKey] || { status: "", image: null, caption: "" };
                 
-                if (itemData && itemData.status) {
-                    if (!payload.checklistItems[sectionKey]) {
-                        payload.checklistItems[sectionKey] = {};
-                    }
-                    
-                    payload.checklistItems[sectionKey][item.itemKey] = { status: itemData.status, caption: itemData.caption || "" };
-                    
-                    if (itemData.image) {
-                        const imageKey = `image-${sectionKey}-${item.itemKey}`;
-                        formData.append(imageKey, itemData.image);
-                    }
+                if (!payload.checklistItems[sectionKey]) {
+                    payload.checklistItems[sectionKey] = {};
+                }
+                
+                payload.checklistItems[sectionKey][item.itemKey] = {
+                    status: itemData.status,
+                    caption: itemData.caption || ""
+                };
+                
+                if (itemData.image) {
+                    const imageKey = `image-${sectionKey}-${item.itemKey}`;
+                    formData.append(imageKey, itemData.image);
                 }
             });
         });
 
-        console.log("Payload JSON to Backend: ", payload);
+        Object.keys(manitouChecklistItemsDefinition).forEach(sectionKey => {
+            const items = manitouChecklistItemsDefinition[sectionKey];
+            
+            items.forEach(item => {
+                const itemData = values[sectionKey]?.[item.itemKey] || { status: "", image: null, caption: "" };
+                
+                if ((itemData.status === 'Bad' || itemData.status === 'Missing') && !itemData.image) {
+                    missingPhotos.push(`${sectionKey} - ${item.label}`);
+                }
+            });
+        });
 
+        if (missingPhotos.length > 0) {
+            notifications.show({
+                title: "Missing Photos",
+                message: `Please upload photos for: ${missingPhotos.join(', ')}`,
+                color: "red",
+            });
+            return;
+        }
+
+        console.log("Payload JSON to Backend: ", payload);
         formData.append('data', JSON.stringify(payload));
         
         try {
-            const response = await fetch(`http://127.0.0.1:5000/api/arrival-check/manitou/submit`, {
-                method: 'POST',
+            const response = await apiClient.post(`/arrival-check/manitou/submit`, formData, {
                 headers: {
-                    'Authorization': `Bearer ${token}`
+                    'Content-Type': 'multipart/form-data'
                 },
-                body: formData,
+                timeout: 30000
             });
 
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.message || 'Failed to submit checklist');
-            }
-
-            const result = await response.json();
             notifications.show({
-                title: "Submission Successful!",
-                message: result.message || 'Form submitted successfully!',
+                title: "Success!",
+                message: "Form Submitted Successfully!",
                 color: "green",
-            });
+            })
             form.reset();
 
         } catch (error) {
             console.error('Error submitting form:', error);
+            const errorMessage = error.response?.data?.message || error.message || "Failed to submit checklist";
             notifications.show({
                 title: "Submission Error",
-                message: error.message || "An unexpected error occurred. Please try again.",
+                message: `Error: ${errorMessage}`,
                 color: "red",
             });
+        
+        } finally {
+            setUploading(false);
         }
     };
 
@@ -384,7 +459,7 @@ export function UnitArrivalInspectionForm() {
                         {...form.getInputProps(formProps)}
                         value={itemData ? itemData.status : ""}
                         onChange={(value) => {
-                            const newStatus = { status: value };
+                        const newStatus = { status: value };
                             if (value === "Good") {
                                 form.setFieldValue(formProps, { status: "Good", image: null, caption: "" });
                             } else {
@@ -404,9 +479,12 @@ export function UnitArrivalInspectionForm() {
                     {showConditionalInputs && (
                         <>
                             <Dropzone
-                                onDrop={(files) => {
+                                onDrop={async (files) => {
                                     if (files.length > 0) {
-                                        form.setFieldValue(`${formProps}.image`, files[0]);
+                                        const processedFile = await processImage(files[0], sectionKey, itemKey);
+                                        if (processedFile) {
+                                            form.setFieldValue(`${formProps}.image`, processedFile);
+                                        }
                                     }
                                 }}
                                 onReject={(files) => {
@@ -417,6 +495,7 @@ export function UnitArrivalInspectionForm() {
                                 });
                             }}
                             maxFiles={1}
+                            maxSize={MAX_ACCEPTED_SIZE}
                             accept={[MIME_TYPES.jpeg, MIME_TYPES.png]}
                             {...dropzoneProps}
                             >
@@ -440,11 +519,35 @@ export function UnitArrivalInspectionForm() {
                                         />
                                     </Dropzone.Idle>
                                     <Stack align="center" gap={4}>
-                                        <Text size="xs" c="dimmed"> {itemData.image ? itemData.image.name : 'Drag and drop an image here or click to select'} </Text>
-                                        <Text size="xs" c="dimmed"> Accepted formats: JPG, PNG </Text>
+                                        <Text size="xs" c="dimmed"> 
+                                            {itemData.image ? itemData.image.name : 'Drag and drop an image here or click to select'} 
+                                        </Text>
+                                        <Text size="xs" c="dimmed"> 
+                                            JPG/PNG, max 5MB (will be compressed to ≤2MB)
+                                        </Text>
+                                        {itemData.image && (
+                                            <Text size="xs" c="green">
+                                                {(itemData.image.size / 1024 / 1024).toFixed(2)} MB
+                                            </Text>
+                                        )}
                                     </Stack>
                                 </Group>
                             </Dropzone>
+
+                            {itemData.image && (
+                                <Group justify="flex-end">
+                                    <Button
+                                        variant="subtle"
+                                        size="xs"
+                                        onClick={() => retryUpload(sectionKey, itemKey)}
+                                        loading={uploading}
+                                        leftSection={<IconRefresh size={14} />}
+                                    >
+                                        Retry Upload
+                                    </Button>
+                                </Group>
+                            )}
+
                             <TextInput
                                 placeholder="Add Image Caption"
                                 mt="xs"
@@ -565,11 +668,11 @@ export function UnitArrivalInspectionForm() {
                 </Card>
 
                 <Divider my="xl" label={<Text style={{ color: '#000000 !important' }}>Legend</Text>} labelPosition="center" />
-                <Group justify="center" gap="xl" mb="lg">
-                    <Text style={{ color: '#000000 !important' }}> 1: Good </Text>
-                    <Text style={{ color: '#000000 !important' }}> 2: Bad </Text>
-                    <Text style={{ color: '#000000 !important' }}> 0: Missing </Text>
-                </Group>
+                    <Group justify="center" gap="xl" mb="lg">
+                        <Text style={{ color: '#000000 !important' }}> 1: Good </Text>
+                        <Text style={{ color: '#000000 !important' }}> 2: Bad </Text>
+                        <Text style={{ color: '#000000 !important' }}> 0: Missing </Text>
+                    </Group>
                 <Divider my="xl" />
 
                 {Object.keys(manitouChecklistItemsDefinition).map(sectionKey => (
@@ -605,7 +708,13 @@ export function UnitArrivalInspectionForm() {
                 />
 
                 <Group justify="flex-end" mt="md">
-                    <Button type="submit">Submit</Button>
+                    <Button 
+                        type="submit"
+                        loading={uploading}
+                        disabled={uploading}
+                    >
+                        {uploading ? 'Submitting...' : 'Submit'}
+                    </Button>
                 </Group>
             </form>
         </Box>

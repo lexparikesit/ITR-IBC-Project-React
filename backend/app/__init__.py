@@ -49,8 +49,16 @@ def create_app():
     app.config['MAIL_DEFAULT_SENDER'] = os.getenv('EMAIL_USER')
 
     # Cors  for ReactJS/ NextJS frontend
-    CORS(app, supports_credentials=True, origins=["http://localhost:3000"])
+    # CORS(app, supports_credentials=True, origins=["http://localhost:3000"])
     # CORS(app, supports_credentials=True, origins=["http://localhost:3000"], allow_headers=["Authorization", "Content-Type"])
+
+    CORS(
+        app, 
+        origins=["http://localhost:3000"],
+        supports_credentials=True,
+        allow_headers=["Authorization", "Content-Type"],
+        methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+    )
 
     # init extensions
     db.init_app(app)
