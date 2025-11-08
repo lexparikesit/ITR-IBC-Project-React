@@ -20,9 +20,11 @@ import {
     Stack,
     SimpleGrid,
 } from '@mantine/core';
-import { IconSearch, IconEye, IconAlertCircle } from '@tabler/icons-react';
+import * as XLSX from 'xlsx';
+import { IconSearch, IconEye, IconAlertCircle, IconDownload } from '@tabler/icons-react';
 import { useDisclosure } from '@mantine/hooks';
-import { notifications } from "@mantine/notifications";
+import { notifications } from '@mantine/notifications';
+import { useUser } from '@/context/UserContext';
 
 const BRAND_NAME_MAP = {
     'MA': 'Manitou',
@@ -64,35 +66,29 @@ const formatDateOnly = (isoString) => {
 
 const formatLocalTime = (isoString) => {
     if (!isoString) return 'N/A';
-    
-    let finalString = isoString;
-    
-    if (isoString.includes('T') && !isoString.includes('Z')) {
-        finalString = `${isoString}Z`;
-    }
-    
-    let date = new Date(finalString); 
-    
-    if (isNaN(date.getTime())) {
-        return isoString; 
-    }
-    
-    const formattedDateTime = date.toLocaleString('id-ID', {
-        year: 'numeric', month: '2-digit', day: '2-digit',
-        hour: '2-digit', minute: '2-digit', second: '2-digit',
-        hour12: false, 
-        timeZone: 'Asia/Jakarta'
-    });
 
-    const parts = formattedDateTime.split(', ');
+    let date;
     
-    if (parts.length < 2) return formattedDateTime;
-    
-    const datePart = parts[0];
-    const timePart = parts[1];
-    const correctedTimePart = timePart.replace(/\./g, ':');
-    
-    return `${datePart}, ${correctedTimePart}`;
+    if (typeof isoString === 'string' && !isoString.endsWith('Z') && !isoString.includes('+')) {
+        date = new Date(isoString + 'Z');
+    } else {
+        date = new Date(isoString);
+    }
+
+    if (isNaN(date.getTime())) {
+        return isoString;
+    }
+
+    return date.toLocaleString('id-ID', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+        timeZone: 'Asia/Jakarta'
+    }).replace(/\./g, ':');
 };
 
 const toTitleCase = (str) => {
@@ -157,7 +153,7 @@ const getUnitInformationData = (details, lookupTables) => {
 
         // Format Requestor
         else if (lowerKey === 'requestor') {
-            value = toTitleCase(value);
+            value = lookupTables.requestors?.[value] || toTitleCase(value) || 'N/A';
         }
 
         // Format Date
@@ -287,10 +283,32 @@ const fetchAccessoryData = async (token) => {
     }
 };
 
-const IBCLogData = ({ title, apiUrl }) => {
-    const token = typeof window !== 'undefined' ?
-        localStorage.getItem('access_token') : null;
+const fetchRequestorData = async (token) => {
+    if (!token) return {};
+    
+    try {
+        const response = await fetch(`http://127.0.0.1:5000/api/users/by-role/Salesman`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (!response.ok) throw new Error('Failed to fetch requestor data.');
+        
+        const requestors = await response.json();
+        const requestorMap = {};
+        
+        requestors.forEach(user => {
+            requestorMap[user.value] = user.label;
+        });
+        return requestorMap;
 
+    } catch (error) {
+        console.error('[ERROR] Error fetching requestor data:', error);
+        return {};
+    }
+};
+
+const IBCLogData = ({ title, apiUrl }) => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
     const [logs, setLogs] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -304,9 +322,10 @@ const IBCLogData = ({ title, apiUrl }) => {
         customers: {},
         packages: {},
         accessories: {},
+        requestors: {},
     });
+    const { user } = useUser()
 
-    // Fetch semua data
     useEffect(() => {
         const fetchAllData = async () => {
             if (!token || !apiUrl) {
@@ -329,6 +348,7 @@ const IBCLogData = ({ title, apiUrl }) => {
                 const customerLookup = await fetchCustomerData(token);
                 const packageLookup = await fetchPackageData(token);
                 const accessoryLookup = await fetchAccessoryData(token);
+                const requestorLookup = await fetchRequestorData(token);
 
                 const uniqueBrands = [...new Set(data.map(log => log.Brand_ID).filter(Boolean))];
                 let allModelLookup = {};
@@ -342,7 +362,8 @@ const IBCLogData = ({ title, apiUrl }) => {
                     models: allModelLookup,
                     customers: customerLookup,
                     packages: packageLookup,
-                    accessories: accessoryLookup
+                    accessories: accessoryLookup,
+                    requestors: requestorLookup,
                 });
 
             } catch (err) {
@@ -359,7 +380,6 @@ const IBCLogData = ({ title, apiUrl }) => {
         fetchAllData();
     }, [apiUrl, token]);
 
-    // Filter logs
     const filteredLogs = useMemo(() => {
         const query = searchQuery.toLowerCase();
         if (!query) return logs;
@@ -409,15 +429,17 @@ const IBCLogData = ({ title, apiUrl }) => {
         }
     };
 
-    const rows = paginatedLogs.map((log) => {
+    const rows = paginatedLogs.map((log,index) => {
         const modelLabel = lookupTables.models[log.UnitType] || log.UnitType || 'N/A';
         const customerName = lookupTables.customers[log.Cust_ID] || log.Cust_ID;
         const brandName = BRAND_NAME_MAP[log.Brand_ID] || log.Brand_ID;
+        const requestorName = lookupTables.requestors?.[log.Requestor] || log.Requestor || 'N/A';
 
         return (
             <Table.Tr key={log.IBC_ID}>
+                <Table.Td>{start + index + 1}</Table.Td>
                 <Table.Td>{log.IBC_No || 'N/A'}</Table.Td>
-                <Table.Td>{toTitleCase(log.Requestor)}</Table.Td>
+                <Table.Td>{requestorName}</Table.Td>
                 <Table.Td>{log.PO_PJB || 'N/A'}</Table.Td>
                 <Table.Td>{brandName}</Table.Td>
                 <Table.Td>{toTitleCase(customerName)}</Table.Td>
@@ -444,6 +466,50 @@ const IBCLogData = ({ title, apiUrl }) => {
         if (!selectedLogDetails) return [];
         return getUnitInformationData(selectedLogDetails, lookupTables);
     }, [selectedLogDetails, lookupTables]);
+
+    const downloadExcel = () => {
+        if (!user?.permissions?.includes('download_ibc_log')) {
+            notifications.show({
+                title: "Permission Denied",
+                message: "You don't have permission to download this log.",
+                color: "red",
+            });
+            return;
+        }
+
+        const excelData = logs.map((log, index) => ({
+            No: index + 1,
+            'IBC No': log.IBC_No || 'N/A',
+            Requestor: lookupTables.requestors?.[log.Requestor] || log.Requestor || 'N/A',
+            'PO/PJB': log.PO_PJB || 'N/A',
+            Brand: log.Brand_ID === 'MA'
+                ? 'Manitou'
+                : log.Brand_ID === 'KA'
+                    ? 'Kalmar'
+                    : log.Brand_ID === 'RT'
+                        ? 'Renault Trucks'
+                        : log.Brand_ID === 'SDLG'
+                            ? 'SDLG'
+                            : log.Brand_ID === 'MTN'
+                                ? 'Mantsinen'
+                                : log.Brand_ID || 'N/A',
+                Customer: lookupTables.customers?.[log.Cust_ID]
+                    ? toTitleCase(lookupTables.customers[log.Cust_ID].trim())
+                    : log.Cust_ID || 'N/A',
+                'Type/Model': lookupTables.models?.[log.UnitType] || log.UnitType || 'N/A',
+                Qty: log.QTY || 'N/A',
+                Date: log.IBC_date
+                    ? new Date(log.IBC_date).toLocaleDateString('id-ID')
+                    : 'N/A',
+                'Created By': log.createdby || 'N/A',
+                'Created On': formatLocalTime(log.createdon)
+            }));
+
+        const ws = XLSX.utils.json_to_sheet(excelData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "IBC Data Log");
+        XLSX.writeFile(wb, `ibc_log_${new Date().toISOString().split('T')[0]}.xlsx`);
+    };
 
     return (
         <Container size="xl" my="xl">
@@ -479,16 +545,38 @@ const IBCLogData = ({ title, apiUrl }) => {
                                 }}
                                 w={400}
                             />
-                            <Select
-                                label="Show Rows"
-                                data={['10', '20', '30', '50']}
-                                value={String(rowsPerPage)}
-                                onChange={(val) => {
-                                    setRowsPerPage(parseInt(val, 10));
-                                    setActivePage(1);
-                                }}
-                                w={80}
-                            />
+                            <Group gap="xs">
+                                {user?.permissions?.includes('download_arrival_log') && (
+                                    <Button 
+                                        onClick={downloadExcel}
+                                        variant="outline"
+                                        color="#A91D3A"
+                                        size="lg"
+                                        p={0}
+                                        w={32}
+                                        h={32}
+                                        style={{
+                                            height: '100%',
+                                            width: '40px',
+                                            paddingTop: '2px',
+                                            paddingBottom: '2px',
+                                            marginTop: '23px'
+                                        }}
+                                    >
+                                        <IconDownload size={16} />
+                                    </Button>
+                                )}
+                                <Select
+                                    label="Show Rows"
+                                    data={['10', '20', '30', '50']}
+                                    value={String(rowsPerPage)}
+                                    onChange={(val) => {
+                                        setRowsPerPage(parseInt(val, 10));
+                                        setActivePage(1);
+                                    }}
+                                    w={80}
+                                />
+                            </Group>
                         </Group>
                     </Paper>
 
@@ -496,6 +584,7 @@ const IBCLogData = ({ title, apiUrl }) => {
                         <Table stickyHeader striped highlightOnHover>
                             <Table.Thead>
                                 <Table.Tr>
+                                    <Table.Th>No.</Table.Th>
                                     <Table.Th>IBC No</Table.Th>
                                     <Table.Th>Requestor</Table.Th>
                                     <Table.Th>PO/PJB</Table.Th>
@@ -521,7 +610,6 @@ const IBCLogData = ({ title, apiUrl }) => {
                 </>
             )}
 
-            {/* Modal Detail */}
             <Modal
                 opened={modalOpened}
                 onClose={closeModal}
@@ -543,7 +631,6 @@ const IBCLogData = ({ title, apiUrl }) => {
                     </Alert>
                 ) : (
                     <Stack gap="xl">
-                        {/* Header Info */}
                         <Box>
                             <Title order={4} mb="sm" pb="xs" style={{ borderBottom: '1px solid var(--mantine-color-gray-2)' }}>
                                 IBC Header Information
@@ -561,7 +648,6 @@ const IBCLogData = ({ title, apiUrl }) => {
                             </SimpleGrid>
                         </Box>
 
-                        {/* Unit / Trans Detail */}
                         <Box>
                             <Title order={4} mb="sm" pb="xs" style={{ borderBottom: '1px solid var(--mantine-color-gray-2)' }}>
                                 Unit Information - {selectedLogDetails.ibc_trans?.length || 0} Units
@@ -600,7 +686,6 @@ const IBCLogData = ({ title, apiUrl }) => {
                             )}
                         </Box>
 
-                        {/* Packages */}
                         <Box>
                             <Title order={4} mb="sm" pb="xs" style={{ borderBottom: '1px solid var(--mantine-color-gray-2)' }}>
                                 Packages Includes - {selectedLogDetails.ibc_packages?.length || 0} Packages

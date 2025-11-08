@@ -1,17 +1,17 @@
 // Manitou Section
 const MANITOU_SECTION_MAP = {
-    engine: "01. Engine",
-    transmission: "02. Transmission",
-    axleTransferBox: "03. Axles/ Transfer Box",
-    hydraulicHydrostaticCircuits: "04. Hydraulic/ Hydrostatic Circuits",
-    brakingCircuits: "05. Braking Circuits",
-    lubrication: "06. Lubrication",
-    boomMastManiscopicManicess: "07. Boom/ Mast Maniscopic/ Manices",
-    mastUnit: "08. Mast Unit",
-    accessories: "09. Accessories",
-    cabProtectiveDeviceElectricCircuit: "10. Cab/ Protective Device/ Electric Circuit",
-    wheels: "11. Wheels",
-    otherItems: "12. Other Items",
+    engine: "Engine",
+    transmission: "Transmission",
+    axleTransferBox: "Axles/ Transfer Box",
+    hydraulicHydrostaticCircuits: "Hydraulic/ Hydrostatic Circuits",
+    brakingCircuits: "Braking Circuits",
+    lubrication: "Lubrication",
+    boomMastManiscopicManicess: "Boom/ Mast Maniscopic/ Manices",
+    mastUnit: "Mast Unit",
+    accessories: "Accessories",
+    cabProtectiveDeviceElectricCircuit: "Cab/ Protective Device/ Electric Circuit",
+    wheels: "Wheels",
+    otherItems: "Other Items",
 };
 
 // Manitou Item
@@ -102,12 +102,12 @@ const MANITOU_ITEM_MAP = {
 
 // Renault Section
 const RENAULT_SECTION_MAP = {
-    chassisAndCab: "01. Chassis & Cab",
-    axleSpringTyre: "02. Axle, Spring, and Tyre",
-    battery: "03. Battery",
-    electrical: "04. Electrical Check",
-    additionalEquipment: "05. Additional Equipment Check",
-    functionalCheck: "06. Functional Check",
+    chassisAndCab: "Chassis & Cab",
+    axleSpringTyre: "Axle, Spring, and Tyre",
+    battery: "Battery",
+    electrical: "Electrical Check",
+    additionalEquipment: "Additional Equipment Check",
+    functionalCheck: "Functional Check",
 };
 
 // Renault Items

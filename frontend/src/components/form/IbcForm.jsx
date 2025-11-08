@@ -16,11 +16,14 @@ import {
     Table,
     Select,
     ActionIcon,
+    Loader,
+    Center,
 } from "@mantine/core";
 import { DateInput } from "@mantine/dates";
 import { IconCalendar, IconTrash } from "@tabler/icons-react";
 import { useForm } from "@mantine/form";
 import { notifications } from "@mantine/notifications";
+import apiClient from '@/libs/api';
 
 const initialHeaderValues = {
     Requestor: null,
@@ -58,6 +61,8 @@ export function MultiStepIbcForm() {
     const [UnitModels, setUnitModels] = useState([]);
     const [packageTypes, setPackageTypes] = useState([]);
     const [accessoryTypes, setAccessoryTypes] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [loadingNext, setLoadingNext] = useState(false);
 
     const headerForm = useForm({
         initialValues: initialHeaderValues,
@@ -92,65 +97,50 @@ export function MultiStepIbcForm() {
     useEffect(() => {
         const fetchData = async () => {
             try {
-                // customers
-                const customerResponse = await fetch(`http://127.0.0.1:5000/api/customers`);
-                if (!customerResponse.ok) throw new Error(`HTTP error! status: ${customerResponse.status}`);
-                const customerData = await customerResponse.json();
+                const [
+                    customerRes,
+                    brandRes,
+                    packageRes,
+                    accessoryRes,
+                    salesmanRes,
+                ] = await Promise.all([
+                    apiClient.get("/customers"),
+                    apiClient.get("/unit-types/brands"),
+                    apiClient.get("/mstPackages"),
+                    apiClient.get("/mstAccesories"),
+                    apiClient.get("/users/by-role/Salesman")
+                ])
+
                 const uniqueCustomerID = new Set();
-                const formattedCustomers = customerData
+                const formattedCustomers = customerRes.data
                     .filter(item => {
                         if (item.CustomerID && !uniqueCustomerID.has(item.CustomerID)) {
                             uniqueCustomerID.add(item.CustomerID);
                             return true;
                         }
-                        return false;
+                        return false
                     })
-                    .map(item => ({
-                        value: item.CustomerID,
-                        label: item.CustomerName,
-                    }));
+                    .map(item => ({value: item.CustomerID, label: item.CustomerName }));
                 setCustomers(formattedCustomers);
-                
-                // brands
-                const brandResponse = await fetch(`http://127.0.0.1:5000/api/unit-types/brands`);
-                if (!brandResponse.ok) throw new Error(`HTTP error! status: ${brandResponse.status}`);
-                const brandData = await brandResponse.json();
-                const formattedBrands = brandData
-                    .filter(item => item.value !== null && item.value !== undefined)
-                    .map(item => ({
-                        value: item.value,
-                        label: item.label,
-                    }));
+
+                const formattedBrands = brandRes.data
+                    .filter(item => item.value != null)
+                    .map(item => ({ value: item.value, label: item.label }));
                 setBrands(formattedBrands);
 
-                // package type
-                const packageResponse = await fetch(`http://127.0.0.1:5000/api/mstPackages`);
-                if (!packageResponse.ok) throw new Error(`HTTP error! status: ${packageResponse.status}`);
-                const packageData = await packageResponse.json();
-                const formattedPackages = packageData
-                    .map(item => ({
-                        value: item.PackagesID,
-                        label: item.PackagesType,
-                    }));
+                const formattedPackages = packageRes.data.map(item => ({
+                    value: item.PackagesID,
+                    label: item.PackagesType,
+                }));
                 setPackageTypes(formattedPackages);
-                
-                // accessory types
-                const accessoryResponse = await fetch(`http://127.0.0.1:5000/api/mstAccesories`);
-                if (!accessoryResponse.ok) throw new Error(`HTTP error! status: ${accessoryResponse.status}`);
-                const accessoryData = await accessoryResponse.json();
-                const formattedAccessories = accessoryData
-                    .map(item => ({
-                        value: item.AccesoriesID,
-                        label: item.AccesoriesName,
-                    }));
-                setAccessoryTypes(formattedAccessories);
 
-                // dummy for Requestors
-                const dummyRequestors = [
-                    { value: 'john_doe', label: 'John Doe' },
-                    { value: 'jane_smith', label: 'Jane Smith' },
-                ];
-                setRequestors(dummyRequestors);
+                const formattedAccessories = accessoryRes.data.map(item => ({
+                    value: item.AccesoriesID,
+                    label: item.AccesoriesName,
+                }));
+                setAccessoryTypes(formattedAccessories);
+                // Populate requestor options from Salesman role
+                setRequestors(salesmanRes.data);
 
             } catch (error) {
                 console.error("Failed to fetch initial data:", error);
@@ -159,6 +149,10 @@ export function MultiStepIbcForm() {
                     message: "Failed to load initial data. Please try again!",
                     color: "red",
                 });
+            
+            } finally {
+                // Initial fetch finished -> stop loading spinner
+                setLoading(false);
             }
         };
         fetchData();
@@ -169,15 +163,10 @@ export function MultiStepIbcForm() {
         if (brandID) {
             const fetchModel = async () => {
                 try {
-                    const modelResponse = await fetch(`http://127.0.0.1:5000/api/unit-types/${brandID}`);
-                    if (!modelResponse.ok) throw new Error(`HTTP error! status: ${modelResponse.status}`);
-                    const modelData = await modelResponse.json();
-                    const formattedModels = modelData
-                        .filter(item => item.value !== null && item.value !== undefined)
-                        .map(item => ({
-                            value: item.value,
-                            label: item.label,
-                        }));
+                    const brandres = await apiClient.get(`/unit-types/${brandID}`);
+                    const formattedModels = brandres.data
+                        .filter(item => item.value != null)    
+                        .map(item => ({ value: item.value, label: item.label }));
                     setUnitModels(formattedModels);
 
                 } catch (error) {
@@ -202,149 +191,100 @@ export function MultiStepIbcForm() {
         headerForm.setFieldValue('UnitType', null); 
     }
 
-    const handleHeaderSubmit = (values) => {
-        let ibcDateFormatted = null;
-        if (values.IBC_date) {
-            try {
-                let dateObj;
-                if (values.IBC_date instanceof Date) {
-                    dateObj = values.IBC_date;
-                } else if (typeof values.IBC_date === 'string') {
-                    dateObj = new Date(values.IBC_date);
-                }
-                if (dateObj && !isNaN(dateObj.getTime())) {
-                    ibcDateFormatted = dateObj.toISOString().split('T')[0];
-                }
-            } catch (e) {
-                console.error("Error parsing IBC_date:", e, values.IBC_date);
-                notifications.show({
-                    title: "Input Error",
-                    message: "Invalid IBC Date format. Please select a valid date.",
-                    color: "red",
-                });
-                return;
-            }
-        }
+    const handleHeaderSubmit = async (values) => {
+        setLoadingNext(true);
 
-        const formattedHeader = {
-            ...values,
-            IBC_date: ibcDateFormatted,
-        };
-        
-        setSubmittedHeader(formattedHeader);
-        
-        const initialVins = Array.from({ length: values.QTY }, (_, index) => ({ VIN: '' }));
-        detailForm.setFieldValue('vins', initialVins);
-        notifications.show({
-            title: "Header Saved",
-            message: "Header form has been saved. Please continue to the next step.",
-            color: "green",
-        });
-        setStep(2);
+        try {
+            let ibcDateFormatted = null;
+            
+            if (values.IBC_date) {
+                const dateObj = new Date(values.IBC_date);
+                    if (isNaN(dateObj.getTime())) throw new Error("Invalid IBC date");
+                    ibcDateFormatted = dateObj.toISOString().split('T')[0];
+            }
+
+            const formattedHeader = { ...values, IBC_date: ibcDateFormatted };
+            setSubmittedHeader(formattedHeader);
+
+            const initialVins = Array.from({ length: values.QTY }, (_, i) => ({ VIN: '' }));
+            detailForm.setFieldValue('vins', initialVins);
+
+            notifications.show({
+                title: "Header Saved",
+                message: "Header form has been saved. Please continue to the next step.",
+                color: "green",
+            });
+
+            setStep(2);
+
+        } catch (error) {
+            notifications.show({
+                title: "Input Error",
+                message: error.message || "Invalid IBC Date format.",
+                color: "red",
+            });
+
+        } finally {
+            setLoadingNext(false);
+        }
     };
 
-    const handleDetailSubmit = (values) => {
-        const isValid = detailForm.validate();
-        if (!isValid) {
-            notifications.show({
-                title: "Validation Error",
-                message: "Please fill in all required fields in the detail form.",
-                color: "red",
-            });
-            return;
-        }
+    const handleDetailSubmit = async (values) => {
+        setLoadingNext(true);
 
-        const allVinsFilled = values.vins.every(vinObj => vinObj.VIN && vinObj.VIN.trim() !== '');
-        if (!allVinsFilled) {
-            notifications.show({
-                title: "Validation Error",
-                message: "All VINs must be filled in.",
-                color: "red",
-            });
-            return;
-        }
-
-        let deliveryPlanFormatted = null;
-        if (values.DeliveryPlan) {
-            try {
-                let dateObj;
-                if (values.DeliveryPlan instanceof Date) {
-                    dateObj = values.DeliveryPlan;
-                } else if (typeof values.DeliveryPlan === 'string') {
-                    dateObj = new Date(values.DeliveryPlan);
+        try {
+            const result = detailForm.validate(); 
+                if (result.hasErrors) {
+                    throw new Error("Validation failed");
                 }
-                if (dateObj && !isNaN(dateObj.getTime())) {
-                    deliveryPlanFormatted = dateObj.toISOString().split('T')[0];
+
+            const allVinsFilled = values.vins.every(vinObj => vinObj.VIN?.trim());
+                if (!allVinsFilled) {
+                    throw new Error("All VINs must be filled in.");
                 }
-            } catch (e) {
-                console.error("Error parsing DeliveryPlan:", e, values.DeliveryPlan);
-                notifications.show({
-                    title: "Input Error",
-                    message: "Invalid Delivery Plan date format. Please select a valid date.",
-                    color: "red",
-                });
-                return;
-            }
-        }
-        
-        if (!deliveryPlanFormatted) {
+            
+            const dateObj = new Date(values.DeliveryPlan);
+                if (isNaN(dateObj.getTime())) {
+                    throw new Error("Invalid Delivery Plan date");
+                }
+
+            const deliveryPlanFormatted = dateObj.toISOString().split('T')[0];
+            const formattedValues = { ...values, DeliveryPlan: deliveryPlanFormatted };
+            setSubmittedDetail(formattedValues);
+
+            notifications.show({
+                title: "Detail Saved",
+                message: "Detail form has been saved. Please continue to the next step.",
+                color: "green",
+            });
+            setStep(3);
+
+        } catch (error) {
             notifications.show({
                 title: "Validation Error",
-                message: "Delivery Plan is required.",
+                message: error.message || "Please fix the form errors.",
                 color: "red",
             });
-            return;
+
+        } finally {
+            setLoadingNext(false);
         }
-
-        const formattedValues = {
-            ...values,
-            DeliveryPlan: deliveryPlanFormatted,
-        };
-
-        setSubmittedDetail(formattedValues);
-        notifications.show({
-            title: "Detail Saved",
-            message: "Detail form has been saved. Please continue to the next step.",
-            color: "green",
-        });
-        setStep(3);
     };
 
     const handleFinalSubmit = async () => {
+        setLoadingNext(true);
+
         try {
-            const token = localStorage.getItem('access_token');
-            if (!token) {
-                notifications.show({
-                    title: "Authentication Error",
-                    message: "Please log in again. Authentication token is missing.",
-                    color: "red",
-                });
-                return;
-            }
-
-            if (!submittedHeader || !submittedDetail) {
-                notifications.show({
-                    title: "Error",
-                    message: "Please complete the previous steps before final submission.",
-                    color: "red",
-                });
-                return;
-            }
-
             const areAccessoriesValid = accessoriesForm.values.accessories.every(
-                (acc) => acc.IBC_Accesories && acc.IBC_Accesories.trim() !== ''
+                acc => acc.IBC_Accesories?.trim()
             );
+
             const arePackagesValid = accessoriesForm.values.packages.every(
-                (pkg) => pkg.PackagesType && pkg.PackagesType.trim() !== ''
+                pkg => pkg.PackagesType?.trim()
             );
 
             if (!areAccessoriesValid || !arePackagesValid) {
-                notifications.show({
-                    title: "Validation Error",
-                    message: "Please ensure all package types and accessory names are filled.",
-                    color: "red",
-                });
-                return;
+                throw new Error("Please ensure all package types and accessory names are filled.");
             }
 
             const finalPayload = {
@@ -357,30 +297,15 @@ export function MultiStepIbcForm() {
                     }))
                 },
                 packagesForm: {
-                    packages: accessoriesForm.values.packages.map(pkg => ({ 
+                    packages: accessoriesForm.values.packages.map(pkg => ({
                         PackagesType: pkg.PackagesType,
                         PackageDesc: pkg.PackageDesc,
                     }))
                 }
             };
-            
-            console.log("Final Payload to Backend: ", finalPayload);
 
-            const response = await fetch("http://127.0.0.1:5000/api/ibc/create-ibc-form", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${token}`
-                },
-                body: JSON.stringify(finalPayload),
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
-            }
-
-            const result = await response.json();
+            const response = await apiClient.post("/ibc/create-ibc-form", finalPayload);
+            const result = response.data;
 
             notifications.show({
                 title: "Success!",
@@ -394,22 +319,24 @@ export function MultiStepIbcForm() {
             setSubmittedHeader(null);
             setSubmittedDetail(null);
             setStep(1);
-
+        
         } catch (error) {
-            console.error("Failed to submit form:", error);
+            console.error("Submission error:", error);
+            const message = error.response?.data?.error || error.message || "An unexpected error occurred.";
             notifications.show({
                 title: "Submission Failed",
-                message: error.message || "An unexpected error occurred. Please try again.",
+                message: message,
                 color: "red",
             });
+
+        } finally {
+            setLoadingNext(false);
         }
     };
 
     const selectedPackageValues = accessoriesForm.values.packages.map(p => p.PackagesType);
     const packageFields = accessoriesForm.values.packages.map((_, index) => {
-        const availablePackageOptions = packageTypes.filter(option =>
-            !selectedPackageValues.includes(option.value) || option.value === accessoriesForm.values.packages[index].PackagesType
-        );
+    const availablePackageOptions = packageTypes.filter(option => !selectedPackageValues.includes(option.value) || option.value === accessoriesForm.values.packages[index].PackagesType);
         return (
             <Table.Tr key={index}>
                 <Table.Td>
@@ -442,9 +369,7 @@ export function MultiStepIbcForm() {
 
     const selectedAccessoryValues = accessoriesForm.values.accessories.map(a => a.IBC_Accesories);
     const accessoryFields = accessoriesForm.values.accessories.map((_, index) => {
-        const availableAccessoryOptions = accessoryTypes.filter(option =>
-            !selectedAccessoryValues.includes(option.value) || option.value === accessoriesForm.values.accessories[index].IBC_Accesories
-        );
+    const availableAccessoryOptions = accessoryTypes.filter(option => !selectedAccessoryValues.includes(option.value) || option.value === accessoriesForm.values.accessories[index].IBC_Accesories);
         return (
             <Table.Tr key={index}>
                 <Table.Td>
@@ -482,17 +407,25 @@ export function MultiStepIbcForm() {
             <TextInput
                 label={`VIN Unit ${index + 1}`}
                 placeholder={`Enter VIN for unit ${index + 1}`}
-                {...detailForm.getInputProps(`vins.${index}.VIN`, {
-                    validate: (value) => value ? null : `VIN ${index + 1} is Required!`,
-                })}
+                    {...detailForm.getInputProps(`vins.${index}.VIN`, {
+                        validate: (value) => value ? null : `VIN ${index + 1} is Required!`,
+                    })}
                 disabled={step > 2}
             />
         </Grid.Col>
     )) : null;
 
+    if (loading) {
+        return (
+            <Center h="60vh">
+                <Loader size="xl" />
+            </Center>
+        );
+    }
+
     return (
         <Box maw="100%" mx="auto" px="md">
-        <Title order={1} mt="md" mb="lg" style={{ color: "#000000" }}> IBC Form </Title>
+        <Title order={1} mt="md" mb="lg" style={{ color: "#000000" }}> Indotraktor Business Case Form </Title>
 
         <Card shadow="sm" p="xl" withBorder mb="lg">
             <Title order={3} mb="md" style={{ color: "#000000" }}> Header Form </Title>
@@ -513,7 +446,6 @@ export function MultiStepIbcForm() {
                     <DateInput
                         label="IBC Date"
                         placeholder="Select IBC Date"
-                        valueFormat="DD-MM-YYYY"
                         rightSection={<IconCalendar size={16} />}
                         {...headerForm.getInputProps("IBC_date")}
                         disabled={step > 1}
@@ -639,7 +571,6 @@ export function MultiStepIbcForm() {
                             <DateInput
                                 label="Delivery Plan"
                                 placeholder="Select Delivery Plan Date"
-                                valueFormat="DD-MM-YYYY"
                                 rightSection={<IconCalendar size={16} />}
                                 {...detailForm.getInputProps("DeliveryPlan")}
                                 disabled={step > 2}
@@ -655,7 +586,9 @@ export function MultiStepIbcForm() {
                     </Grid>
                     {step === 2 && (
                     <Group justify="flex-end" mt="md">
-                        <Button type="submit">Next Page</Button>
+                        <Button type="submit">
+                            Next Page
+                        </Button>
                     </Group>
                     )}
                 </form>
@@ -673,12 +606,8 @@ export function MultiStepIbcForm() {
                     <Table striped highlightOnHover withTableBorder>
                         <Table.Thead>
                             <Table.Tr>
-                                <Table.Th style={{ width: "50%", color: "#000000" }}>
-                                    Packages Type
-                                </Table.Th>
-                                <Table.Th style={{ width: "50%", color: "#000000" }}>
-                                    Package Desc
-                                </Table.Th>
+                                <Table.Th style={{ width: "50%", color: "#000000" }}>Packages Type</Table.Th>
+                                <Table.Th style={{ width: "50%", color: "#000000" }}>Package Description</Table.Th>
                                 <Table.Th></Table.Th>
                             </Table.Tr>
                         </Table.Thead>
@@ -703,23 +632,16 @@ export function MultiStepIbcForm() {
                                 }
                             }}
                         >
-                        Add Item
+                            Add Item
                         </Button>
                     </Group>
 
-                    <Divider
-                        my="sm"
-                        label={<Text style={{ color: "#000000" }}>Accessories</Text>}
-                    />
+                    <Divider my="sm" label={<Text style={{ color: "#000000" }}>Accessories</Text>} />
                     <Table striped highlightOnHover withTableBorder>
                         <Table.Thead>
                             <Table.Tr>
-                                <Table.Th style={{ width: "50%", color: "#000000" }}>
-                                    Accessories
-                                </Table.Th>
-                                <Table.Th style={{ width: "50%", color: "#000000" }}>
-                                    Accessories Desc
-                                </Table.Th>
+                                <Table.Th style={{ width: "50%", color: "#000000" }}>Accessories</Table.Th>
+                                <Table.Th style={{ width: "50%", color: "#000000" }}>Accessories Description</Table.Th>
                                 <Table.Th></Table.Th>
                             </Table.Tr>
                         </Table.Thead>
@@ -744,12 +666,18 @@ export function MultiStepIbcForm() {
                                 }
                             }}
                         >
-                        Add Item
+                            Add Item
                         </Button>
                     </Group>
 
                     <Group justify="flex-end" mt="md">
-                        <Button type="submit">Submit</Button>
+                        <Button
+                            type="submit"
+                            loading={loadingNext}
+                            disabled={loadingNext}
+                        >
+                            {loadingNext ? 'Submitting...' : 'Submit'}
+                        </Button>
                     </Group>
                 </form>
             </Card>

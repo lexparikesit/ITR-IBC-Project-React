@@ -1,80 +1,119 @@
-import os
-import uuid
 import json
-from flask import request, jsonify, g
+from flask import request, jsonify, g, current_app
 from datetime import datetime
 from app import db
 from app.models.KHO_models import KHODocumentFormModel
+from app.utils.gcs_utils import upload_kho_file, generate_signed_url
 from app.controllers.auth_controller import jwt_required
+from uuid import UUID
 
 @jwt_required
 def submit_kho_document():
-    """Handles form submissions for Key Hand Over Unit."""
-
-    try:
-        if not request.form or 'unitInfo' not in request.form:
-            return jsonify({
-                "message" : "Invalid request. Data 'unitInfo' not found."
-            }), 400
+    """Submit KHO form with PDF upload to GCS."""
     
-        # get JSON data from form
-        unit_info_data_str = request.form['unitInfo']
-        unit_info_data = json.loads(unit_info_data_str)
+    try:
+        if 'pdfDocument' not in request.files:
+            return jsonify({"message": "PDF document is required."}), 400
 
-        # get identity user 
+        pdf_file = request.files['pdfDocument']
+        
+        if not pdf_file or pdf_file.filename == '':
+            return jsonify({"message": "No file selected."}), 400
+
+        if not pdf_file.filename.lower().endswith('.pdf'):
+            return jsonify({"message": "Only PDF files are allowed."}), 400
+
+        if 'unitInfo' not in request.form:
+            return jsonify({"message": "'unitInfo' is required."}), 400
+
+        try:
+            unit_info = json.loads(request.form['unitInfo'])
+        
+        except Exception:
+            return jsonify({"message": "'unitInfo' must be valid JSON."}), 400
+
+        required = ['dealerCode', 'customerName', 'location', 'brand', 'typeModel', 'vinNumber', 'bastDate']
+        
+        for field in required:
+            if not unit_info.get(field):
+                return jsonify({"message": f"Field '{field}' is required."}), 400
+
         current_user = g.current_user
+        
+        if not current_user:
+            return jsonify({"message": "User not authenticated."}), 500
 
-        # validation of data requirements
-        required_fields = ['dealerCode', 'customerName', 'location', 'brand', 'typeModel', 'vinNumber', 'bastDate']
+        created_by_value = getattr(current_user, 'username', None) or str(getattr(current_user, 'id', 'unknown'))
 
-        for field in required_fields:
-            if field not in unit_info_data or not unit_info_data[field]:
-                return jsonify({
-                    "message": f"Field '{field}' is Required!"
-                }), 400
-            
-        # get all data field
-        dealer_code = unit_info_data['dealerCode']
-        customer_name = unit_info_data['customerName']
-        location_data = unit_info_data['location']
-        brand_data = unit_info_data['brand']
-        type_model = unit_info_data['typeModel']
-        vin_number = unit_info_data['vinNumber']
-        bast_date = datetime.strptime(unit_info_data['bastDate'], '%Y-%m-%d')
-
-        # dummy pdf url item - later we will configure GCS
-        pdf_url = f"https://dummy.url/kho-document-{uuid.uuid4()}.pdf"
-
-        new_document = KHODocumentFormModel(
-            dealerCode = dealer_code,
-            customer = customer_name,
-            location = location_data,
-            brand = brand_data,
-            typeModel = type_model,
-            VIN = vin_number,
-            bastDate = bast_date,
-            pdfDocumentUrl = pdf_url,
-            createdBy = current_user
+        blob_name = upload_kho_file(
+            file=pdf_file,
+            brand=unit_info['brand'],
+            user_id=created_by_value,
+            async_upload=False
         )
 
-        # save it to DB Object
-        db.session.add(new_document)
+        if not blob_name:
+            current_app.logger.error("GCS upload failed")
+            return jsonify({"message": "Failed to upload document."}), 500
+
+        try:
+            bast_date = datetime.strptime(unit_info['bastDate'], '%Y-%m-%d')
+        
+        except ValueError:
+            return jsonify({"message": "Invalid date format. Use YYYY-MM-DD."}), 400
+
+        new_doc = KHODocumentFormModel(
+            dealerCode=unit_info['dealerCode'],
+            customer=unit_info['customerName'],
+            location=unit_info['location'],
+            brand=unit_info['brand'],
+            typeModel=unit_info['typeModel'],
+            VIN=unit_info['vinNumber'],
+            bastDate=bast_date,
+            pdfDocumentUrl=blob_name,
+            createdBy=created_by_value
+        )
+
+        db.session.add(new_doc)
         db.session.commit()
 
         return jsonify({
-            "message": "The document has been successfully uploaded and the data has been successfully saved!",
-            "documentID": str(new_document.khoID),
-            "pdfUrl": pdf_url
+            "message": "KHO document submitted successfully!",
+            "documentID": str(new_doc.khoID)
         }), 201
-    
-    except json.JSONDecodeError:
-        return jsonify({"message": "The 'unitInfo' payload is not a valid JSON format."}), 400
-    
-    except KeyError as e:
-        return jsonify({"message": f"Bidang yang dibutuhkan tidak ada: {e}"}), 400
-    
-    except Exception as e:
-        db.session.rollback() 
-        print(f"Error while Requesting: {e}")
-        return jsonify({"message": f"A server error has occurred: {str(e)}"}), 500
 
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"KHO submission error: {str(e)}")
+        return jsonify({"message": "Internal server error."}), 500
+
+@jwt_required
+def get_kho_document_pdf(kho_id):
+    """Generate signed URL to download KHO PDF."""
+    
+    try:
+        try:
+            kho_uuid = UUID(kho_id)
+        except ValueError:
+            return jsonify({"message": "Invalid document ID format."}), 400
+
+        doc = KHODocumentFormModel.query.get(kho_uuid)
+        
+        if not doc:
+            return jsonify({"message": "Document not found."}), 404
+
+        if not doc.pdfDocumentUrl:
+            return jsonify({"message": "No document attached."}), 404
+
+        signed_url = generate_signed_url(doc.pdfDocumentUrl, expiration_hours=1)
+        
+        if not signed_url:
+            return jsonify({"message": "Failed to generate download link."}), 500
+
+        return jsonify({
+            "downloadUrl": signed_url
+        }), 200
+
+    except Exception as e:
+        current_app.logger.error(f"Error generating KHO PDF URL: {str(e)}")
+        return jsonify({"message": "Internal server error."}), 500

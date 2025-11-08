@@ -9,7 +9,7 @@ from app.models.renault_arrival_items import ArrivalChecklistItemModel_RT
 from app.models.sdlg_arrival_form import ArrivalFormModel_SDLG
 from app.models.sdlg_arrival_items import ArrivalChecklistItemModel_SDLG
 from app.controllers.auth_controller import jwt_required
-from app.utils.gcs_utils import upload_arrival_check_file, generate_signed_url
+from app.utils.gcs_utils import upload_arrival_check_file
 from datetime import datetime, time
 from dateutil.parser import isoparse 
 
@@ -157,31 +157,20 @@ def submit_arrival_checklist():
                                 }), 400
                             
                             try:
-                                blob_name = upload_arrival_check_file(
+                                image_url = upload_arrival_check_file(
                                     file=file,
                                     brand=brand.lower(),
                                     user_id=str(g.user_id),
                                 )
                                 
-                                if not blob_name:
+                                if not image_url:
                                     db.session.rollback()
-                                    current_app.logger.error(f"Blob name is None for {section_key} - {item_name}")
+                                    current_app.logger.error(f"Failed to upload photo for {section_key} - {item_name}")
                                     return jsonify({
                                         'message': f'Failed to upload photo for {section_key} - {item_name}'
                                     }), 500
                                 
-                                current_app.logger.debug(f"Generating signed URL for blob: {blob_name}")
-
-                                try:
-                                    image_url = generate_signed_url(blob_name, expiration_hours=24)
-                                    current_app.logger.debug(f"Signed URL generated: {image_url[:50]}...")
-                                
-                                except Exception as e:
-                                    db.session.rollback()
-                                    current_app.logger.error(f"Error generating signed URL for {section_key} - {item_name}: {str(e)}")
-                                    return jsonify({
-                                        'message': f'Failed to generate signed URL for {section_key} - {item_name}'
-                                    }), 500
+                                current_app.logger.debug(f"Public URL generated: {image_url}")
                                 
                             except Exception as e:
                                 db.session.rollback()
@@ -195,7 +184,7 @@ def submit_arrival_checklist():
                             section=section_key,
                             itemName=item_name,
                             status=convert_manitou_status_to_int(status),
-                            image_url=image_url,
+                            image_blob_name=image_url,
                             caption=caption
                         )
                         db.session.add(new_item)
@@ -298,7 +287,6 @@ def submit_arrival_checklist():
                     arrivalID=arrival_entry.arrivalID,
                     ItemName=item.get('ItemName'),
                     status=convert_sdlg_status_to_int(item.get('status')),
-                    remarks=item.get('remarks')
                 )
                 db.session.add(new_item)
 

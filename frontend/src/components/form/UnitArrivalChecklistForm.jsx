@@ -15,6 +15,7 @@ import {
 	Stack,
 	Radio,
 	Select,
+	Loader,
 } from "@mantine/core";
 import { DateInput } from "@mantine/dates";
 import { useForm } from "@mantine/form";
@@ -107,6 +108,7 @@ export function UnitArrivalChecklistForm() {
 	const [approvers, setApprovers] = useState([]);
 	const [woNumbers, setWoNumbers] = useState([]);
 	const [loading, setLoading] = useState(true);
+	const [uploading, setUploading] = useState(false);
 	const currentChecklistData = CHECKLIST_DATA_RENAULT;
 
 	const form = useForm({
@@ -212,6 +214,7 @@ export function UnitArrivalChecklistForm() {
 
 	const handleSubmit = async (values) => {
 		console.log("Form Submitted (Frontend Data)", values);
+		setUploading(true);
 
 		const token = localStorage.getItem('access_token');
 		if (!token) {
@@ -278,6 +281,9 @@ export function UnitArrivalChecklistForm() {
                 message: `Error: ${error.message}`,
                 color: "red",
 			});
+		
+		} finally {
+			setUploading(false);
 		}
 	};
 
@@ -307,6 +313,15 @@ export function UnitArrivalChecklistForm() {
 			</Card>
 		);
 	};
+
+	if (loading) {
+		return (
+			<Box maw="100%" mx="auto" px="md" ta="center">
+				<Title order={1} mt="md" mb="lg">Loading Form Data...</Title>
+				<Loader size="lg" />
+			</Box>
+		);
+	}
 
 	return (
 		<Box maw="100%" mx="auto" px="md">
@@ -428,7 +443,13 @@ export function UnitArrivalChecklistForm() {
 				</Card>
 
 				<Group justify="flex-end" mt="md">
-					<Button type="submit">Submit</Button>
+					<Button 
+						type="submit"
+						loading={uploading}
+						disabled={uploading}
+					>
+						{uploading ? 'Submitting...' : 'Submit'}
+					</Button>
 				</Group>
 			</form>
 		</Box>

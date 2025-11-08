@@ -14,12 +14,14 @@ import {
     Group,
     ActionIcon,
     Select,
+    Loader,
 } from "@mantine/core";
 import { DateInput } from "@mantine/dates";
 import { useForm } from "@mantine/form";
 import { notifications } from "@mantine/notifications";
 import { IconCalendar } from "@tabler/icons-react";
 import { IconPlus, IconTrash } from '@tabler/icons-react';
+import apiClient from '@/libs/api';
 
 const inspectionItemsDefinition = [
     { id: 1, label: "Visual inspection for paint damage and rust protection defects." },
@@ -36,6 +38,8 @@ export function SdlgPDIForm() {
     const [WoNumbers, setWoNumbers] = useState([]);
     const [technicians, setTechnicians] = useState([]);
     const [approvers, setApprovers] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [uploading, setUploading] = useState(false);
 
     const form = useForm({
         initialValues: {
@@ -79,45 +83,32 @@ export function SdlgPDIForm() {
             try {
                 const brandId = "SDLG"; // 'SDLG' for SDLG
                 const groupId = "DPDPI"; // 'DPDPI' for PDI
-                
-                // model/ Type SDLG API
-                const modelResponse = await fetch(`http://127.0.0.1:5000/api/unit-types/${brandId}`);
-                if (!modelResponse.ok) throw new Error(`HTTP error! status: ${modelResponse.status}`);
-                const modelData = await modelResponse.json();
-                const formattedModels = modelData
-                    .filter(item => item.value !== null && item.value !== undefined && item.label !== null && item.label !== undefined)
-                    .map(item => ({
-                        value: item.value,
-                        label: item.label
-                    }));
+                const [
+                    modelRes,
+                    woRes,
+                    techRes,
+                    supervisorRes,
+                    techHeadRes,
+                ] = await Promise.all([
+                    apiClient.get(`/unit-types/${brandId}`),
+                    apiClient.get(`/work-orders?brand_id=${brandId}&group_id=${groupId}`),
+                    apiClient.get("/users/by-role/Technician"),
+                    apiClient.get("/users/by-role/Supervisor"),
+                    apiClient.get("/users/by-role/Technical Head")
+                ])
+
+                const formattedModels = modelRes.data
+                    .filter(item => item.value !== null && item.label !== null)
+                    .map(item => ({ value: item.value, label: item.label }));
                 setUnitModels(formattedModels);
 
-                // wo Number API
-                const woResponse = await fetch(`http://127.0.0.1:5000/api/work-orders?brand_id=${brandId}&group_id=${groupId}`);
-                if (!woResponse.ok) throw new Error(`HTTP error! status: ${woResponse.status}`);
-                const woData = await woResponse.json();
-                const formattedWoData = woData.map(wo => ({
-                    value: wo.WONumber,
-                    label: wo.WONumber
-                }));
-                setWoNumbers(formattedWoData);
-
-                // dummy Technicians API
-                const dummyTechnicians = [
-                    { value: "tech1", label: "John Doe" },
-                    { value: "tech2", label: "Jane Smith" },
-                    { value: "tech3", label: "Peter Jones" }
-                ];
-                setTechnicians(dummyTechnicians);
-
-                // dummy Approvers API
-                const dummyApprover = [
-                    { value: "app1", label: "Alice Brown" },
-                    { value: "app2", label: "Bob White" },
-                    { value: "app3", label: "John Green" }
-                ];
-                setApprovers(dummyApprover);
-
+                setWoNumbers(woRes.data.map(wo => ({ value: wo.WONumber, label: wo.WONumber })));
+                setTechnicians(techRes.data);
+                setApprovers([
+                    ...supervisorRes.data,
+                    ...techHeadRes.data,
+                ]);
+                
             } catch (error) {
                 console.error("Failed to fetch data:", error);
                 notifications.show({
@@ -125,6 +116,9 @@ export function SdlgPDIForm() {
                     message: "Failed to load form data. Please try again!",
                     color: "red",
                 });
+
+            } finally {
+                setLoading(false);
             }
         };
         fetchData();
@@ -151,74 +145,82 @@ export function SdlgPDIForm() {
     };
 
     const handleSubmit = async (values) => {
-        const token = localStorage.getItem('access_token');
-        console.log("DEBUG: Token from localStorage:", token);
-
-        if (!token) {
-            notifications.show({
-                title: "Authentication Error",
-                message: "No access token found. Please log in.",
-                color: "red",
-            });
-            return;
-        }
-
-        console.log("Form submitted with values:", values);
-
-        const payload = {
-            brand: 'SDLG',
-            unitInfo: {
-                woNumber: values.woNumber,
-                machineModel: values.machineModel,
-                vehicleNumber: values.vehicleNumber,
-                preInspectionPersonnel: values.preInspectionPersonnel,
-                approvalBy: values.approvalBy,
-                inspectionDate: formatDate(values.inspectionDate),
-            },
-            checklist: values.inspectionChecklist,
-            defects: values.defects,
-            signatures: {
-                inspector: values.inspectorSignature,
-                inspectorDate: formatDate(values.inspectorDate),
-                supervisor: values.supervisorSignature,
-                supervisorDate: formatDate(values.supervisorDate),
-            }
-        };
-
-        console.log("Payload sent to backend:", payload);
-
+        setUploading(true);
+        
         try {
-            const response = await fetch(`http://127.0.0.1:5000/api/pre-delivery-inspection/sdlg/submit`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify(payload),
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.message || "Failed to submit PDI Checklist");
+            const token = localStorage.getItem('access_token');
+                if (!token) {
+                notifications.show({
+                    title: "Authentication Error",
+                    message: "No access token found. Please log in.",
+                    color: "red",
+                });
+                return;
+            }
+                if (!token) {
+                notifications.show({
+                    title: "Authentication Error",
+                    message: "No access token found. Please log in.",
+                    color: "red",
+                });
+                return;
             }
 
-            const result = await response.json();
+            console.log("Form submitted with values:", values);
+
+            const payload = {
+                brand: 'SDLG',
+                unitInfo: {
+                    woNumber: values.woNumber,
+                    machineModel: values.machineModel,
+                    vehicleNumber: values.vehicleNumber,
+                    preInspectionPersonnel: values.preInspectionPersonnel,
+                    approvalBy: values.approvalBy,
+                    inspectionDate: formatDate(values.inspectionDate),
+                },
+                checklist: values.inspectionChecklist,
+                defects: values.defects,
+                signatures: {
+                    inspector: values.inspectorSignature,
+                    inspectorDate: formatDate(values.inspectorDate),
+                    supervisor: values.supervisorSignature,
+                    supervisorDate: formatDate(values.supervisorDate),
+                }
+            };
+
+            console.log("Payload sent to backend:", payload);
+
+            const response = await apiClient.post(`/pre-delivery-inspection/sdlg/submit`, payload);
+
             notifications.show({
-                title: "Submission Successful!",
-                message: result.message || "Form Submitted Successfully.",
+                title: "Success!",
+                message: "Form Submitted Successfully!",
                 color: "green",
-            });
+            })
             form.reset();
 
         } catch (error) {
             console.error('Error submitting form:', error);
+            const errorMessage = error.response?.data?.message || error.message || "Failed to submit checklist";
             notifications.show({
                 title: "Submission Error",
-                message: `Failed to submit form: ${error.message}`,
+                message: `Error: ${errorMessage}`,
                 color: "red",
             });
+        
+        } finally {
+            setUploading(false);
         }
     };
+
+    if (loading) {
+        return (
+            <Box maw="100%" mx="auto" px="md" ta="center">
+                <Title order={1} mt="md" mb="lg">Loading Form Data...</Title>
+                <Loader size="lg" />
+            </Box>
+        );
+    }
 
     return (
         <Box maw="100%" mx="auto" px="md" mt="md">
@@ -227,7 +229,8 @@ export function SdlgPDIForm() {
                 mt="md"
                 mb="lg"
                 style={{ color: '#000000 !important' }}
-            > Pre Delivery Inspection Form
+            > 
+                Pre Delivery Inspection Form
             </Title>
 
             <form onSubmit={form.onSubmit(handleSubmit)}>
@@ -399,7 +402,6 @@ export function SdlgPDIForm() {
                             <DateInput
                                 label="Date"
                                 placeholder="Select Date"
-                                valueFormat="YYYY-MM-DD"
                                 mt="md"
                                 {...form.getInputProps('inspectorDate')}
                                 rightSection={<IconCalendar size={16} />}
@@ -417,7 +419,6 @@ export function SdlgPDIForm() {
                             <DateInput
                                 label="Date"
                                 placeholder="Select Date"
-                                valueFormat="YYYY-MM-DD"
                                 mt="md"
                                 {...form.getInputProps('supervisorDate')}
                                 rightSection={<IconCalendar size={16} />}
@@ -426,8 +427,14 @@ export function SdlgPDIForm() {
                     </Grid>
                 </Card>
 
-                <Group justify="flex-end" mt="xl">
-                    <Button type="submit">Submit</Button>
+                <Group justify="flex-end" mt="md">
+                    <Button 
+                        type="submit"
+                        loading={uploading}
+                        disabled={uploading}
+                    >
+                        {uploading ? 'Submitting...' : 'Submit'}
+                    </Button>
                 </Group>
             </form>
         </Box>

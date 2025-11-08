@@ -9,16 +9,9 @@ from app.models.renault_maintenance_items import StorageMaintenanceChecklistItem
 from app.models.sdlg_maintenance_form import StorageMaintenanceFormModel_SDLG
 from app.models.sdlg_maintenance_items import StorageMaintenanceChecklistItemModel_SDLG
 from app.models.sdlg_maintenance_form import Maintenance_sdlg_defect_remarks
-from datetime import datetime, time, date
 from app.controllers.auth_controller import jwt_required
-# from google.cloud import Storage
-
-# configuartion of GCS Environment
-# GCS_Bucket_Name = os.environ.get('GCS_BUCKET_NAME')
-# CDN_BASE_URL = os.environ.get('CDN_BASE_URL', 'https://cdn.example.com')
-
-# initiate GCS Client
-# storage_client = storage.Client()
+from app.utils.gcs_utils import upload_storage_maintenance_file
+from datetime import datetime, time, date
 
 # mapping for brand Models
 BRAND_MODELS = {
@@ -137,28 +130,87 @@ def submit_maintenance_checklist():
             db.session.add(storage_maintenance_entry)
             db.session.flush()
 
+            missing_photos = []
+
             for section_key, items in checklist_item_payloads.items():
                 if isinstance(items, dict):
                     for item_key, item_details in items.items():
                         if isinstance(item_details, dict):
-                            image_url = None # will None as long as GCS/ CDN is commenting
+                            status = item_details.get('status')
+                            file_key = f"image-{section_key}-{item_key}"
 
+                            if status in ['Bad', 'Missing']:
+                                if file_key not in uploaded_files or not uploaded_files[file_key].filename:
+                                    missing_photos.append(f"{section_key} - {item_key}")
+                            
+                            image_url = None
+                            caption = item_details.get('caption')
+
+                            if file_key in uploaded_files and uploaded_files[file_key].filename:
+                                file = uploaded_files[file_key]
+                                file.seek(0, 2)
+                                file_size = file.tell()
+                                file.seek(0)
+
+                                if file_size > 2 * 1024 * 1024:
+                                    db.session.rollback()
+                                    return jsonify({
+                                        'message': f'File {section_key} - {item_key} exceeds 2MB limit'
+                                    }), 400
+                                
+                                allowed_types = {'image/jpeg', 'image/png', 'image/jpg'}
+
+                                if file.content_type not in allowed_types:
+                                    db.session.rollback()
+                                    return jsonify({
+                                        'message': f'Invalid file type for {section_key} - {item_key}. Only JPG/PNG allowed.'
+                                    }), 400
+                                
+                                try:
+                                    image_url = upload_storage_maintenance_file(
+                                        file=file,
+                                        brand=brand.lower(),
+                                        user_id=str(g.user_id),
+                                    )
+
+                                    if not image_url:
+                                        db.session.rollback()
+                                        current_app.logger.error(f"Blob name is None for {section_key} - {item_key}")
+                                        return jsonify({
+                                            'message': f'Failed to upload photo for {section_key} - {item_key}'
+                                        }), 500
+                                    
+                                    current_app.logger.debug(f"Public URL generated: {image_url}")
+                                
+                                except Exception as e:
+                                    db.session.rollback()
+                                    current_app.logger.error(f"Upload error for {section_key} - {item_key}: {str(e)}")
+                                    return jsonify({
+                                        'message': f'Upload failed for {section_key} - {item_key}'
+                                    }), 500
+                        
                             new_item = StorageMaintenanceChecklistItemModel_MA(
                                 smID = storage_maintenance_entry.smID,
                                 section = section_key,
                                 itemName = item_key,
-                                status = converted_manitou_status_to_int(item_details.get('status')),
-                                image_url = image_url,
-                                caption = item_details.get('notes')
+                                status = converted_manitou_status_to_int(status),
+                                image_blob_name = image_url,
+                                caption = caption
                             )
                             db.session.add(new_item)
-            # Commit all changes to the database
-            db.session.commit()
+                
+            if missing_photos:
+                db.session.rollback()
+                return jsonify({
+                    'message': 'Photos are required for items with "Bad" or "Missing" status',
+                    'missing_items': missing_photos
+                }), 400
 
+            db.session.commit()
             return jsonify({
                 'message': 'Manitou Storage Maintenance Checklist submitted successfully!',
                 'id': str(storage_maintenance_entry.smID)
-            }), 201
+            }), 201        
 
         # for Renault
         elif brand.lower() == 'renault':
@@ -186,6 +238,8 @@ def submit_maintenance_checklist():
             db.session.add(storage_maintenance_entry)
             db.session.flush()
 
+            missing_photos = []
+
             def save_items(section, item_name, status=None, value=None, code=None, caption=None, image_url=None):
                 """handles generic Data"""
                 
@@ -197,7 +251,7 @@ def submit_maintenance_checklist():
                     value = value,
                     code = code,
                     caption = caption,
-                    image_url = image_url
+                    image_blob_name = image_url
                 )
                 db.session.add(new_item)
             
@@ -208,19 +262,67 @@ def submit_maintenance_checklist():
                 for section_key, items in checklist_item_payloads.items():
                     if isinstance(items, dict):
                         for item_key, item_details in items.items():
-                            status_string = item_details.get('value')
-                            
-                            if isinstance(item_details, dict) and status_string is not None:
-                                image_url = item_details.get('image_url')
+                            if isinstance(item_details, dict):
+                                status_string = item_details.get('value')
+                                file_key = f"image-{section_key}-{item_key}"
+                                
+                                if status_string in ['recommended_repair', 'immediately_repair']:
+                                    if file_key not in uploaded_files or not uploaded_files[file_key].filename:
+                                        missing_photos.append(f"{section_key} - {item_key}")
+                                
+                                image_url = None
+                                caption = item_details.get('notes')
+                                
+                                if file_key in uploaded_files and uploaded_files[file_key].filename:
+                                    file = uploaded_files[file_key]
+                                    file.seek(0, 2)
+                                    file_size = file.tell()
+                                    file.seek(0)
+                                    
+                                    if file_size > 2 * 1024 * 1024:
+                                        db.session.rollback()
+                                        return jsonify({
+                                            'message': f'File {section_key} - {item_key} exceeds 2MB limit'
+                                        }), 400
+                                    
+                                    allowed_types = {'image/jpeg', 'image/png', 'image/jpg'}
+                                    if file.content_type not in allowed_types:
+                                        db.session.rollback()
+                                        return jsonify({
+                                            'message': f'Invalid file type for {section_key} - {item_key}. Only JPG/PNG allowed.'
+                                        }), 400
+                                    
+                                    try:
+                                        image_url = upload_storage_maintenance_file(
+                                            file=file,
+                                            brand=brand.lower(),
+                                            user_id=str(g.user_id),
+                                        )
+                                        
+                                        if not image_url:
+                                            db.session.rollback()
+                                            current_app.logger.error(f"Blob name is None for {section_key} - {item_key}")
+                                            return jsonify({
+                                                'message': f'Failed to upload photo for {section_key} - {item_key}'
+                                            }), 500
+
+                                        current_app.logger.debug(f"Public URL generated: {image_url}")
+                                        
+                                    except Exception as e:
+                                        db.session.rollback()
+                                        current_app.logger.error(f"Upload error for {section_key} - {item_key}: {str(e)}")
+                                        return jsonify({
+                                            'message': f'Upload failed for {section_key} - {item_key}'
+                                        }), 500
 
                                 save_items(
-                                    section = section_key,
-                                    item_name = item_key,
-                                    status = converted_renault_status_to_int(status_string),
-                                    value = None,
-                                    code = None,
-                                    caption = item_details.get('notes'),
-                                    image_url = image_url
+                                    section=section_key,
+                                    item_name=item_key,
+                                    status=converted_renault_status_to_int(status_string),
+                                    value=None,
+                                    code=None,
+                                    caption=caption,
+                                    image_url=image_url
                                 )
 
             if isinstance(battery_data, list) and len(battery_data) >= 2:
@@ -277,8 +379,14 @@ def submit_maintenance_checklist():
                             caption=code_item.get('status')
                         )
 
-            db.session.commit()
+            if missing_photos:
+                db.session.rollback()
+                return jsonify({
+                    'message': 'Photos are required for items with "Repair Recommended" or "Repair Immediately" status',
+                    'missing_items': missing_photos
+                }), 400
 
+            db.session.commit()
             return jsonify({
                 'message': 'Renault Storage Maintenance Checklist submitted successfully!',
                 'id': str(storage_maintenance_entry.smID)
@@ -356,6 +464,8 @@ def submit_maintenance_checklist():
         
         if "Violation of UNIQUE KEY constraint" in str(e) or "duplicate key" in str(e).lower():
             return jsonify({'message': f'Duplicate VIN found for {brand.capitalize()}. Please check your input.'}), 409
+        
+        current_app.logger.error(f"Submission error: {str(e)}", exc_info=True)
         
         print(f"Error submitting {brand.capitalize()} checklist: {str(e)}")
         return jsonify({'message': f'Error submitting {brand.capitalize()} checklist: {str(e)}'}), 500

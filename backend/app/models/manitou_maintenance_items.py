@@ -22,7 +22,7 @@ class StorageMaintenanceChecklistItemModel_MA(db.Model):
     status = db.Column(db.SmallInteger, nullable=True)
     
     # URL Path of the image
-    image_url = db.Column(db.String(255), nullable=True)
+    image_blob_name = db.Column(db.Text(), nullable=True)
 
     # for caption of the image
     caption = db.Column(db.Text(), nullable=True)

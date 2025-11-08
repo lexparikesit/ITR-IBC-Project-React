@@ -19,13 +19,13 @@ import {
     ScrollArea,
     Stack,
     SimpleGrid,
-    ScrollAreaAutosize,
 } from '@mantine/core';
-import { IconSearch, IconEye, IconAlertCircle } from '@tabler/icons-react';
+import * as XLSX from 'xlsx';
+import { IconSearch, IconEye, IconAlertCircle, IconDownload } from '@tabler/icons-react';
 import { useDisclosure } from '@mantine/hooks';
 import { notifications } from "@mantine/notifications";
 import { BRAND_CHECKLIST_MAP } from '@/config/MaintenanceMap'; 
-import { toDateTimeString } from '@mantine/dates';
+import { useUser } from '@/context/UserContext';
 
 const EXCLUDED_KEYS = ['remarks', 'notes', 'checklist_items', 'id', 'smId', 'details', 'generalRemarks', 'defect_remarks'];
 const formatKeyToLabel = (key) => {
@@ -56,6 +56,13 @@ const formatKeyToLabel = (key) => {
 const toCapitalCase = (str) => {
     if (!str) return 'N/A';
     return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+};
+
+// Remove trailing numeric suffixes from section labels (e.g., "Engine 01" -> "Engine")
+const stripSectionIndex = (label) => {
+    if (!label) return '';
+    const text = String(label).trim();
+    return text.replace(/[\s_-]*\(?0*\d+\)?$/i, '').trim();
 };
 
 const BRAND_ID_MAP = {
@@ -116,7 +123,7 @@ const getNormalizedLabel = (brand, sectionKey, itemKey) => {
         section: normalizedSection || 'N/A',
         item: normalizedItem || 'N/A',
     }
-} 
+}
 
 const getStatusLabels = (brand, statusValue) => {
     const normalizedBrand = (brand || '').toLowerCase();
@@ -155,6 +162,10 @@ const getStatusLabels = (brand, statusValue) => {
         }
     }
 }
+
+// Helpers to fetch user option lists and build lookup maps
+const API_BASE = 'http://127.0.0.1:5000/api';
+const makeLookup = (arr) => (arr || []).reduce((acc, it) => { acc[it.value] = it.label; return acc; }, {});
 
 const formatLocalTime = (isoString) => {
     if (!isoString) return 'N/A';
@@ -203,6 +214,15 @@ const formatDateOnly = (toDateTimeString) => {
     }
 };
 
+// Normalize voltage display like 12V, 12 v, or 12 -> 12 V
+const formatVoltageValue = (val) => {
+    if (val === null || val === undefined || val === '') return '-';
+    const raw = String(val).trim();
+    const match = raw.match(/^(\d+(?:\.\d+)?)/);
+    const numberPart = match ? match[1] : raw.replace(/[^\d.]/g, '');
+    return numberPart ? `${numberPart} V` : raw;
+};
+
 const LogData = ({ title, apiUrl }) => {
     const token = typeof window !== 'undefined' ?
         localStorage.getItem('access_token') : null; 
@@ -220,6 +240,43 @@ const LogData = ({ title, apiUrl }) => {
         technicians: {},
         approvers: {},
     });
+    const { user } = useUser()
+
+    const downloadExcel = () => {
+        if (!user?.permissions?.includes('download_access_maintenance_log')) {
+            notifications.show({
+                title: "Permission Denied",
+                message: "You don't have permission to download this log.",
+                color: "red",
+            });
+            return;
+        }
+
+        const excelData = logs.map((log, index) => ({
+            No: index + 1,
+            'WO Number': log.woNumber || 'N/A',
+            'Type/Model': lookupTables.models[log.model] || log.model || 'N/A',
+            Brand: log.brand === 'manitou' 
+                ? 'Manitou' 
+                : log.brand === 'renault' 
+                    ? 'Renault Trucks' 
+                    : log.brand || 'N/A',
+            VIN: log.VIN || 'N/A',
+            'Date of Check': log.dateOfCheck 
+                ? new Date(log.dateOfCheck).toLocaleDateString('id-ID') 
+                : 'N/A',
+            Technician: lookupTables.technicians[log.technician] || log.technician || 'N/A',
+            'Approval By': lookupTables.approvers[log.approvalBy] || log.approvalBy || 'N/A',
+            'Created By': log.createdBy || 'N/A',
+            'Created On': formatLocalTime(log.createdOn)
+        }));
+
+        const ws = XLSX.utils.json_to_sheet(excelData);
+        const wb = XLSX.utils.book_new();
+        
+        XLSX.utils.book_append_sheet(wb, ws, "Storage Maintenance Check Log");
+        XLSX.writeFile(wb, `storage_maintenance_log_${new Date().toISOString().split('T')[0]}.xlsx`);
+    }
 
     const getUnitInformationData = (details, lookupTables) => {
         if (!details) return [];
@@ -258,12 +315,12 @@ const LogData = ({ title, apiUrl }) => {
                 value = formatDateOnly(value);
             }
 
-            else if (lowerKey.includes('date') || lowerKey.includes('on')) {
-                if (lowerKey.includes('check')) {
-                    value = value ? new Date(value).toLocaleDateString('id-ID') : 'N/A';
-                } else {
-                    value = formatLocalTime(value);
-                }
+            // Explicit datetime handling to avoid false matches like "transmissionType"
+            else if (lowerKey === 'dateofcheck') {
+                value = value ? new Date(value).toLocaleDateString('id-ID') : 'N/A';
+            }
+            else if (lowerKey === 'createdon' || lowerKey === 'updatedon') {
+                value = formatLocalTime(value);
             }
 
             else {
@@ -288,7 +345,7 @@ const LogData = ({ title, apiUrl }) => {
         let modelLookup = {};
         if (!brandId || !token) return modelLookup;
         
-        const apiUrl = `http://127.0.0.1:5000/api/unit-types/${brandId}`;
+        const apiUrl = `${API_BASE}/unit-types/${brandId}`;
         try {
             const modelResponse = await fetch(apiUrl, {
                 headers: { 'Authorization': `Bearer ${token}` }
@@ -305,6 +362,18 @@ const LogData = ({ title, apiUrl }) => {
             console.error(`[ERROR] Error fetching models for ${brandId}:`, e);
         }
         return modelLookup;
+    };
+
+    const fetchUsersByRole = async (role) => {
+        if (!token) return [];
+        const url = `${API_BASE}/users/by-role/${encodeURIComponent(role)}`;
+        try {
+            const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
+            if (!res.ok) return [];
+            return await res.json(); // [{value,label}]
+        } catch {
+            return [];
+        }
     };
 
     useEffect(() => {
@@ -332,13 +401,8 @@ const LogData = ({ title, apiUrl }) => {
                 setLogs(logData);
                 
                 const uniqueBrandIds = [...new Set(
-                    logData.map(log => BRAND_ID_MAP[(log.brand || '').toLowerCase()]).filter(id => id) 
+                    logData.map(log => BRAND_ID_MAP[(log.brand || '').toLowerCase()]).filter(id => id)
                 )];
-
-                const dummyTechnicians = [{ value: "tech1", label: "John Doe" }, { value: "tech2", label: "Jane Smith" }, { value: "tech3", label: "Peter Jones" }];
-                const techLookup = dummyTechnicians.reduce((acc, item) => { acc[item.value] = item.label; return acc; }, {});
-                const dummyApprovers = [{ value: "app1", label: "Alice Brown" }, { value: "app2", label: "Bob White" }, { value: "app3", label: "John Green" }];
-                const approverLookup = dummyApprovers.reduce((acc, item) => { acc[item.value] = item.label; return acc; }, {});
 
                 let allModelLookup = {};
                 
@@ -347,11 +411,17 @@ const LogData = ({ title, apiUrl }) => {
                     allModelLookup = { ...allModelLookup, ...modelLookupForBrand }; 
                 }
 
-                setLookupTables({
-                    models: allModelLookup,
-                    technicians: techLookup,
-                    approvers: approverLookup,
-                });
+                // Real technicians and approvers from API
+                const [techs, supervisors, techHeads] = await Promise.all([
+                    fetchUsersByRole('Technician'),
+                    fetchUsersByRole('Supervisor'),
+                    fetchUsersByRole('Technical Head'),
+                ]);
+
+                const techLookup = makeLookup(techs);
+                const approverLookup = { ...makeLookup(supervisors), ...makeLookup(techHeads) };
+
+                setLookupTables({ models: allModelLookup, technicians: techLookup, approvers: approverLookup });
 
             } catch (err) {
                 setError(err.message);
@@ -434,16 +504,24 @@ const LogData = ({ title, apiUrl }) => {
         }
     }
 
-    const rows = paginatedLogs.map((log) => {
+    const rows = paginatedLogs.map((log, index) => {
         const modelLabel = lookupTables.models[log.model] || log.model || 'N/A';
         const technicianLabel = lookupTables.technicians[log.technician] || log.technician || 'N/A';
         const approverLabel = lookupTables.approvers[log.approvalBy] || log.approvalBy || 'N/A';
+        const globalIndex = (activePage - 1) * parseInt(rowsPerPage, 10) + index + 1
         
         return (
             <Table.Tr key={log.id}> 
+                <Table.Td>{globalIndex}</Table.Td>
                 <Table.Td>{log.woNumber || 'N/A'}</Table.Td>
                 <Table.Td>{modelLabel}</Table.Td> 
-                <Table.Td>{log.brand || 'N/A'}</Table.Td>
+                <Table.Td>
+                    {log.brand === 'manitou'
+                        ? 'Manitou'
+                        : log.brand == 'renault'
+                            ? 'Renault Trucks'
+                            : log.brand || 'N/A'}
+                </Table.Td>
                 <Table.Td>{log.VIN || 'N/A'}</Table.Td>
                 <Table.Td>
                     {log.dateOfCheck 
@@ -513,7 +591,7 @@ const LogData = ({ title, apiUrl }) => {
                             <TextInput
                                 label="Search Unit"
                                 icon={<IconSearch size={14} />}
-                                placeholder="by WO Number, VIN Number, Brand/ Product, or Unit Type)"
+                                placeholder="by WO Number, VIN Number, Brand/ Product, or Unit Type"
                                 value={searchQuery}
                                 onChange={(event) => {
                                     setSearchQuery(event.currentTarget.value);
@@ -522,24 +600,47 @@ const LogData = ({ title, apiUrl }) => {
                                 w={400}
                                 style={{ alignSelf: 'center' }} 
                             />
-                            <Select
-                                label="Show Rows"
-                                placeholder="10"
-                                data={['10', '20', '30', '40', '50']}
-                                value={rowsPerPage}
-                                onChange={(value) => {
-                                    setRowsPerPage(value);
-                                    setActivePage(1);
-                                }}
-                                w={80}
-                            />
+                            <Group gap="xs">
+                                {user?.permissions?.includes('download_arrival_log') && (
+                                    <Button 
+                                        onClick={downloadExcel}
+                                        variant="outline"
+                                        color="#A91D3A"
+                                        size="lg"
+                                        p={0}
+                                        w={32}
+                                        h={32}
+                                        style={{
+                                            height: '100%',
+                                            width: '40px',
+                                            paddingTop: '2px',
+                                            paddingBottom: '2px',
+                                            marginTop: '23px'
+                                        }}
+                                    >
+                                        <IconDownload size={16} />
+                                    </Button>
+                                )}
+                                <Select
+                                    label="Show Rows"
+                                    placeholder="10"
+                                    data={['10', '20', '30', '40', '50']}
+                                    value={rowsPerPage}
+                                    onChange={(value) => {
+                                        setRowsPerPage(value);
+                                        setActivePage(1);
+                                    }}
+                                    w={80}
+                                />
+                            </Group>
                         </Group>
                     </Paper>
 
                     <Paper shadow="sm" radius="md" p="md">
-                        <Table stickyHeader striped highlightOnHover>
+                        <Table stickyHeader highlightOnHover>
                             <Table.Thead>
                                 <Table.Tr>
+                                    <Table.Th>No.</Table.Th>
                                     <Table.Th>WO Number</Table.Th>
                                     <Table.Th>Type/Model</Table.Th>
                                     <Table.Th>Brand</Table.Th>
@@ -572,7 +673,7 @@ const LogData = ({ title, apiUrl }) => {
                 opened={modalOpened}
                 onClose={closeModal}
                 title="Detail Storage Maintenance Log"
-                size="1350pxpx"
+                size="1350px"
                 styles={{ 
                     title: { flexGrow: 1, textAlign: 'center' }
                 }}
@@ -639,6 +740,28 @@ const LogData = ({ title, apiUrl }) => {
                                                 const DISPLAY_FAULT_CODES_TITLE = "Fault Codes (Renault) - Diagnostics";
 
                                                 const batteryData = allItems.filter(item => item.section === BACKEND_BATTERY_SECTION);
+                                                // Consolidate battery items into two rows with proper labels
+                                                const getItem = (name) => batteryData.find(i => i.itemName === name) || {};
+                                                const frontLevel = getItem('front_battery_level');
+                                                const frontVolt = getItem('front_battery_voltage');
+                                                const rearLevel = getItem('rear_battery_level');
+                                                const rearVolt = getItem('rear_battery_voltage');
+                                                const structuredBatteryData = [
+                                                    {
+                                                        section: 'Battery Inspection',
+                                                        itemName: 'Rear Battery Voltage',
+                                                        electrolyte: rearLevel?.value ?? '-',
+                                                        voltage: formatVoltageValue(rearVolt?.value ?? '-'),
+                                                        status: rearVolt?.caption || rearLevel?.caption || '-',
+                                                    },
+                                                    {
+                                                        section: 'Battery Inspection',
+                                                        itemName: 'Front Battery Voltage',
+                                                        electrolyte: frontLevel?.value ?? '-',
+                                                        voltage: formatVoltageValue(frontVolt?.value ?? '-'),
+                                                        status: frontVolt?.caption || frontLevel?.caption || '-',
+                                                    },
+                                                ];
                                                 const faultCodesData = allItems.filter(item => item.section === BACKEND_FAULT_CODES_SECTION);
                                                 const mainChecklistData = allItems.filter(item =>
                                                     item.section !== BACKEND_BATTERY_SECTION && item.section !== BACKEND_FAULT_CODES_SECTION
@@ -659,38 +782,67 @@ const LogData = ({ title, apiUrl }) => {
                                                         {/* 1. Main Checklist Inspection Items Section (Tabel Standard) */}
                                                         {mainChecklistData.length > 0 && (
                                                             <Box>
-                                                                <Table withRowBorders={true} striped highlightOnHover>
+                                                                <Table withRowBorders={true} highlightOnHover>
                                                                     <Table.Thead>
                                                                         <Table.Tr>
                                                                             <Table.Th>Section</Table.Th>
                                                                             <Table.Th>Item</Table.Th>
                                                                             <Table.Th style={{ width: '100px' }}>Status</Table.Th>
                                                                             <Table.Th>Remarks/Caption</Table.Th>
-                                                                            <Table.Th>Image URL</Table.Th>
+                                                                            <Table.Th>Image</Table.Th>
                                                                         </Table.Tr>
                                                                     </Table.Thead>
                                                                     <Table.Tbody>
-                                                                        {mainChecklistData.map((item, index) => {
+                                                                        {(() => {
                                                                             const brand = selectedLogDetails.brand;
-                                                                            const { item: normalizedItem } = getNormalizedLabel(brand, item.section, item.itemName);
-                                                                            const { text: statusText, color: statusColor } = getStatusLabels(brand, item.status);
-                                                                            
-                                                                            return (
-                                                                                <Table.Tr key={index}>
-                                                                                    <Table.Td>{getNormalizedLabel(brand, item.section, null).section}</Table.Td> 
-                                                                                    <Table.Td>{normalizedItem}</Table.Td>
-                                                                                    <Table.Td>
-                                                                                        <Text fw={700} c={statusColor}>{statusText}</Text>
-                                                                                    </Table.Td>
-                                                                                    <Table.Td>{item.remarks || item.caption || '-'}</Table.Td> 
-                                                                                    <Table.Td>
-                                                                                        {item.image_url ? (
-                                                                                            <a href={item.image_url} target="_blank" rel="noopener noreferrer" style={{color: 'var(--mantine-color-blue-6)'}}>Picture</a>
-                                                                                        ) : '-'}
-                                                                                    </Table.Td>
-                                                                                </Table.Tr>
-                                                                            );
-                                                                        })}
+                                                                            const rows = mainChecklistData.map(it => {
+                                                                                const { section: normSec, item: normItem } = getNormalizedLabel(brand, it.section, it.itemName);
+                                                                                return {
+                                                                                    section: stripSectionIndex(normSec),
+                                                                                    itemLabel: normItem,
+                                                                                    status: it.status,
+                                                                                    remarks: it.remarks || it.caption || '-',
+                                                                                    imageUrl: it.image_url,
+                                                                                };
+                                                                            });
+                                                                            const counts = {};
+                                                                            rows.forEach(r => { counts[r.section] = (counts[r.section] || 0) + 1; });
+                                                                            const emitted = {};
+                                                                            return rows.map((row, idx) => {
+                                                                                const { text: statusText, color: statusColor } = getStatusLabels(brand, row.status);
+                                                                                const firstForSection = !emitted[row.section];
+                                                                                emitted[row.section] = (emitted[row.section] || 0) + 1;
+                                                                                return (
+                                                                                    <Table.Tr key={idx}>
+                                                                                        {firstForSection && (
+                                                                                            <Table.Td rowSpan={counts[row.section]} style={{ textAlign: 'center', verticalAlign: 'middle', fontWeight: 600 }}>
+                                                                                                {row.section}
+                                                                                            </Table.Td>
+                                                                                        )}
+                                                                                        <Table.Td>{row.itemLabel}</Table.Td>
+                                                                                        <Table.Td>
+                                                                                            <Text fw={700} c={statusColor}>{statusText}</Text>
+                                                                                        </Table.Td>
+                                                                                        <Table.Td>{row.remarks}</Table.Td>
+                                                                                        <Table.Td>
+                                                                                            {row.imageUrl && row.imageUrl.startsWith('https://') ? (
+                                                                                                <Box style={{ width: '100px', height: '100px', overflow: 'hidden' }}>
+                                                                                                    <img 
+                                                                                                        src={row.imageUrl}
+                                                                                                        alt="Inspection" 
+                                                                                                        style={{ width: '100%', height: 'auto', objectFit: 'cover' }}
+                                                                                                        onError={(e) => {
+                                                                                                            e.target.style.display = 'none';
+                                                                                                            e.target.parentElement.innerHTML = '<span style=\"color: red\">Image Failed to Load</span>';
+                                                                                                        }}
+                                                                                                    />
+                                                                                                </Box>
+                                                                                            ) : '-'}
+                                                                                        </Table.Td>
+                                                                                    </Table.Tr>
+                                                                                );
+                                                                            });
+                                                                        })()}
                                                                     </Table.Tbody>
                                                                 </Table>
                                                             </Box>
@@ -703,7 +855,7 @@ const LogData = ({ title, apiUrl }) => {
                                                                     {DISPLAY_BATTERY_TITLE}
                                                                 </Title>
                                                                 <>
-                                                                    <Table withRowBorders={true} striped highlightOnHover>
+                                                                    <Table withRowBorders={true} highlightOnHover>
                                                                         <Table.Thead>
                                                                             <Table.Tr>
                                                                                 <Table.Th style={{ width: '20%' }}>Section</Table.Th>
@@ -714,17 +866,15 @@ const LogData = ({ title, apiUrl }) => {
                                                                             </Table.Tr>
                                                                         </Table.Thead>
                                                                         <Table.Tbody>
-                                                                        {batteryData.map((data, index) => {
-                                                                            return (
-                                                                                <Table.Tr key={index}>
-                                                                                    <Table.Td>{data.section}</Table.Td>
-                                                                                    <Table.Td>{data.itemName}</Table.Td>
-                                                                                    <Table.Td>{data.status}</Table.Td>
-                                                                                    <Table.Td>{data.value || '-'}</Table.Td> 
-                                                                                    <Table.Td>{data.caption || '-'}</Table.Td>
-                                                                                </Table.Tr>
-                                                                            );
-                                                                        })}
+                                                                        {structuredBatteryData.map((row, index) => (
+                                                                            <Table.Tr key={index}>
+                                                                                <Table.Td>{row.section}</Table.Td>
+                                                                                <Table.Td>{row.itemName}</Table.Td>
+                                                                                <Table.Td>{row.electrolyte}</Table.Td>
+                                                                                <Table.Td>{row.voltage}</Table.Td>
+                                                                                <Table.Td>{row.status}</Table.Td>
+                                                                            </Table.Tr>
+                                                                        ))}
                                                                     </Table.Tbody>
                                                                     </Table>
                                                                 </>
@@ -737,13 +887,12 @@ const LogData = ({ title, apiUrl }) => {
                                                                 <Title order={4} mt="md" mb="sm" pb="xs" style={{ borderBottom: '1px solid var(--mantine-color-gray-2)' }}>
                                                                     {DISPLAY_FAULT_CODES_TITLE}
                                                                 </Title>
-                                                                <Table withRowBorders={true} striped highlightOnHover>
+                                                                <Table withRowBorders={true} highlightOnHover>
                                                                     <Table.Thead>
                                                                         <Table.Tr>
-                                                                            <Table.Th style={{ width: '25%' }}>Section</Table.Th>
-                                                                            <Table.Th style={{ width: '25%' }}>Item Name</Table.Th>
-                                                                            <Table.Th style={{ width: '25%' }}>Fault Code</Table.Th>
-                                                                            <Table.Th style={{ width: '25%' }}>Status</Table.Th>
+                                                                            <Table.Th style={{ width: '33%' }}>Section</Table.Th>
+                                                                            <Table.Th style={{ width: '33%' }}>Fault Code</Table.Th>
+                                                                            <Table.Th style={{ width: '34%' }}>Status</Table.Th>
                                                                         </Table.Tr>
                                                                     </Table.Thead>
                                                                     <Table.Tbody>
@@ -752,9 +901,8 @@ const LogData = ({ title, apiUrl }) => {
                                                                             .map((item, index) => {
                                                                                 return (
                                                                                     <Table.Tr key={index}>
-                                                                                        <Table.Td>{item.section}</Table.Td>
-                                                                                        <Table.Td>{item.itemName}</Table.Td>
-                                                                                        <Table.Td>{item.value || item.code || '-'}</Table.Td> 
+                                                                                        <Table.Td>{'Fault Codes'}</Table.Td>
+                                                                                        <Table.Td>{item.value || item.code || '-'}</Table.Td>
                                                                                         <Table.Td>{item.caption || '-'}</Table.Td>
                                                                                     </Table.Tr>
                                                                                 );
@@ -769,9 +917,10 @@ const LogData = ({ title, apiUrl }) => {
                                         ) : (
                                             <>
                                                 {selectedLogDetails.brand && selectedLogDetails.brand.toLowerCase() === 'sdlg' ? (
-                                                    <Table withRowBorders={true} striped highlightOnHover>
+                                                    <Table withRowBorders={true} highlightOnHover>
                                                         <Table.Thead>
                                                             <Table.Tr>
+                                                                <Table.Th style={{ width: '50px' }}>No.</Table.Th>
                                                                 <Table.Th style={{ width: '85%' }}>Technical Requirement</Table.Th>
                                                                 <Table.Th style={{ width: '15%', textAlign: 'center' }}>Status</Table.Th>
                                                             </Table.Tr>
@@ -785,6 +934,7 @@ const LogData = ({ title, apiUrl }) => {
                                                                     const { text: statusText, color: statusColor } = getStatusLabels('sdlg', item.status);
                                                                     return (
                                                                         <Table.Tr key={index}>
+                                                                            <Table.Td>{index + 1}</Table.Td>
                                                                             <Table.Td>{itemContent}</Table.Td>
                                                                             <Table.Td style={{ textAlign: 'center' }}>
                                                                                 <Text fw={700} c={statusColor}>
@@ -797,57 +947,81 @@ const LogData = ({ title, apiUrl }) => {
                                                         </Table.Tbody>
                                                     </Table>
                                                 ) : (
-                                                    <Table withRowBorders={true} striped highlightOnHover>
+                                                    <Table withRowBorders={true} highlightOnHover>
                                                         <Table.Thead>
                                                             <Table.Tr>
                                                                 <Table.Th>Section</Table.Th>
                                                                 <Table.Th>Item</Table.Th>
                                                                 <Table.Th style={{ width: '100px' }}>Status</Table.Th>
                                                                 <Table.Th>Remarks/Caption</Table.Th>
-                                                                <Table.Th>Image URL</Table.Th>
+                                                                <Table.Th>Image</Table.Th>
                                                             </Table.Tr>
                                                         </Table.Thead>
                                                         <Table.Tbody>
-                                                            {selectedLogDetails.checklist_items
-                                                                .slice() 
-                                                                .sort((a, b) => {
-                                                                    const brandLower = (selectedLogDetails.brand || '').toLowerCase();
-                                                                    const map = BRAND_CHECKLIST_MAP[brandLower];
-                                                                    
-                                                                    if (!map) return 0; 
-                                                                    
-                                                                    const sectionKeys = Object.keys(map.sections); 
-                                                                    const rankA = sectionKeys.indexOf(a.section);
-                                                                    const rankB = sectionKeys.indexOf(b.section);
-                                                                    
-                                                                    if (rankA !== rankB) {
-                                                                        return rankA - rankB;
-                                                                    }
-                                                                    return 0;
-                                                                })
-                                                                .map((item, index) => {
-                                                                    const brand = selectedLogDetails.brand;
-                                                                    const { section: normalizedSection, item: normalizedItem } = getNormalizedLabel(brand, item.section, item.itemName);
-                                                                    const { text: statusText, color: statusColor } = getStatusLabels(brand, item.status);
-                                                                    
+                                                            {(() => {
+                                                                const brand = selectedLogDetails.brand;
+                                                                const sorted = selectedLogDetails.checklist_items
+                                                                    .slice() 
+                                                                    .sort((a, b) => {
+                                                                        const map = BRAND_CHECKLIST_MAP[(brand || '').toLowerCase()];
+                                                                        if (!map) return 0; 
+                                                                        const sectionKeys = Object.keys(map.sections); 
+                                                                        const rankA = sectionKeys.indexOf(a.section);
+                                                                        const rankB = sectionKeys.indexOf(b.section);
+                                                                        if (rankA !== rankB) return rankA - rankB;
+                                                                        return 0;
+                                                                    })
+                                                                    .map((item) => {
+                                                                        const { section: normSec, item: normItem } = getNormalizedLabel(brand, item.section, item.itemName);
+                                                                        return {
+                                                                            section: stripSectionIndex(normSec),
+                                                                            itemLabel: normItem,
+                                                                            status: item.status,
+                                                                            remarks: item.remarks || item.caption || item.notes || '-',
+                                                                            imageUrl: item.image_url || item.imageUrl || item.image_blob_name,
+                                                                        };
+                                                                    });
+
+                                                                const counts = {};
+                                                                sorted.forEach(r => { counts[r.section] = (counts[r.section] || 0) + 1; });
+                                                                const emitted = {};
+
+                                                                return sorted.map((row, idx) => {
+                                                                    const { text: statusText, color: statusColor } = getStatusLabels(brand, row.status);
+                                                                    const firstForSection = !emitted[row.section];
+                                                                    emitted[row.section] = (emitted[row.section] || 0) + 1;
+
                                                                     return (
-                                                                        <Table.Tr key={index}>
-                                                                            <Table.Td>{normalizedSection}</Table.Td> 
-                                                                            <Table.Td>{normalizedItem}</Table.Td>
+                                                                        <Table.Tr key={idx}>
+                                                                            {firstForSection && (
+                                                                                <Table.Td rowSpan={counts[row.section]} style={{ textAlign: 'center', verticalAlign: 'middle', fontWeight: 600 }}>
+                                                                                    {row.section}
+                                                                                </Table.Td>
+                                                                            )}
+                                                                            <Table.Td>{row.itemLabel}</Table.Td>
                                                                             <Table.Td>
-                                                                                <Text fw={700} c={statusColor}>
-                                                                                    {statusText}
-                                                                                </Text>
+                                                                                <Text fw={700} c={statusColor}>{statusText}</Text>
                                                                             </Table.Td>
-                                                                            <Table.Td>{item.remarks || item.caption || '-'}</Table.Td> 
+                                                                            <Table.Td>{row.remarks}</Table.Td>
                                                                             <Table.Td>
-                                                                                {item.image_url ? (
-                                                                                    <a href={item.image_url} target="_blank" rel="noopener noreferrer" style={{color: 'var(--mantine-color-blue-6)'}}>Picture</a>
+                                                                                {row.imageUrl && String(row.imageUrl).startsWith('https://') ? (
+                                                                                    <Box style={{ width: '100px', height: '100px', overflow: 'hidden' }}>
+                                                                                        <img
+                                                                                            src={row.imageUrl}
+                                                                                            alt="Inspection"
+                                                                                            style={{ width: '100%', height: 'auto', objectFit: 'cover' }}
+                                                                                            onError={(e) => {
+                                                                                                e.target.style.display = 'none';
+                                                                                                e.target.parentElement.innerHTML = '<span style=\"color: red\">Image Failed to Load</span>';
+                                                                                            }}
+                                                                                        />
+                                                                                    </Box>
                                                                                 ) : '-'}
                                                                             </Table.Td>
                                                                         </Table.Tr>
                                                                     );
-                                                                })}
+                                                                });
+                                                            })()}
                                                         </Table.Tbody>
                                                     </Table>
                                                 )}
@@ -870,10 +1044,10 @@ const LogData = ({ title, apiUrl }) => {
                                 >
                                     Defects & Corrective Actions
                                 </Title>
-                                <Table striped highlightOnHover withTableBorder withColumnBorders>
+                                <Table highlightOnHover withTableBorder withColumnBorders>
                                     <Table.Thead>
                                         <Table.Tr>
-                                            <Table.Th style={{ width: '50px' }}>#</Table.Th>
+                                            <Table.Th style={{ width: '50px' }}>No.</Table.Th>
                                             <Table.Th style={{ width: '50%' }}>Defect Description</Table.Th>
                                             <Table.Th>Remarks / Corrective Action</Table.Th>
                                         </Table.Tr>

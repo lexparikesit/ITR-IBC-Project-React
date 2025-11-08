@@ -17,12 +17,15 @@ import {
     Table,
     Select,
     rem,
+    Loader,
 } from "@mantine/core";
 import { DateInput } from "@mantine/dates";
-import { IconCalendar, IconPencil, IconUpload, IconX, IconFile } from "@tabler/icons-react";
+import { IconCalendar, IconPencil, IconUpload, IconX, IconFile, IconRefresh } from "@tabler/icons-react";
 import { useForm } from "@mantine/form";
 import { notifications } from "@mantine/notifications";
 import { Dropzone, MIME_TYPES } from "@mantine/dropzone";
+import apiClient from "@/libs/api";
+import imageCompression from "browser-image-compression";
 
 const renaultPdiChecklistItemDefinition = {
     lubricationOilAndFluidLevels: [
@@ -72,41 +75,14 @@ const renaultPdiChecklistItemDefinition = {
     ],
 };
 
-const initialChecklistValues = Object.keys(renaultPdiChecklistItemDefinition).reduce((acc, sectionKey) => {
-    acc[sectionKey] = renaultPdiChecklistItemDefinition[sectionKey].reduce((itemAcc, item) => {
-        itemAcc[item.itemKey] = {
-            value: '',
-            notes: '',
-            image: null,
-        };
-        return itemAcc;
-    }, {});
-    return acc;
-}, {});
-
-const initialRenaultPdiValues = {
-    date: null,
-    // repairOrderNo: null,
-    repairOrderNo: '',
-    mileageHourMeter: '',
-    chassisId: '',
-    registrationNo: '',
-    vinNo: '',
-    customer: null,
-    province: null,
-    model: null,
-    engine: null,
-    technician: null,
-    approvalBy: null,
-    checklistItems: initialChecklistValues,
-    batteryStatus: [
-        { battery: 'Inner/ Front Battery', testCode: '' },
-        { battery: 'Outer/ Rear Battery', testCode: '' },
-    ],
-
-    // vehicle damage notes
-    vehicleDamageNotes: '',
-};
+const MAX_FILE_SIZE = 2 * 1024 * 1024;
+const MAX_ACCEPTED_SIZE = 5 * 1024 * 1024;
+const COMPRESS_OPTIONS = {
+    maxSizeMB: 1.8,
+    maxWidthOrHeight: 1920,
+    useWebWorker: true,
+    fileType: 'image/jpeg',
+}
 
 export function RenaultPDIForm() {
     const [unitModels, setUnitModels] = useState([]);
@@ -115,25 +91,121 @@ export function RenaultPDIForm() {
     const [approvers, setApprovers] = useState([]);
     const [provinces, setProvinces] = useState([]);
     const [engines, setEngines] = useState([]);
-    const [customers, setCustomers] = useState('');
+    const [customers, setCustomers] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [uploading, setUploading] = useState(false);
+
+    const processImage = async (file, sectionKey, itemKey) => {
+        try {
+            if (file.size > MAX_ACCEPTED_SIZE) {
+                notifications.show({
+                    title: "File Too Large",
+                    message: "Maximum file size is 5MB. Please choose a smaller file.",
+                    color: "red",
+                });
+                return null;
+            }
+
+            let processedFile = file;
+
+            if (file.size > MAX_FILE_SIZE) {
+                notifications.show({
+                    title: "Optimizing Image",
+                    message: `Compressing ${file.name}...`,
+                    color: "blue",
+                    autoClose: false,
+                    id: `compress-${sectionKey}-${itemKey}`
+                });
+
+                processedFile = await imageCompression(file, COMPRESS_OPTIONS);
+
+                if (processedFile.size > MAX_FILE_SIZE) {
+                    notifications.update({
+                        id: `compress-${sectionKey}-${itemKey}`,
+                        title: "Compression Failed",
+                        message: "Unable to compress below 2MB. Please choose a different image.",
+                        color: "red",
+                        autoClose: 5000
+                    });
+                    return null;
+                }
+
+                notifications.update({
+                    id: `compress-${sectionKey}-${itemKey}`,
+                    title: "Image Optimized",
+                    message: `Compressed to ${(processedFile.size / 1024 / 1024).toFixed(2)} MB`,
+                    color: "green",
+                    autoClose: 3000
+                });
+            }
+            return processedFile;
+
+        } catch (error) {
+            console.error("Image processing error:", error);
+            notifications.show({
+                title: "Processing Error",
+                message: "Failed to process image. Please try again.",
+                color: "red",
+            });
+            return null;
+        }
+    };
 
     const buildChecklistValidation = () => {
-        const checklistValidation = {};
-        Object.keys(renaultPdiChecklistItemDefinition).forEach(sectionKey => {
-            renaultPdiChecklistItemDefinition[sectionKey].forEach(item => {
-                checklistValidation[`checklistItems.${sectionKey}.${item.itemKey}.value`] = (value) => (
-                    value ? null : "This Field is Required!"
-                );
-                checklistValidation[`checklistItems.${sectionKey}.${item.itemKey}.image`] = (value) => (
-                    value ? null : "An Image is Required for This Item!"
-                );
+        const rules = {};
+        Object.keys(renaultPdiChecklistItemDefinition).forEach((sectionKey) => {
+            renaultPdiChecklistItemDefinition[sectionKey].forEach((item) => {
+                rules[`checklistItems.${sectionKey}.${item.itemKey}.value`] = (v) =>
+                    v ? null : 'This Field is Required!';
+                rules[`checklistItems.${sectionKey}.${item.itemKey}.image`] = (_img, values) => {
+                    const selected = values?.checklistItems?.[sectionKey]?.[item.itemKey]?.value;
+                    const image = values?.checklistItems?.[sectionKey]?.[item.itemKey]?.image;
+
+                    if (!selected) return null; // let value rule fire first
+                    if (selected === 'not_applicable') return null; // NA does not require image
+                    return image ? null : 'An Image is Required for This Item!';
+                };
             });
         });
-        return checklistValidation;
+        return rules;
     };
 
     const form = useForm({
-        initialValues: initialRenaultPdiValues,
+        initialValues: (() => {
+            const initialRenaultPdiValues = {
+                date: "",
+                vinNo: "",
+                repairOrderNo: "",
+                mileageHourMeter: "",
+                chassisId: "",
+                registrationNo: "",
+                customer: null,
+                province: null,
+                model: null,
+                engine: null,
+                technician: null,
+                approvalBy: null,
+
+                batteryStatus: [
+                    { battery: 'Inner/ Front Battery', testCode: '' },
+                    { battery: 'Outer/ Rear Battery', testCode: '' },
+                ],
+
+                vehicleDamageNotes: "",
+                checklistItems: {},
+            };
+            Object.keys(renaultPdiChecklistItemDefinition).forEach(sectionKey => {
+                initialRenaultPdiValues.checklistItems[sectionKey] = {};
+                renaultPdiChecklistItemDefinition[sectionKey].forEach(item => {
+                    initialRenaultPdiValues.checklistItems[sectionKey][item.itemKey] = {
+                        value: "",
+                        notes: "",
+                        image: null
+                    };
+                });
+            });
+            return initialRenaultPdiValues;
+        })(),
         validate: {
             repairOrderNo: (value) => (value ? null : "WO Number is Required!"),
             vinNo: (value) => (value ? null: "VIN Number is Required!"),
@@ -147,7 +219,7 @@ export function RenaultPDIForm() {
             date: (value) => (value ? null : "Date is Required!"),
             technician: (value) => (value ? null: "Technician is Required!"),
             approvalBy: (value) => (value ? null: "Approval By is Required!"),
-            // ...buildChecklistValidation(),
+            ...buildChecklistValidation(),
         },
     });
 
@@ -156,77 +228,50 @@ export function RenaultPDIForm() {
             try {
                 const brandId = "RT"; // 'RT' for Renault
                 const groupId = "DPDPI"; // 'DPDPI' for PDI
-
-                // model/ Type RT API
-                const modelResponse = await fetch(`http://127.0.0.1:5000/api/unit-types/RT`);
-                if (!modelResponse.ok) throw new Error(`HTTP error! status: ${modelResponse.status}`);
-                const modelData = await modelResponse.json();
-                setUnitModels(modelData);
-
-                // wo Number API
-                const woResponse = await fetch(`http://127.0.0.1:5000/api/work-orders?brand_id=${brandId}&group_id=${groupId}`);
-                if (!woResponse.ok) throw new Error(`HTTP error! status: ${woResponse.status}`);
-                const woData = await woResponse.json();
-                const formattedWoData = woData.map(wo => ({ 
-                    value: wo.WONumber, 
-                    label: wo.WONumber 
-                }));
-                setWoNumbers(formattedWoData);
-
-                // customers API
-                const customerResponse = await fetch(`http://127.0.0.1:5000/api/customers`);
-                if (!customerResponse.ok) throw new Error(`HTTP error! status: ${customerResponse.status}`);
-                const customerData = await customerResponse.json();
-                const formattedCustomers = customerData.map(customer => ({
-                    value: customer.CustomerID,
-                    label: customer.CustomerName
-                }));
-                setCustomers(formattedCustomers);
-
-                // province API
-                const provincesResponse = await fetch("http://127.0.0.1:5000/api/provinces");
-
-                if (!provincesResponse.ok) {
-                    console.error(`HTTP error! status: ${provincesResponse.status}`);
-                    setProvinces([]); 
-                    return;
-                }
-
-                const provincesObject = await provincesResponse.json();
-
-                if (typeof provincesObject === 'object' && provincesObject !== null) {
-                    const provincesArray = Object.keys(provincesObject).map(code => ({
-                        value: code,
-                        label: provincesObject[code]
-                    }));
-                    
-                    setProvinces(provincesArray);
+                const [
+                    modelRes,
+                    woRes,
+                    techRes,
+                    customerRes,
+                    provinceRes,
+                    supervisorRes,
+                    techHeadRes,
+                ] = await Promise.all([
+                    apiClient.get(`/unit-types/${brandId}`),
+                    apiClient.get(`/work-orders?brand_id=${brandId}&group_id=${groupId}`),
+                    apiClient.get("/users/by-role/Technician"),
+                    apiClient.get("/customers"),
+                    apiClient.get("/provinces"),
+                    apiClient.get("/users/by-role/Supervisor"),
+                    apiClient.get("/users/by-role/Technical Head")
+                ])
                 
+                setUnitModels(modelRes.data);
+                setWoNumbers(woRes.data.map(wo => ({ value: wo.WONumber, label: wo.WONumber })));
+                setTechnicians(techRes.data);
+                setCustomers(customerRes.data.map((customer => ({ value: customer.CustomerID, label: customer.CustomerName }))));
+                setApprovers([
+                    ...supervisorRes.data,
+                    ...techHeadRes.data,
+                ]);
+
+                const provinceObject = provinceRes.data;
+
+                if (typeof provinceObject === 'object' && provinceObject !== null) {
+                    const provinceArray = Object.keys(provinceObject).map((code) => ({
+                        value: code,
+                        label: provinceObject[code],
+                    }));
+                    setProvinces(provinceArray);
                 } else {
-                    console.error("API response is not a valid object for mapping:", provincesObject);
+                    console.log("Invalid provinces response:", provinceObject);
                     setProvinces([]);
-                }
-
-                 // dummy Technicians API
-                const dummyTechniciansData = [
-                    { value: "tech1", label: "John Doe" },
-                    { value: "tech2", label: "Jane Smith" },
-                    { value: "tech3", label: "Peter Jones" }
-                ];
-                setTechnicians(dummyTechniciansData);
-
-                // dummy Approvers API
-                const dummyApproverData = [
-                    { value: "app1", label: "Alice Brown" },
-                    { value: "app2", label: "Bob White" },
-                    { value: "app3", label: "John Green" }
-                ];
-                setApprovers(dummyApproverData);
+                };
 
                 // engine Types
                 const engineData = [
-                    { value: "engine1", label: "DXI 11" },
-                    { value: "engine2", label: "DXI 13" },
+                    { value: "DXI 11", label: "DXI 11" },
+                    { value: "DXI 13", label: "DXI 13" },
                 ];
                 setEngines(engineData);
                 
@@ -237,124 +282,151 @@ export function RenaultPDIForm() {
                     message: "Failed to load models. Please try again!",
                     color: "red",
                 });
+
+            } finally {
+                setLoading(false);
             }
         };
         fetchData();
     }, []);
 
-    const handleSubmit = async (values) => {
-        const token = localStorage.getItem('access_token');
+    const retryUpload = async (sectionKey, itemKey) => {
+        const currentFile = form.values.checklistItems[sectionKey]?.[itemKey]?.image;
+        if (!currentFile) return;
 
-        if (!token) {
-            notifications.show({
-                title: "Authentication Error",
-                message: "Please log in again. Authentication token is missing.",
-                color: "red",
-            });
-            console.log("Authentication token is missing.");
-            return;
+        setUploading(true);
+        try {
+            const processedFile = await processImage(currentFile, sectionKey, itemKey);
+            if (processedFile) {
+                form.setFieldValue(`checklistItems.${sectionKey}.${itemKey}.image`, processedFile);
+            }
+        } finally {
+            setUploading(false);
         }
-        
-        console.log("Form Submitted with Values:", values);
+    };
 
-        const checklistPayload = {};
-        const formData = new FormData();
-
-        const {
-            cab,
-            exterior,
-            lubricationOilAndFluidLevels,
-            testDrive,
-            underVehicle,
-            finish,
-        } = values.checklistItems;
-        
-        const processChecklistItems = (section, sectionKey) => {
-            checklistPayload[sectionKey] = {}; 
-            Object.entries(section).forEach(([itemKey, itemValue]) => {
-                checklistPayload[sectionKey][itemKey] = {
-                    value: itemValue.value,
-                    notes: itemValue.notes,
-                };
-                
-                if (itemValue.image) {
-                    formData.append(`${sectionKey}.${itemKey}.image`, itemValue.image);
-                }
-            });
-        };
-        
-        processChecklistItems(cab, 'cab');
-        processChecklistItems(exterior, 'exterior');
-        processChecklistItems(lubricationOilAndFluidLevels, 'lubricationOilAndFluidLevels');
-        processChecklistItems(testDrive, 'testDrive');
-        processChecklistItems(underVehicle, 'underVehicle');
-        processChecklistItems(finish, 'finish');
-
-        const payload = {
-            brand: 'renault',
-            unitInfo: {
-                repairOrderNo: values.repairOrderNo,
-                mileageHourMeter: values.mileageHourMeter,
-                chassisId: values.chassisId,
-                registrationNo: values.registrationNo,
-                vinNo: values.vinNo,
-                date: values.date,
-                customer: values.customer,
-                province: values.province,
-                model: values.model,
-                engine: values.engine,
-                axle: values.axle,
-                technician: values.technician,
-                approvalBy: values.approvalBy,
-            },
-            checklistItems: checklistPayload,
-            batteryStatus: {
-                batt_inner_front: values.batteryStatus[0].battery,
-                test_code_batt_inner_front: values.batteryStatus[0].testCode,
-                batt_outer_rear: values.batteryStatus[1].battery,
-                test_code_batt_outer_rear: values.batteryStatus[1].testCode,
-            },
-            vehicle_inspection: values.vehicleDamageNotes,
-        };
-
-        formData.append('data', JSON.stringify(payload));
-        console.log("Payload to be sent:", payload);
+    const handleSubmit = async (values) => {
+        setUploading(true);
 
         try {
-            const response = await fetch(`http://localhost:5000/api/pre-delivery-inspection/renault/submit`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                },
-                body: formData,
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.message || "Failed to submit Renault Pre-Delivery Inspection");
+            const token = localStorage.getItem('access_token');
+            if (!token) {
+                notifications.show({
+                    title: "Authentication Error",
+                    message: "Please log in again. Authentication token is missing.",
+                    color: "red",
+                });
+                console.log("Authentication token is missing.");
+                setUploading(false);
+                return;
             }
 
-            const result = await response.json();
+            // Ensure client-side validation passes before building payload
+            const validation = form.validate();
+            if (validation.hasErrors) {
+                notifications.show({
+                    title: "Missing or Invalid Fields",
+                    message: "Please fix the highlighted fields before submitting.",
+                    color: "red",
+                });
+                setUploading(false);
+                return;
+            }
+
+            const checklistPayload = {};
+            const formData = new FormData();
+
+            const {
+                cab,
+                exterior,
+                lubricationOilAndFluidLevels,
+                testDrive,
+                underVehicle,
+                finish,
+            } = values.checklistItems;
+        
+            const processChecklistItems = (section, sectionKey) => {
+                checklistPayload[sectionKey] = {}; 
+                Object.entries(section).forEach(([itemKey, itemValue]) => {
+                    checklistPayload[sectionKey][itemKey] = {
+                        value: itemValue.value,
+                        notes: itemValue.notes,
+                    };
+                    
+                    if (itemValue.image) {
+                        formData.append(`${sectionKey}.${itemKey}.image`, itemValue.image);
+                    }
+                });
+            };
+        
+            processChecklistItems(cab, 'cab');
+            processChecklistItems(exterior, 'exterior');
+            processChecklistItems(lubricationOilAndFluidLevels, 'lubricationOilAndFluidLevels');
+            processChecklistItems(testDrive, 'testDrive');
+            processChecklistItems(underVehicle, 'underVehicle');
+            processChecklistItems(finish, 'finish');
+
+            const payload = {
+                brand: 'renault',
+                unitInfo: {
+                    repairOrderNo: values.repairOrderNo,
+                    mileageHourMeter: values.mileageHourMeter,
+                    chassisId: values.chassisId,
+                    registrationNo: values.registrationNo,
+                    vinNo: values.vinNo,
+                    date: values.date,
+                    customer: values.customer,
+                    province: values.province,
+                    model: values.model,
+                    engine: values.engine,
+                    technician: values.technician,
+                    approvalBy: values.approvalBy,
+                },
+                checklistItems: checklistPayload,
+                batteryStatus: {
+                    batt_inner_front: values.batteryStatus[0].battery,
+                    test_code_batt_inner_front: values.batteryStatus[0].testCode,
+                    batt_outer_rear: values.batteryStatus[1].battery,
+                    test_code_batt_outer_rear: values.batteryStatus[1].testCode,
+                },
+                vehicle_inspection: values.vehicleDamageNotes,
+            };
+
+            formData.append('data', JSON.stringify(payload));
+            console.log("Payload to be sent:", payload);
+
+            await apiClient.post(`/pre-delivery-inspection/renault/submit`, formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data'
+                },
+                timeout: 50000
+            })
+
             notifications.show({
-                title: "Submission Successful!",
-                message: result.message || "Form Submitted Successfully.",
+                title: "Success!",
+                message: "Form Submitted Successfully!",
                 color: "green",
             })
             form.reset();
         
         } catch (error) {
-            console.log('Error submitting form:', error);
+            console.error('Error submitting form:', error);
+            const errorMessage = error.response?.data?.message || error.message || "Failed to submit checklist";
             notifications.show({
                 title: "Submission Error",
-                message: `Failed to submit form: ${error.message}`,
+                message: `Error: ${errorMessage}`,
                 color: "red",
             });
+        
+        } finally {
+            setUploading(false);
         }
     };
     
     const renderChecklistItem = (label, sectionKey, itemKey) => {
         const itemData = form.getInputProps(`checklistItems.${sectionKey}.${itemKey}`);
-        const hasImage = itemData.value.image instanceof File;
+        const currentImage = itemData?.value?.image;
+        const hasImage = currentImage instanceof File;
         const imageError = form.errors[`checklistItems.${sectionKey}.${itemKey}.image`];
         const notesError = form.errors[`checklistItems.${sectionKey}.${itemKey}.notes`];
 
@@ -367,7 +439,7 @@ export function RenaultPDIForm() {
 
                     {/* Radio of Button Group */}
                     <Radio.Group
-                        value={itemData.value.value}
+                        value={itemData?.value?.value}
                         onChange={(statusValue) => form.setFieldValue(`checklistItems.${sectionKey}.${itemKey}.value`, statusValue)}
                         orientation="horizontal"
                         error={form.errors[`checklistItems.${sectionKey}.${itemKey}.value`]}
@@ -382,9 +454,12 @@ export function RenaultPDIForm() {
                     
                     {/* Dropzone of images */}
                     <Dropzone
-                        onDrop={(files) => {
+                        onDrop={async (files) => {
                             if (files.length > 0) {
-                                form.setFieldValue(`checklistItems.${sectionKey}.${itemKey}.image`, files[0]);
+                                const processedFile = await processImage(files[0], sectionKey, itemKey);
+                                if (processedFile) {
+                                    form.setFieldValue(`checklistItems.${sectionKey}.${itemKey}.image`, processedFile);
+                                }
                             }
                         }}
                         onReject={(files) => {
@@ -395,10 +470,10 @@ export function RenaultPDIForm() {
                             });
                         }}
                         maxFiles={1}
+                        maxSize={MAX_ACCEPTED_SIZE}
                         accept={[MIME_TYPES.jpeg, MIME_TYPES.png]}
                         mt="xs"
                         error={imageError}
-                        style={{ borderColor: imageError ? 'red' : undefined }}
                     >
                         <Group justify="center" gap="xs" style={{ minHeight: rem(80), pointerEvents: 'none' }}>
                             <Dropzone.Accept>
@@ -415,8 +490,17 @@ export function RenaultPDIForm() {
                                 )}
                             </Dropzone.Idle>
                             <Stack align="center" gap={4}>
-                                <Text size="xs" c="dimmed"> {hasImage ? itemData.value.image.name : 'Drag and drop an image here or click to select'} </Text>
-                                <Text size="xs" c="dimmed"> Accepted formats: JPG, PNG </Text>
+                                <Text size="xs" c="dimmed"> 
+                                    {hasImage ? currentImage.name : 'Drag and drop an image here or click to select'} 
+                                </Text>
+                                <Text size="xs" c="dimmed"> 
+                                    JPG/PNG, max 5MB (will be compressed to ≤2MB)
+                                </Text>
+                                {hasImage && (
+                                    <Text size="xs" c="green">
+                                        {(currentImage.size / 1024 / 1024).toFixed(2)} MB
+                                    </Text>
+                                )}
                             </Stack>
                         </Group>
                     </Dropzone>
@@ -425,11 +509,24 @@ export function RenaultPDIForm() {
                             {imageError}
                         </Text>
                     )}
+                    {hasImage && (
+                        <Group justify="flex-end">
+                            <Button
+                                variant="subtle"
+                                size="xs"
+                                onClick={() => retryUpload(sectionKey, itemKey)}
+                                loading={uploading}
+                                leftSection={<IconRefresh size={14} />}
+                            >
+                                Retry Upload
+                            </Button>
+                        </Group>
+                    )}
                     
                     <TextInput
                         placeholder="Add Image Caption"
                         mt="xs"
-                        value={itemData.value.notes}
+                        value={itemData?.value?.notes}
                         leftSection={<IconPencil size={20}/>}
                         onChange={(event) => form.setFieldValue(`checklistItems.${sectionKey}.${itemKey}.notes`, event.target.value)}
                         error={notesError}
@@ -458,6 +555,15 @@ export function RenaultPDIForm() {
         );
     };
 
+    if (loading) {
+        return (
+            <Box maw="100%" mx="auto" px="md" ta="center">
+                <Title order={1} mt="md" mb="lg">Loading Form Data...</Title>
+                <Loader size="lg" />
+            </Box>
+        );
+    }
+
     return (
         <Box maw="100%" mx="auto" px="md">
             <Title 
@@ -465,7 +571,8 @@ export function RenaultPDIForm() {
                 mt="md"
                 mb="lg"
                 style={{ color: '#000000 !important' }}
-            > Pre Delivery Inspection Form
+            > 
+                Pre Delivery Inspection Form
             </Title>
 
             <form onSubmit={form.onSubmit(handleSubmit)}>
@@ -669,7 +776,13 @@ export function RenaultPDIForm() {
                     />
                 </Card>
                 <Group justify="flex-end" mt="md">
-                    <Button type="submit">Submit</Button>
+                    <Button
+                        type="submit"
+                        loading={uploading}
+                        disabled={uploading}
+                    >
+                        {uploading ? 'Submitting...' : 'Submit'}
+                    </Button>
                 </Group>
             </form>
         </Box>

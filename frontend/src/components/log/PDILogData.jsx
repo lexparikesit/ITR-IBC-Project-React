@@ -20,11 +20,12 @@ import {
     Stack,
     SimpleGrid,
 } from '@mantine/core';
-import { IconSearch, IconEye, IconAlertCircle } from '@tabler/icons-react';
+import * as XLSX from 'xlsx';
+import { IconSearch, IconEye, IconAlertCircle, IconDownload } from '@tabler/icons-react';
 import { useDisclosure } from '@mantine/hooks';
 import { notifications } from "@mantine/notifications";
 import { BRAND_CHECKLIST_MAP } from '@/config/PDIMap'; 
-import { toDateTimeString } from '@mantine/dates';
+import { useUser } from '@/context/UserContext';
 
 const EXCLUDED_KEYS = ['remarks', 'notes', 'checklist_items', 'id', 'pdiId', 'details', 'generalRemarks', 'remarksTransport', 'vehicle_inspection', 'defect_remarks'];
 const formatKeyToLabel = (key) => {
@@ -60,6 +61,13 @@ const formatKeyToLabel = (key) => {
 const toCapitalCase = (str) => {
     if (!str) return 'N/A';
     return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+};
+
+// Remove trailing numeric suffixes from section labels (e.g., "01. Engine" -> "Engine")
+const stripSectionIndex = (label) => {
+    if (!label) return '';
+    const text = String(label).trim();
+    return text.replace(/[\s._-]*\(?0*\d+\)?\.?\s*/i, '').trim() || text;
 };
 
 const BRAND_ID_MAP = {
@@ -204,9 +212,7 @@ const formatDateOnly = (toDateTimeString) => {
 };
 
 const LogData = ({ title, apiUrl }) => {
-    const token = typeof window !== 'undefined' ? 
-        localStorage.getItem('access_token') : null; 
-    
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null; 
     const [logs, setLogs] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -221,6 +227,45 @@ const LogData = ({ title, apiUrl }) => {
         approvers: {},
         customers: {},
     });
+    const { user } = useUser()
+
+    const downloadExcel = () => {
+        if (!user?.permissions?.includes('download_pdi_log')) {
+            notifications.show({
+                title: "Permission Denied",
+                message: "You don't have permission to download this log.",
+                color: "red",
+            });
+            return;
+        }
+
+        const excelData = logs.map((log, index) => ({
+            No: index + 1,
+            'WO Number': log.woNumber || 'N/A',
+            'Type/Model': lookupTables.models[log.model] || log.model || 'N/A',
+            Brand: log.brand === 'manitou'
+                ? 'Manitou'
+                : log.brand === 'renault'
+                    ? 'Renault Trucks'
+                        : log.brand === 'sdlg'
+                        ? 'SDLG'
+                            : log.brand || 'N/A',
+            VIN: log.VIN || 'N/A',
+            'Date of Check': log.dateOfCheck
+                ? new Date(log.dateOfCheck).toLocaleDateString('id-ID')
+                : 'N/A',
+            Technician: lookupTables.technicians[log.technician] || log.technician || 'N/A',
+            'Approval By': lookupTables.approvers[log.approvalBy] || log.approvalBy || 'N/A',
+            'Created By': log.createdBy || 'N/A',
+            'Created On': formatLocalTime(log.createdOn)
+        }));
+        
+        const ws = XLSX.utils.json_to_sheet(excelData);
+        const wb = XLSX.utils.book_new()
+
+        XLSX.utils.book_append_sheet(wb, ws, "PDI Data Log");
+        XLSX.writeFile(wb, `pdi_log_${new Date().toISOString().split('T')[0]}.xlsx`)
+    };
 
     const getUnitInformationData = (details, lookupTables) => {
         if (!details) return [];
@@ -297,9 +342,11 @@ const LogData = ({ title, apiUrl }) => {
 
     const fetchLookupData = async (brandId) => {
         let modelLookup = {};
+        
         if (!brandId || !token) return modelLookup;
         
         const apiUrl = `http://127.0.0.1:5000/api/unit-types/${brandId}`;
+        
         try {
             const modelResponse = await fetch(apiUrl, {
                 headers: { 'Authorization': `Bearer ${token}` }
@@ -367,6 +414,44 @@ const LogData = ({ title, apiUrl }) => {
         return formattedWords.join(' ');
     }
 
+    const fetchUserLookup = async (token) => {
+        if (!token) return { technicians: {}, approvers: {} };
+        
+        try {
+            const baseUrl = 'http://127.0.0.1:5000/api';
+            const [techRes, supervisorRes, techHeadRes] = await Promise.all([
+                fetch(`${baseUrl}/users/by-role/Technician`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                }),
+                fetch(`${baseUrl}/users/by-role/Supervisor`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                }),
+                fetch(`${baseUrl}/users/by-role/Technical Head`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                })
+            ]);
+
+            const techData = techRes.ok ? await techRes.json() : [];
+            const supervisorData = supervisorRes.ok ? await supervisorRes.json() : [];
+            const techHeadData = techHeadRes.ok ? await techHeadRes.json() : [];
+            const allApprovers = [...supervisorData, ...techHeadData];
+            const techLookup = techData.reduce((acc, user) => {
+                acc[user.value] = user.label;
+                return acc;
+            }, {});
+            const approverLookup = allApprovers.reduce((acc, user) => {
+                acc[user.value] = user.label;
+                return acc;
+            }, {});
+
+            return { technicians: techLookup, approvers: approverLookup };
+        
+        } catch (error) {
+            console.error("Error fetching user lookup data:", error);
+            return { technicians: {}, approvers: {} };
+        }
+    };
+
     useEffect(() => {
         const fetchAllData = async () => {
             if (!token) {
@@ -394,12 +479,6 @@ const LogData = ({ title, apiUrl }) => {
                 const uniqueBrandIds = [...new Set(
                     logData.map(log => BRAND_ID_MAP[(log.brand || '').toLowerCase()]).filter(id => id) 
                 )];
-                
-                const dummyTechnicians = [{ value: "tech1", label: "John Doe" }, { value: "tech2", label: "Jane Smith" }, { value: "tech3", label: "Peter Jones" }];
-                const techLookup = dummyTechnicians.reduce((acc, item) => { acc[item.value] = item.label; return acc; }, {});
-                const dummyApprovers = [{ value: "app1", label: "Alice Brown" }, { value: "app2", label: "Bob White" }, { value: "app3", label: "John Green"}];
-                const approverLookup = dummyApprovers.reduce((acc, item) => { acc[item.value] = item.label; return acc; }, {});
-                const customerLookup = await fetchCustomerData(); 
 
                 let allModelLookup = {};
 
@@ -408,10 +487,13 @@ const LogData = ({ title, apiUrl }) => {
                     allModelLookup = { ...allModelLookup, ...modelLookupForBrand }; 
                 }
 
+                const customerLookup = await fetchCustomerData();
+                const { technicians, approvers } = await fetchUserLookup(token);
+
                 setLookupTables({
                     models: allModelLookup,
-                    technicians: techLookup,
-                    approvers: approverLookup,
+                    technicians: technicians,
+                    approvers: approvers,
                     customers: customerLookup,
                 });
 
@@ -498,16 +580,26 @@ const LogData = ({ title, apiUrl }) => {
         }
     }
 
-    const rows = paginatedLogs.map((log) => {
+    const rows = paginatedLogs.map((log, index) => {
         const modelLabel = lookupTables.models[log.model] || log.model || 'N/A';
         const technicianLabel = lookupTables.technicians[log.technician] || log.technician || 'N/A';
         const approverLabel = lookupTables.approvers[log.approvalBy] || log.approvalBy || 'N/A';
-        
+        const globalIndex = (activePage - 1) * parseInt(rowsPerPage, 10) + index + 1;
+
         return (
-            <Table.Tr key={log.id}> 
+            <Table.Tr key={log.id}>
+                <Table.Td>{globalIndex}</Table.Td>
                 <Table.Td>{log.woNumber || 'N/A'}</Table.Td>
                 <Table.Td>{modelLabel}</Table.Td> 
-                <Table.Td>{log.brand || 'N/A'}</Table.Td>
+                <Table.Td>
+                    {log.brand === 'manitou'
+                        ? 'Manitou'
+                        : log.brand == 'renault'
+                            ? 'Renault Trucks'
+                            : log.brand == 'sdlg'
+                                ? 'SDLG'
+                                : log.brand || 'N/A'}
+                </Table.Td>
                 <Table.Td>{log.VIN || 'N/A'}</Table.Td>
                 <Table.Td>
                     {log.dateOfCheck 
@@ -586,24 +678,47 @@ const LogData = ({ title, apiUrl }) => {
                                 w={400}
                                 style={{ alignSelf: 'center' }} 
                             />
-                            <Select
-                                label="Show Rows"
-                                placeholder="10"
-                                data={['10', '20', '30', '40', '50']}
-                                value={rowsPerPage}
-                                onChange={(value) => {
-                                    setRowsPerPage(value);
-                                    setActivePage(1);
-                                }}
-                                w={80}
-                            />
+                            <Group gap="xs">
+                                {user?.permissions?.includes('download_arrival_log') && (
+                                    <Button 
+                                        onClick={downloadExcel}
+                                        variant="outline"
+                                        color="#A91D3A"
+                                        size="lg"
+                                        p={0}
+                                        w={32}
+                                        h={32}
+                                        style={{
+                                            height: '100%',
+                                            width: '40px',
+                                            paddingTop: '2px',
+                                            paddingBottom: '2px',
+                                            marginTop: '23px'
+                                        }}
+                                    >
+                                        <IconDownload size={16} />
+                                    </Button>
+                                )}
+                                <Select
+                                    label="Show Rows"
+                                    placeholder="10"
+                                    data={['10', '20', '30', '40', '50']}
+                                    value={rowsPerPage}
+                                    onChange={(value) => {
+                                        setRowsPerPage(value);
+                                        setActivePage(1);
+                                    }}
+                                    w={80}
+                                />
+                            </Group>
                         </Group>
                     </Paper>
 
                     <Paper shadow="sm" radius="md" p="md">
-                        <Table stickyHeader striped highlightOnHover>
+                        <Table stickyHeader highlightOnHover>
                             <Table.Thead>
                                 <Table.Tr>
+                                    <Table.Th>No.</Table.Th>
                                     <Table.Th>WO Number</Table.Th>
                                     <Table.Th>Type/Model</Table.Th>
                                     <Table.Th>Brand</Table.Th>
@@ -696,36 +811,17 @@ const LogData = ({ title, apiUrl }) => {
                                             (() => {
                                                 const allItems = selectedLogDetails.checklist_items || [];
 
-                                                const BACKEND_BATTERY_SECTION = 'battery_status';
+                                                const BACKEND_BATTERY_SECTION_PDI = 'battery_status';
+                                                const BACKEND_BATTERY_SECTION_SM = 'battery_inspection';
                                                 const DISPLAY_BATTERY_TITLE = "Battery Inspection (Renault) - Measurements";
 
-                                                const batteryData = allItems.filter(item => item.section === BACKEND_BATTERY_SECTION);
-                                                const batteryMap = {};
-
-                                                batteryData.forEach(item => {
-                                                    if (item.itemName.startsWith('batt_')) {
-                                                        const batteryKey = item.itemName;
-                                                        const batteryLabel = item.value;
-                                                        
-                                                        batteryMap[batteryKey] = {
-                                                            label: batteryLabel,
-                                                            testCode: '',
-                                                        };
-                                                    }
-                                                });
-
-                                                batteryData.forEach(item => {
-                                                    if (item.itemName.startsWith('test_code_batt_')) {
-                                                        const batteryKey = item.itemName.replace('test_code_', '');
-                                                        
-                                                        if (batteryMap[batteryKey]) {
-                                                            batteryMap[batteryKey].testCode = item.value;
-                                                        }
-                                                    }
-                                                });
+            const smBatteryItems = allItems.filter(item => item.section === BACKEND_BATTERY_SECTION_SM);
+            const pdiBatteryItems = allItems.filter(item => item.section === BACKEND_BATTERY_SECTION_PDI);
 
                                                 const mainChecklistData = allItems.filter(item => 
-                                                    item.section !== BACKEND_BATTERY_SECTION && item.section
+                                                    item.section !== BACKEND_BATTERY_SECTION_PDI &&
+                                                    item.section !== BACKEND_BATTERY_SECTION_SM &&
+                                                    item.section
                                                 ).slice().sort((a, b) => {
                                                     const brandLower = selectedLogDetails.brand.toLowerCase();
                                                     const map = BRAND_CHECKLIST_MAP[brandLower];
@@ -738,18 +834,33 @@ const LogData = ({ title, apiUrl }) => {
                                                     return rankA - rankB;
                                                 });
 
-                                                const structuredBatteryData = Object.keys(batteryMap).map(key => ({
-                                                    key,
-                                                    label: batteryMap[key].label,
-                                                    testCode: batteryMap[key].testCode || '-'
-                                                }));
+            // PDI view should show only Battery + Test Code columns
+            let structuredBatteryData = [];
+            if (pdiBatteryItems.length > 0) {
+                const batteryMap = {};
+                pdiBatteryItems.forEach(item => {
+                    if ((item.itemName || '').startsWith('batt_')) {
+                        batteryMap[item.itemName] = { label: item.value, testCode: '' };
+                    }
+                });
+                pdiBatteryItems.forEach(item => {
+                    if ((item.itemName || '').startsWith('test_code_batt_')) {
+                        const key = item.itemName.replace('test_code_', '');
+                        if (batteryMap[key]) batteryMap[key].testCode = item.value;
+                    }
+                });
+                structuredBatteryData = Object.keys(batteryMap).map(key => ({
+                    label: batteryMap[key].label,
+                    testCode: batteryMap[key].testCode || '-',
+                }));
+            }
 
                                                 return (
                                                     <Stack gap="xl">
                                                         {/* 1. Main Checklist Inspection Items Section (Tabel Standard) */}
                                                         {mainChecklistData.length > 0 && (
                                                             <Box>
-                                                                <Table withRowBorders={true} striped highlightOnHover>
+                                                                <Table withRowBorders={true} highlightOnHover>
                                                                     <Table.Thead>
                                                                         <Table.Tr>
                                                                             <Table.Th>Section</Table.Th>
@@ -760,57 +871,63 @@ const LogData = ({ title, apiUrl }) => {
                                                                         </Table.Tr>
                                                                     </Table.Thead>
                                                                     <Table.Tbody>
-                                                                        {mainChecklistData.map((item, index) => {
+                                                                        {(() => {
                                                                             const brand = selectedLogDetails.brand;
-                                                                            const { item: normalizedItem } = getNormalizedLabel(brand, item.section, item.itemName);
-                                                                            const { text: statusText, color: statusColor } = getStatusLabels(brand, item.status);
-
-                                                                            return (
-                                                                                <Table.Tr key={index}>
-                                                                                    <Table.Td>{getNormalizedLabel(brand, item.section, null).section}</Table.Td>
-                                                                                    <Table.Td>{normalizedItem}</Table.Td>
+                                                                            const rows = mainChecklistData.map(it => {
+                                                                                const { section: normSec, item: normItem } = getNormalizedLabel(brand, it.section, it.itemName);
+                                                                                return { section: stripSectionIndex(normSec), itemLabel: normItem, status: it.status, remarks: it.remarks || it.caption || '-', imageUrl: it.image_url };
+                                                                            });
+                                                                            const counts = {};
+                                                                            rows.forEach(r => { counts[r.section] = (counts[r.section] || 0) + 1; });
+                                                                            const emitted = {};
+                                                                            return rows.map((row, idx) => (
+                                                                                <Table.Tr key={idx}>
+                                                                                    {(!emitted[row.section]) && (
+                                                                                        <Table.Td rowSpan={counts[row.section]} style={{ textAlign: 'center', verticalAlign: 'middle', fontWeight: 600 }}>{row.section}</Table.Td>
+                                                                                    )}{(emitted[row.section] = (emitted[row.section] || 0) + 1) && null}
+                                                                                    <Table.Td>{row.itemLabel}</Table.Td>
                                                                                     <Table.Td>
-                                                                                        <Text fw={700} c={statusColor}>{statusText}</Text>
+                                                                                        <Text fw={700} c={getStatusLabels(brand, row.status).color}>{getStatusLabels(brand, row.status).text}</Text>
                                                                                     </Table.Td>
-                                                                                    <Table.Td>{item.remarks || item.caption || '-'}</Table.Td>
+                                                                                    <Table.Td>{row.remarks}</Table.Td>
                                                                                     <Table.Td>
-                                                                                        {item.image_url == null || item.image_url.trim() === '' ? '-' : (
-                                                                                            <a href={item.image_url} target="_blank" rel="noopener noreferrer" style={{color: 'var(--mantine-color-blue-6)'}}>Picture</a>
-                                                                                        )}
+                                                                                        {row.imageUrl && row.imageUrl.startsWith('https://') ? (
+                                                                                            <Box style={{ width: '100px', height: '100px', overflow: 'hidden' }}>
+                                                                                                <img src={row.imageUrl} alt="Inspection" style={{ width: '100%', height: 'auto', objectFit: 'cover' }} onError={(e) => { e.target.style.display = 'none'; e.target.parentElement.innerHTML = '<span style=\"color: red\">Image Failed to Load</span>'; }} />
+                                                                                            </Box>
+                                                                                        ) : '-'}
                                                                                     </Table.Td>
                                                                                 </Table.Tr>
-                                                                            );
-                                                                        })}
+                                                                            ));
+                                                                        })()}
                                                                     </Table.Tbody>
                                                                 </Table>
                                                             </Box>
                                                         )}
 
                                                         {/* --- 2. Battery Inspection Section (Full List) --- */}
-                                                        {batteryData.length > 0 && (
+                                                        {structuredBatteryData.length > 0 && (
                                                             <Box>
                                                                 <Title order={4} mt="md" mb="sm" pb="xs" style={{ borderBottom: '1px solid var(--mantine-color-gray-2)' }}>
                                                                     {DISPLAY_BATTERY_TITLE}
                                                                 </Title>
-                                                                <>
-                                                                    <Table withRowBorders={true} striped highlightOnHover>
-                                                                        <Table.Thead>
-                                                                            <Table.Tr>
-                                                                                <Table.Th style={{ width: '50%' }}>Battery</Table.Th>
-                                                                                <Table.Th style={{ width: '50%' }}>Test Code</Table.Th>
-                                                                            </Table.Tr>
-                                                                        </Table.Thead>
-                                                                        <Table.Tbody>
-                                                                            {structuredBatteryData.map((data, index) => (
-                                                                            <Table.Tr key={index}>
-                                                                                <Table.Td>{data.label}</Table.Td>
-                                                                                <Table.Td>{data.testCode || '-'}</Table.Td>
-                                                                            </Table.Tr>
-                                                                        ))}
-                                                                        </Table.Tbody>
-                                                                    </Table>
-                                                                </>
-                                                            </Box>
+            <Table withRowBorders={true} highlightOnHover>
+                <Table.Thead>
+                    <Table.Tr>
+                        <Table.Th>Battery</Table.Th>
+                        <Table.Th>Test Code</Table.Th>
+                    </Table.Tr>
+                </Table.Thead>
+                <Table.Tbody>
+                    {structuredBatteryData.map((row, index) => (
+                        <Table.Tr key={index}>
+                            <Table.Td>{row.label}</Table.Td>
+                            <Table.Td>{row.testCode}</Table.Td>
+                        </Table.Tr>
+                    ))}
+                </Table.Tbody>
+            </Table>
+                                                                </Box>
                                                         )}
                                                     </Stack>
                                                     );    
@@ -818,9 +935,10 @@ const LogData = ({ title, apiUrl }) => {
                                                 ) : (
                                                     <>
                                                         {selectedLogDetails.brand && selectedLogDetails.brand.toLowerCase() === 'sdlg' ? (
-                                                            <Table withRowBorders={true} striped highlightOnHover>
+                                                            <Table withRowBorders={true} highlightOnHover>
                                                                 <Table.Thead>
                                                                     <Table.Tr>
+                                                                        <Table.Th style={{ width: '50px' }}>No.</Table.Th>
                                                                         <Table.Th style={{ width: '85%' }}>Technical Requirement</Table.Th>
                                                                         <Table.Th style={{ width: '15%', textAlign: 'center' }}>Status</Table.Th>
                                                                     </Table.Tr>
@@ -850,6 +968,7 @@ const LogData = ({ title, apiUrl }) => {
 
                                                                             return (
                                                                                 <Table.Tr key={index}>
+                                                                                    <Table.Td>{index + 1}</Table.Td>
                                                                                     <Table.Td>{itemContent}</Table.Td>
                                                                                     <Table.Td style={{ textAlign: 'center' }}>
                                                                                         <Text fw={700} c={statusColor}>
@@ -862,7 +981,7 @@ const LogData = ({ title, apiUrl }) => {
                                                                 </Table.Tbody>
                                                             </Table>
                                                         ) : (
-                                                            <Table withRowBorders={true} striped highlightOnHover>
+                                                            <Table withRowBorders={true} highlightOnHover>
                                                                 <Table.Thead>
                                                                     <Table.Tr>
                                                                         <Table.Th>Section</Table.Th>
@@ -873,47 +992,70 @@ const LogData = ({ title, apiUrl }) => {
                                                                     </Table.Tr>
                                                                 </Table.Thead>
                                                                 <Table.Tbody>
-                                                                    {selectedLogDetails.checklist_items
-                                                                        .slice()
-                                                                        .sort((a, b) => {
-                                                                            const brandLower = (selectedLogDetails.brand || '').toLowerCase();
-                                                                            const map = BRAND_CHECKLIST_MAP[brandLower];
+                                                                    {(() => {
+                                                                        const brand = selectedLogDetails.brand;
+                                                                        const sorted = selectedLogDetails.checklist_items
+                                                                            .slice()
+                                                                            .sort((a, b) => {
+                                                                                const map = BRAND_CHECKLIST_MAP[(brand || '').toLowerCase()];
+                                                                                if (!map) return 0;
+                                                                                const sectionKeys = Object.keys(map.sections);
+                                                                                const rankA = sectionKeys.indexOf(a.section);
+                                                                                const rankB = sectionKeys.indexOf(b.section);
+                                                                                if (rankA !== rankB) return rankA - rankB;
+                                                                                return 0;
+                                                                            })
+                                                                            .map((it) => {
+                                                                                const { section: normSec, item: normItem } = getNormalizedLabel(brand, it.section, it.itemName);
+                                                                                return {
+                                                                                    section: normSec,
+                                                                                    itemLabel: normItem,
+                                                                                    status: it.status,
+                                                                                    remarks: it.remarks || it.caption || it.notes || '-',
+                                                                                    imageUrl: it.image_url || it.imageUrl || it.image_blob_name,
+                                                                                };
+                                                                            });
 
-                                                                            if (!map) return 0;
+                                                                        const counts = {};
+                                                                        sorted.forEach(r => { counts[r.section] = (counts[r.section] || 0) + 1; });
+                                                                        const emitted = {};
 
-                                                                            const sectionKeys = Object.keys(map.sections);
-                                                                            const rankA = sectionKeys.indexOf(a.section);
-                                                                            const rankB = sectionKeys.indexOf(b.section);
-
-                                                                            if (rankA !== rankB) {
-                                                                                return rankA - rankB;
-                                                                            }
-
-                                                                            return 0;
-                                                                        })
-                                                                        .map((item, index) => {
-                                                                            const brand = selectedLogDetails.brand;
-                                                                            const { section: normalizedSection, item: normalizedItem } =getNormalizedLabel(brand, item.section, item.itemName);
-                                                                            const { text: statusText, color: statusColor } = getStatusLabels(brand, item.status);
+                                                                        return sorted.map((row, idx) => {
+                                                                            const { text: statusText, color: statusColor } = getStatusLabels(brand, row.status);
+                                                                            const firstForSection = !emitted[row.section];
+                                                                            emitted[row.section] = (emitted[row.section] || 0) + 1;
 
                                                                             return (
-                                                                                <Table.Tr key={index}>
-                                                                                    <Table.Td>{normalizedSection}</Table.Td>
-                                                                                    <Table.Td>{normalizedItem}</Table.Td>
+                                                                                <Table.Tr key={idx}>
+                                                                                    {firstForSection && (
+                                                                                        <Table.Td rowSpan={counts[row.section]} style={{ textAlign: 'center', verticalAlign: 'middle', fontWeight: 600 }}>
+                                                                                            {row.section}
+                                                                                        </Table.Td>
+                                                                                    )}
+                                                                                    <Table.Td>{row.itemLabel}</Table.Td>
                                                                                     <Table.Td>
-                                                                                        <Text fw={700} c={statusColor}>
-                                                                                            {statusText}
-                                                                                        </Text>
+                                                                                        <Text fw={700} c={statusColor}>{statusText}</Text>
                                                                                     </Table.Td>
-                                                                                    <Table.Td>{item.remarks || item.caption || '-'}</Table.Td>
+                                                                                    <Table.Td>{row.remarks}</Table.Td>
                                                                                     <Table.Td>
-                                                                                        {item.image_url ? (
-                                                                                            <a href={item.image_url} target="_blank" rel="noopener noreferrer" style={{color: 'var(--mantine-color-blue-6)'}}>Picture</a>
+                                                                                        {row.imageUrl && String(row.imageUrl).startsWith('https://') ? (
+                                                                                            <Box style={{ width: '100px', height: '100px', overflow: 'hidden' }}>
+                                                                                                <img
+                                                                                                    src={row.imageUrl}
+                                                                                                    alt="Inspection"
+                                                                                                    style={{ width: '100%', height: 'auto', objectFit: 'cover' }}
+                                                                                                    onError={(e) => {
+                                                                                                        e.target.style.display = 'none';
+                                                                                                        e.target.parentElement.innerHTML = '<span style=\"color: red\">Image Failed to Load</span>';
+                                                                                                    }}
+                                                                                                />
+                                                                                            </Box>
                                                                                         ) : '-'}
                                                                                     </Table.Td>
                                                                                 </Table.Tr>
                                                                             );
-                                                                        })}
+                                                                        });
+                                                                    })()}
                                                                 </Table.Tbody>
                                                             </Table>
                                                         )}
@@ -939,7 +1081,7 @@ const LogData = ({ title, apiUrl }) => {
                                 <Table striped highlightOnHover withTableBorder withColumnBorders>
                                     <Table.Thead>
                                         <Table.Tr>
-                                            <Table.Th style={{ width: '50px' }}>#</Table.Th>
+                                            <Table.Th style={{ width: '50px' }}>No.</Table.Th>
                                             <Table.Th style={{ width: '50%' }}>Defect Description</Table.Th>
                                             <Table.Th>Remarks / Corrective Action</Table.Th>
                                         </Table.Tr>

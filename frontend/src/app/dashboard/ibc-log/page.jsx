@@ -4,7 +4,7 @@ import IBCLogData from '@/components/log/IBCLogData'; // Sesuaikan path jika ber
 export default function IBCLogPage() {
     return (
         <IBCLogData
-            title="IBC Log"
+            title="Indotraktor Business Case Log"
             apiUrl="http://localhost:5000/ibc/log/all"
         />
     );

@@ -1,9 +1,11 @@
 from flask import Blueprint, jsonify, request
+from app.controllers.auth_controller import jwt_required
 from app.controllers.accessories_controller import get_all_accesories, create_accesory 
 
 mst_accessories_bp = Blueprint('mst_accessories_bp', __name__, url_prefix='/api')
 
 @mst_accessories_bp.route('/mstAccesories', methods=['GET'])
+@jwt_required
 def get_all_accessories_route():
     """API Route to get all Accessories.Create new accessories data."""
     
@@ -11,6 +13,7 @@ def get_all_accessories_route():
     return jsonify(accessories_data), status_code
 
 @mst_accessories_bp.route('/mstAccesories', methods=['POST'])
+@jwt_required
 def create_accessory_route():
     """API Route to create new Accessories."""
 

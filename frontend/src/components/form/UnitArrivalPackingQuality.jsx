@@ -15,6 +15,7 @@ import {
     useMantineTheme,
     Select,
     Flex,
+    Loader,
 } from '@mantine/core';
 import { DateInput } from '@mantine/dates';
 import { useForm } from '@mantine/form';
@@ -29,6 +30,7 @@ export function ArrivingPackingQuality() {
     const [approvers, setApprovers] = useState([]);
     const [woNumbers, setWoNumbers] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [uploading, setUploading] = useState(false);
     
     useEffect(() => {
         const fetchData = async () => {
@@ -141,7 +143,7 @@ export function ArrivingPackingQuality() {
         "All the parts have been fixed properly after the entire wheel loader settled in the container. No breakage or looseness in the binding rope.",
         "Spare parts or documents have been placed properly in the container. No parts or documents damaged or lost.",
         "The container is in good condition, without damaging the container wall or floor, no oil leakage was found.",
-        "[Unit Assembly]: Unit has already assembled befor arrival check done",
+        "[Unit Assembly]: Unit has already assembled before arrival check done",
     ];
 
     const checkVinExists = async (vin) => {
@@ -174,6 +176,7 @@ export function ArrivingPackingQuality() {
 
     const handleSubmit = async (values) => {
         const token = localStorage.getItem('access_token');
+        setUploading(true);
         
         if (!token) {
             notifications.show({
@@ -247,8 +250,20 @@ export function ArrivingPackingQuality() {
                 message: `Error: ${errorMessage}`,
                 color: "red",
             });
+        
+        } finally {
+            setUploading(false);
         }
     };
+
+    if (loading) {
+        return (
+            <Box maw="100%" mx="auto" px="md" ta="center">
+                <Title order={1} mt="md" mb="lg">Loading Form Data...</Title>
+                <Loader size="lg" />
+            </Box>
+        );
+    }
 
     return (
         <Box maw="100%" mx="auto" px="md">
@@ -424,8 +439,14 @@ export function ArrivingPackingQuality() {
                         minRows={10}
                         {...form.getInputProps('remarks')}
                     />
-                    <Group justify="flex-end">
-                        <Button type="submit">Submit</Button>
+                    <Group justify="flex-end" mt="md">
+                        <Button 
+                            type="submit"
+                            loading={uploading}
+                            disabled={uploading}
+                        >
+                            {uploading ? 'Submitting...' : 'Submit'}
+                        </Button>
                     </Group>
                 </Card>
             </form>

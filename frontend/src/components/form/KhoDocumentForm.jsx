@@ -12,13 +12,19 @@ import {
     Title,
     Box,
     Select,
+    Loader,
+    Alert,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { Dropzone, MIME_TYPES } from "@mantine/dropzone";
 import { useForm } from '@mantine/form';
 import { rem } from "@mantine/core";
-import { IconUpload, IconFile, IconX, IconCalendar } from "@tabler/icons-react";
+import { IconUpload, IconFile, IconX, IconCalendar, IconRefresh } from "@tabler/icons-react";
 import { DateInput } from "@mantine/dates";
+import { PDFDocument } from 'pdf-lib';
+import apiClient from '@/libs/api';
+
+const MAX_FILE_SIZE = 2 * 1024 * 1024;
 
 export function KHODocumentUploadForm() {
     const [brands, setBrands] = useState([]);
@@ -26,6 +32,9 @@ export function KHODocumentUploadForm() {
     const [customers, setCustomers] = useState([]);
     const [provinces, setProvinces] = useState([]); 
     const [dealerCode, setDealerCode] = useState('');
+    const [loading, setLoading] = useState(true);
+    const [uploading, setUploading] = useState(false);
+    const [retryMode, setRetryMode] = useState(false);
 
     const form = useForm({
         initialValues: {
@@ -53,25 +62,30 @@ export function KHODocumentUploadForm() {
     useEffect(() => {
         const fetchData = async () => {
             try {
-                // Fetch data for brands
-                const brandResponse = await fetch(`http://127.0.0.1:5000/api/unit-types/brands`);
-                if (!brandResponse.ok) throw new Error(`HTTP error! status: ${brandResponse.status}`);
-                const brandData = await brandResponse.json();
-                const formattedBrands = brandData.map(item => ({ value: item.value, label: item.label }));
-                setBrands(formattedBrands);
+                const [
+                    brandRes,
+                    customerRes,
+                    provinceRes
+                ] = await Promise.all([
+                    apiClient.get('/unit-types/brands'),
+                    apiClient.get('/customers'),
+                    apiClient.get('/provinces')
+                ]);
+                setBrands(brandRes.data.map(item => ({ value: item.value, label: item.label })));
+                setCustomers(customerRes.data.map(item => ({ value: item.CustomerID, label: item.CustomerName })));
+                
+                const provinceObject = provinceRes.data;
 
-                // Fetch data for customers
-                const customerResponse = await fetch(`http://127.0.0.1:5000/api/customers`);
-                if (!customerResponse.ok) throw new Error(`HTTP error! status: ${customerResponse.status}`);
-                const customerData = await customerResponse.json();
-                const formattedCustomers = customerData.map(item => ({ value: item.CustomerID, label: item.CustomerName }));
-                setCustomers(formattedCustomers);
-
-                // Fetch data for provinces
-                const provincesResponse = await fetch("http://127.0.0.1:5000/api/provinces");
-                if (!provincesResponse.ok) throw new Error(`HTTP error! status: ${provincesResponse.status}`);
-                const provincesData = await provincesResponse.json();
-                setProvinces(provincesData);
+                if (typeof provinceObject === 'object' && provinceObject !== null) {
+                    const provinceArray = Object.keys(provinceObject).map((code) => ({
+                        value: code,
+                        label: provinceObject[code],
+                    }));
+                    setProvinces(provinceArray);
+                } else {
+                    console.log("Invalid provinces response:", provinceObject);
+                    setProvinces([]);
+                };
 
                 // delaer Code
                 setDealerCode([{ value: "30479-ITR", label: "30479 - PT. Indo Traktor Utama" }]);
@@ -83,6 +97,9 @@ export function KHODocumentUploadForm() {
                     message: "Failed to load initial data. Please try again!",
                     color: "red",
                 });
+
+            } finally {
+                setLoading(false);
             }
         };
         fetchData();
@@ -90,14 +107,13 @@ export function KHODocumentUploadForm() {
 
     useEffect(() => {
         const selectedBrand = form.values.brand;
+        
         if (selectedBrand) {
             const fetchModel = async () => {
                 try {
-                    const modelResponse = await fetch(`http://127.0.0.1:5000/api/unit-types/${selectedBrand}`);
-                    if (!modelResponse.ok) throw new Error(`HTTP error! status: ${modelResponse.status}`);
-                    const modelData = await modelResponse.json();
-                    const formattedModels = modelData.map(item => ({ value: item.value, label: item.label }));
-                    setUnitModels(formattedModels);
+                    const res = await apiClient.get(`/unit-types/${selectedBrand}`);
+                    setUnitModels(res.data.map(item => ({ value: item.value, label: item.label })));
+                
                 } catch (error) {
                     console.error("Failed to Fetch Unit Types:", error);
                     notifications.show({
@@ -108,6 +124,7 @@ export function KHODocumentUploadForm() {
                     setUnitModels([]);
                 }
             };
+
             fetchModel();
         } else {
             setUnitModels([]);
@@ -119,72 +136,57 @@ export function KHODocumentUploadForm() {
         form.setFieldValue('typeModel', null); 
     };
 
-    const handleSubmit = async (values) => {
-        const token = localStorage.getItem("access_token");
-        
-        if (!token) {
-            notifications.show({
-                title: "Authentication Error",
-                message: "Please log in again. Authentication token is missing.",
-                color: "red",
-            });
-            console.log("Authentication token is missing.");
-            return;
-        }
-
-        const formData = new FormData()
-
-        const unitInfoPayload = {
-            dealerCode: values.dealerCode,
-            customerName: values.customerName,
-            location: values.location,
-            brand: values.brand,
-            typeModel: values.typeModel,
-            vinNumber: values.vinNumber,
-            bastDate: values.bastDate,
-        };
-    
-        formData.append('unitInfo', JSON.stringify(unitInfoPayload));
-
-        if (values.pdfDocument) {
-            formData.append('pdfDocument', values.pdfDocument);
-        }
-
+    const compressPDF = async (file) => {
         try {
-            const response = await fetch(`http://127.0.0.1:5000/api/kho-document/submit`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                },
-                body: formData,
+            const arrayBuffer = await file.arrayBuffer();
+            const pdfDoc = await PDFDocument.load(arrayBuffer);
+            const compressedPdfBytes = await pdfDoc.save({
+                useObjectStreams: false,
+                addDefaultPage: false,
+                compress: true,
             });
 
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.message || "Failed to submit form");
+            const blob = new Blob([compressedPdfBytes], { type: 'application/pdf' });
+            const compressedFile = new File([blob], file.name, { type: 'application/pdf' });
+
+            if (compressedFile.size <= MAX_FILE_SIZE) {
+                return compressedFile;
+            
+            } else {
+                notifications.show({
+                    title: "Compression Warning",
+                    message: "File is still larger than 2MB after compression. Uploading anyway.",
+                    color: "yellow",
+                });
+                return compressedFile;
             }
 
-            const result = await response.json();
+        } catch (err) {
+            console.error("PDF compression failed:", err);
             notifications.show({
-                title: "Submission Successful!",
-                message: result.message || "Form Submitted Successfully.",
-                color: "green",
-            });
-            form.reset();
-
-        } catch (error) {
-            console.error('Error submitting form:', error);
-            notifications.show({
-                title: "Submission Error",
-                message: `Failed to submit form: ${error.message}`,
+                title: "Compression Failed",
+                message: "Could not compress PDF. Please use a smaller file.",
                 color: "red",
             });
+            return file
         }
     };
 
-    const handleDrop = (files) => {
-        if (files.length > 0) {
-            form.setFieldValue('pdfDocument', files[0]);
+    const handleDrop = async (files) => {
+        if (files.length === 0) return;
+
+        const file = files[0];
+
+        if (file.size > MAX_FILE_SIZE) {
+            notifications.show({
+                title: "File Too Large",
+                message: `File size exceeds 2MB. Compressing...`,
+                color: "yellow",
+            });
+            const compressed = await compressPDF(file);
+            form.setFieldValue('pdfDocument', compressed);
+        } else {
+            form.setFieldValue('pdfDocument', file);
         }
     };
 
@@ -196,6 +198,67 @@ export function KHODocumentUploadForm() {
         });
     };
 
+    const handleSubmit = async (values) => {
+        if (retryMode) {
+            setRetryMode(false);
+        }
+
+        const formData = new FormData();
+        const unitInfoPayload = {
+            dealerCode: values.dealerCode,
+            customerName: values.customerName,
+            location: values.location,
+            brand: values.brand,
+            typeModel: values.typeModel,
+            vinNumber: values.vinNumber,
+            bastDate: values.bastDate ? new Date(values.bastDate).toISOString().split('T')[0] : null,
+        };
+
+        formData.append('unitInfo', JSON.stringify(unitInfoPayload));
+        
+        if (values.pdfDocument) {
+            formData.append('pdfDocument', values.pdfDocument);
+        }
+
+        setUploading(true);
+        
+        try {
+            await apiClient.post('/kho-document/submit', formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data',
+                },
+            });
+
+            notifications.show({
+                title: "Submission Successful!",
+                message: "Form submitted successfully.",
+                color: "green",
+            });
+            form.reset();
+
+        } catch (error) {
+            console.error('Submission error:', error);
+            setRetryMode(true);
+            notifications.show({
+                title: "Submission Failed",
+                message: error.response?.data?.message || "An error occurred during submission.",
+                color: "red",
+            });
+
+        } finally {
+            setUploading(false);
+        }
+    };
+
+    if (loading) {
+        return (
+            <Box maw="100%" mx="auto" px="md" ta="center">
+                <Title order={1} mt="md" mb="lg">Loading Form Data...</Title>
+                <Loader size="lg" />
+            </Box>
+        );
+    }
+
     return (
         <Box maw="100%" mx="auto" px="md">
             <Title
@@ -203,8 +266,31 @@ export function KHODocumentUploadForm() {
                 mt="md"
                 mb="lg"
                 style={{ color: '#000000 !important' }}
-            > Key Hand Over Document Upload
+            > 
+                Key Hand Over Document Upload
             </Title>
+
+            {retryMode && (
+                <Alert
+                    color="red"
+                    title="Upload Failed"
+                    mb="md"
+                    withCloseButton
+                    onClose={() => setRetryMode(false)}
+                >
+                    <Group justify="space-between" align="center">
+                        <Text size="sm">Please check your connection and try again.</Text>
+                        <Button
+                            leftSection={<IconRefresh size={16} />}
+                            onClick={() => form.onSubmit(handleSubmit)()}
+                            size="xs"
+                            variant="light"
+                        >
+                            Retry
+                        </Button>
+                    </Group>
+                </Alert>
+            )}
 
             <form onSubmit={form.onSubmit(handleSubmit)}>
                 <Card shadow="sm" p="xl" withBorder mb="lg">
@@ -283,9 +369,10 @@ export function KHODocumentUploadForm() {
                         onDrop={handleDrop}
                         onReject={handleReject}
                         maxFiles={1}
+                        maxSize={MAX_FILE_SIZE}
                         accept={[MIME_TYPES.pdf]}
                         error={form.errors.pdfDocument}
-                        style={{ borderColor: form.errors.pdfDocument ? 'red' : undefined }}
+                        disabled={uploading}
                     >
                         <Group justify="center" gap="xs" style={{ minHeight: rem(80), pointerEvents: 'none' }}>
                             <Dropzone.Accept>
@@ -299,9 +386,11 @@ export function KHODocumentUploadForm() {
                             </Dropzone.Idle>
                             <Stack align="center" gap={4}>
                                 <Text size="xs" c="dimmed">
-                                    {form.values.pdfDocument ? form.values.pdfDocument.name : 'Drag and drop PDF here or click to select'}
+                                    {form.values.pdfDocument
+                                        ? form.values.pdfDocument.name
+                                        : 'Drag and drop PDF here or click to select'}
                                 </Text>
-                                <Text size="xs" c="dimmed">Accepted format: PDF</Text>
+                                <Text size="xs" c="dimmed">Accepted format: PDF (Max 2MB)</Text>
                             </Stack>
                         </Group>
                     </Dropzone>
@@ -313,7 +402,13 @@ export function KHODocumentUploadForm() {
                 </Card>
 
                 <Group justify="flex-end" mt="md">
-                    <Button type="submit">Submit</Button>
+                    <Button
+                        type="submit"
+                        loading={uploading}
+                        disabled={uploading}
+                    >
+                        {uploading ? 'Submitting...' : 'Submit'}
+                    </Button>
                 </Group>
             </form>
         </Box>

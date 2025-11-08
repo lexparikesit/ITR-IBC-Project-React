@@ -57,7 +57,7 @@ def create_app():
         origins=["http://localhost:3000"],
         supports_credentials=True,
         allow_headers=["Authorization", "Content-Type"],
-        methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+        methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]
     )
 
     # init extensions

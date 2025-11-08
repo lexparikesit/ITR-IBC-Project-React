@@ -15,13 +15,16 @@ import {
     Box,
     Select,
     Radio,
+    Loader,
 } from "@mantine/core";
 import { DateInput } from "@mantine/dates";
-import { IconCalendar, IconUpload, IconX, IconFile, IconPencil } from "@tabler/icons-react";
+import { IconCalendar, IconUpload, IconX, IconFile, IconPencil, IconRefresh } from "@tabler/icons-react";
 import { useForm } from '@mantine/form';
 import { notifications } from "@mantine/notifications";
 import { Dropzone, MIME_TYPES } from "@mantine/dropzone";
 import { rem } from "@mantine/core";
+import apiClient from "@/libs/api";
+import imageCompression from "browser-image-compression";
 
 const manitouPdiChecklistItemDefinition = {
     levels: [
@@ -73,25 +76,91 @@ const manitouPdiChecklistItemDefinition = {
     ],
 };
 
+const MAX_FILE_SIZE = 2 * 1024 * 1024;
+const MAX_ACCEPTED_SIZE = 5 * 1024 * 1024;
+const COMPRESS_OPTIONS = {
+    maxSizeMB: 1.8,
+    maxWidthOrHeight: 1920,
+    useWebWorker: true,
+    fileType: 'image/jpeg',
+}
+
 export function ManitouPDIForm() {
     const [unitModels, setUnitModels] = useState([]);
     const [WoNumbers, setWoNumbers] = useState([]);
     const [technicians, setTechnicians] = useState([]);
     const [approvers, setApprovers] = useState([]);
     const [customers, setCustomers] = useState([]);
-    const [dealerCode, setDealerCode] = useState('');
+    const [dealerCode, setDealerCode] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [uploading, setUploading] = useState(false);
+
+    const processImage = async (file, sectionKey, itemKey) => {
+        try {
+            if (file.size > MAX_ACCEPTED_SIZE) {
+                notifications.show({
+                    title: "File Too Large",
+                    message: "Maximum file size is 5MB. Please choose a smaller file.",
+                    color: "red",
+                });
+                return null;
+            }
+
+            let processedFile = file;
+
+            if (file.size > MAX_FILE_SIZE) {
+                notifications.show({
+                    title: "Optimizing Image",
+                    message: `Compressing ${file.name}...`,
+                    color: "blue",
+                    autoClose: false,
+                    id: `compress-${sectionKey}-${itemKey}`
+                });
+
+                processedFile = await imageCompression(file, COMPRESS_OPTIONS);
+
+                if (processedFile.size > MAX_FILE_SIZE) {
+                    notifications.update({
+                        id: `compress-${sectionKey}-${itemKey}`,
+                        title: "Compression Failed",
+                        message: "Unable to compress below 2MB. Please choose a different image.",
+                        color: "red",
+                        autoClose: 5000
+                    });
+                    return null;
+                }
+
+                notifications.update({
+                    id: `compress-${sectionKey}-${itemKey}`,
+                    title: "Image Optimized",
+                    message: `Compressed to ${(processedFile.size / 1024 / 1024).toFixed(2)} MB`,
+                    color: "green",
+                    autoClose: 3000
+                });
+            }
+            return processedFile;
+        
+        } catch (error) {
+            console.error("Image processing error:", error);
+            notifications.show({
+                title: "Processing Error",
+                message: "Failed to process image. Please try again.",
+                color: "red",
+            });
+            return null;
+        }
+    };
 
     const generateChecklistValidation = () => {
         let validationRules = {};
         Object.keys(manitouPdiChecklistItemDefinition).forEach(sectionKey => {
             manitouPdiChecklistItemDefinition[sectionKey].forEach(item => {
                 const itemKey = item.itemKey;
+                // Require a status selection
                 validationRules[`checklistItems.${sectionKey}.${itemKey}.value`] = (value) => (
                     value ? null : 'This Field is Required!'
                 );
-                validationRules[`checklistItems.${sectionKey}.${itemKey}.image`] = (value) => (
-                    value ? null : 'An Image is Required for This Item!'
-                );
+                // Do not require image here; enforce conditionally in UI and submit
             });
         });
         return validationRules;
@@ -99,34 +168,30 @@ export function ManitouPDIForm() {
 
     const form = useForm({
         initialValues: (() => {
-            const initialChecklist = {};
-            Object.keys(manitouPdiChecklistItemDefinition).forEach(sectionKey => {
-                initialChecklist[sectionKey] = {};
-                manitouPdiChecklistItemDefinition[sectionKey].forEach(item => {
-                    initialChecklist[sectionKey][item.itemKey] = {
-                        value: '', // Status: Good, Bad, Missing
-                        notes: '', // Caption
-                        image: null, // Image File
-                    };
-                });
-            });
-
-            return {
+            const initialManitouValues = {
+                //woNumber: null
+                woNumber: "",
                 dealerCode: null,
                 machineType: null,
-                serialNumber: '',
+                serialNumber: "",
                 deliveryDate: null,
                 checkingDate: null,
-                HourMeter: '',
+                HourMeter: "",
                 inspectorSignature: null,
                 approvalBy: null,
                 customer: null,
-                //woNumber: null,
-                woNumber: '',
-                deliveryRemarks: '',
-                generalRemarks: '',
-                checklistItems: initialChecklist,
+                deliveryRemarks: "",
+                generalRemarks: "",
             };
+
+            initialManitouValues.checklistItems = {};
+            Object.keys(manitouPdiChecklistItemDefinition).forEach(sectionKey => {
+                initialManitouValues.checklistItems[sectionKey] = {};
+                manitouPdiChecklistItemDefinition[sectionKey].forEach(item => {
+                    initialManitouValues.checklistItems[sectionKey][item.itemKey] = { value: "", image: null, notes: "" };
+                });
+            });
+            return initialManitouValues;
         })(),
 
         validate: {
@@ -140,7 +205,7 @@ export function ManitouPDIForm() {
             approvalBy: (value) => (value ? null : "Approval By is Required!"),
             customer: (value) => (value ? null : "Customer is Required!"),
             woNumber: (value) => (value ? null : "WO Number is Required!"),
-            // ...generateChecklistValidation(),
+            ...generateChecklistValidation(),
         },
     });
 
@@ -149,55 +214,31 @@ export function ManitouPDIForm() {
             try {
                 const brandId = "MA"; // 'MA' for Manitou
                 const groupId = "DPDPI"; // 'DPDPI' for PDI
+                const [
+                    modelRes,
+                    woRes,
+                    techRes,
+                    customerRes,
+                    supervisorRes,
+                    techHeadRes,
+                ] = await Promise.all([
+                    apiClient.get(`/unit-types/${brandId}`),
+                    apiClient.get(`/work-orders?brand_id=${brandId}&group_id=${groupId}`),
+                    apiClient.get("/users/by-role/Technician"),
+                    apiClient.get("/customers"),
+                    apiClient.get("/users/by-role/Supervisor"),
+                    apiClient.get("/users/by-role/Technical Head"),
+                ])
 
-                // model/ Type MA API
-                const modelResponse = await fetch(`http://127.0.0.1:5000/api/unit-types/${brandId}`);
-                if (!modelResponse.ok) throw new Error(`HTTP error! status: ${modelResponse.status}`);
-                const modelData = await modelResponse.json();
-                const formattedModels = modelData
-                    .filter(item => item.value !== null && item.value !== undefined && item.label !== null && item.label !== undefined)
-                    .map(item => ({
-                        value: item.value,
-                        label: item.label
-                    }));
-                setUnitModels(formattedModels);
-
-                // wo Number API
-                const woResponse = await fetch(`http://127.0.0.1:5000/api/work-orders?brand_id=${brandId}&group_id=${groupId}`);
-                if (!woResponse.ok) throw new Error(`HTTP error! status: ${woResponse.status}`);
-                const woData = await woResponse.json();
-                const formattedWoData = woData.map(wo => ({
-                    value: wo.WONumber,
-                    label: wo.WONumber
-                }));
-                setWoNumbers(formattedWoData);
-
-                // customers API
-                const customerResponse = await fetch(`http://127.0.0.1:5000/api/customers`);
-                if (!customerResponse.ok) throw new Error(`HTTP error! status: ${customerResponse.status}`);
-                const customerData = await customerResponse.json();
-                const formattedCustomers = customerData.map(customer => ({
-                    value: customer.CustomerID,
-                    label: customer.CustomerName
-                }));
-                setCustomers(formattedCustomers);
-
-                // dummy Technicians API
-                const dummyTechnicians = [
-                    { value: "tech1", label: "John Doe" },
-                    { value: "tech2", label: "Jane Smith" },
-                    { value: "tech3", label: "Peter Jones" }
-                ];
-                setTechnicians(dummyTechnicians);
-
-                // dummy Approvers API
-                const dummyApprover = [
-                    { value: "app1", label: "Alice Brown" },
-                    { value: "app2", label: "Bob White" },
-                    { value: "app3", label: "John Green" }
-                ];
-                setApprovers(dummyApprover);
-
+                setUnitModels(modelRes.data);
+                setWoNumbers(woRes.data.map(wo => ({ value: wo.WONumber, label: wo.WONumber })));
+                setTechnicians(techRes.data);
+                setCustomers(customerRes.data.map((customer => ({ value: customer.CustomerID, label: customer.CustomerName }))));
+                setApprovers([
+                    ...supervisorRes.data,
+                    ...techHeadRes.data,
+                ]);
+                
                 // delaer Code
                 setDealerCode([{ value: "30479", label: "30479" }]);
 
@@ -208,12 +249,32 @@ export function ManitouPDIForm() {
                     message: "Failed to load form data. Please try again!",
                     color: "red",
                 });
+            
+            } finally {
+                setLoading(false);
             }
         };
         fetchData();
     }, []);
 
+    const retryUpload = async (sectionKey, itemKey) => {
+        const currentFile = form.values.checklistItems[sectionKey]?.[itemKey]?.image;
+        if (!currentFile) return;
+
+        setUploading(true);
+        try {
+            const processedFile = await processImage(currentFile, sectionKey, itemKey);
+            if (processedFile) {
+                form.setFieldValue(`checklistItems.${sectionKey}.${itemKey}.image`, processedFile);
+            }
+        } finally {
+            setUploading(false);
+        }
+    }
+
     const handleSubmit = async (values) => {
+        setUploading(true);
+
         const token = localStorage.getItem('access_token');
         if (!token) {
             notifications.show({
@@ -221,17 +282,21 @@ export function ManitouPDIForm() {
                 message: "Please log in again. Authentication token is missing.",
                 color: "red",
             });
+            setUploading(false);
             return;
         }
 
-        const formData = new FormData();
+        // Build checklist items payload first
         const checklistItemsPayload = {};
+        const formData = new FormData();
+        let missingPhotos = [];
 
         Object.keys(manitouPdiChecklistItemDefinition).forEach(sectionKey => {
             const items = manitouPdiChecklistItemDefinition[sectionKey];
+
             items.forEach(item => {
                 const itemData = values.checklistItems[sectionKey]?.[item.itemKey];
-                
+
                 if (itemData && itemData.value) {
                     if (!checklistItemsPayload[sectionKey]) {
                         checklistItemsPayload[sectionKey] = {};
@@ -241,13 +306,27 @@ export function ManitouPDIForm() {
                         notes: itemData.notes || "",
                     };
 
+                    // Only require image for Bad/Missing statuses, and include if present
                     if (itemData.image) {
-                        const imageKey = `${sectionKey}.${item.itemKey}.image`;
+                        const imageKey = `image-${sectionKey}-${item.itemKey}`;
                         formData.append(imageKey, itemData.image);
+                    } else if (itemData.value === 'Bad' || itemData.value === 'Missing') {
+                        // image mandatory only for Bad/Missing per backend
+                        missingPhotos.push(`${sectionKey} - ${item.itemKey}`);
                     }
                 }
             });
         });
+
+        if (missingPhotos.length > 0) {
+            notifications.show({
+                title: "Missing Photos",
+                message: `Please upload photos for: ${missingPhotos.join(', ')}`,
+                color: "red",
+            });
+            setUploading(false);
+            return;
+        }
 
         const payload = {
             brand: 'manitou',
@@ -268,37 +347,34 @@ export function ManitouPDIForm() {
             checklistItems: checklistItemsPayload,
         };
 
+        console.log("Payload to Backend: ", payload);
         formData.append('data', JSON.stringify(payload));
 
         try {
-            const response = await fetch(`http://localhost:5000/api/pre-delivery-inspection/manitou/submit`, {
-                method: 'POST',
+            const response = await apiClient.post(`/pre-delivery-inspection/manitou/submit`, formData, {
                 headers: {
-                    'Authorization': `Bearer ${token}`
+                    'Content-Type': 'multipart/form-data'
                 },
-                body: formData,
-            });
+            })
 
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.message || "Failed to submit Manitou Pre-Delivery Inspection");
-            }
-
-            const result = await response.json();
             notifications.show({
                 title: "Submission Successful!",
-                message: result.message || "Form Submitted Successfully.",
+                message: "Form Submitted Successfully.",
                 color: "green",
             })
             form.reset();
 
         } catch (error) {
             console.error('Error submitting form:', error);
+            const errorMessage = error.response?.data?.message || error.message || "Failed to submit checklist";
             notifications.show({
                 title: "Submission Error",
-                message: `Failed to submit form: ${error.message}`,
+                message: `Error: ${errorMessage}`,
                 color: "red",
             });
+        
+        } finally {
+            setUploading(false);
         }
     };
 
@@ -317,7 +393,15 @@ export function ManitouPDIForm() {
 
                     <Radio.Group
                         value={itemData?.value || ''}
-                        onChange={(statusValue) => form.setFieldValue(`${path}.value`, statusValue)}
+                        onChange={(statusValue) => {
+                            form.setFieldValue(`${path}.value`, statusValue);
+                            const img = form.values.checklistItems[sectionKey]?.[itemKey]?.image;
+                            if ((statusValue === 'Bad' || statusValue === 'Missing') && !img) {
+                                form.setFieldError(`${path}.image`, 'Photo is required for Bad/Missing');
+                            } else {
+                                form.clearFieldError(`${path}.image`);
+                            }
+                        }}
                         orientation="horizontal"
                         error={form.errors[`${path}.value`]}
                         spacing="xl"
@@ -330,9 +414,13 @@ export function ManitouPDIForm() {
                     </Radio.Group>
                     
                     <Dropzone
-                        onDrop={(files) => {
+                        onDrop={async (files) => {
                             if (files.length > 0) {
-                                form.setFieldValue(`${path}.image`, files[0]);
+                                const processedFile = await processImage(files[0], sectionKey, itemKey);
+                                if (processedFile) {
+                                    form.setFieldValue(`${path}.image`, processedFile);
+                                    form.clearFieldError(`${path}.image`);
+                                }
                             }
                         }}
                         onReject={(files) => {
@@ -343,24 +431,41 @@ export function ManitouPDIForm() {
                             });
                         }}
                         maxFiles={1}
+                        maxSize={MAX_ACCEPTED_SIZE}
                         accept={[MIME_TYPES.jpeg, MIME_TYPES.png]}
-                        mt="xs"
                         error={imageError}
-                        style={{ borderColor: imageError ? 'red' : undefined }}
                     >
                         <Group justify="center" gap="xs" style={{ minHeight: rem(80), pointerEvents: 'none' }}>
                             <Dropzone.Accept>
-                                <IconUpload style={{ width: rem(40), height: rem(40), color: 'var(--mantine-color-blue-6)' }} stroke={1.5} />
+                                <IconUpload
+                                    style={{ width: rem(30), height: rem(30) }}
+                                    stroke={1.5}
+                                />
                             </Dropzone.Accept>
                             <Dropzone.Reject>
-                                <IconX style={{ width: rem(40), height: rem(40), color: 'var(--mantine-color-red-6)' }} stroke={1.5} />
+                                <IconX
+                                    style={{ width: rem(30), height: rem(30) }}
+                                    stroke={1.5}
+                                />
                             </Dropzone.Reject>
                             <Dropzone.Idle>
-                                <IconFile style={{ width: rem(40), height: rem(40), color: 'var(--mantine-color-dimmed)' }} stroke={1.5} />
+                                <IconFile
+                                    style={{ width: rem(30), height: rem(30) }}
+                                    stroke={1.5}
+                                />
                             </Dropzone.Idle>
                             <Stack align="center" gap={4}>
-                                <Text size="xs" c="dimmed"> {hasImage ? itemData.image.name : 'Drag and drop an image here or click to select'} </Text>
-                                <Text size="xs" c="dimmed"> Accepted formats: JPG, PNG </Text>
+                                <Text size="xs" c="dimmed"> 
+                                    {itemData.image ? itemData.image.name : 'Drag and drop an image here or click to select'} 
+                                </Text>
+                                <Text size="xs" c="dimmed"> 
+                                    JPG/PNG, max 5MB (will be compressed to ≤2MB)
+                                </Text>
+                                {itemData.image && (
+                                    <Text size="xs" c="green">
+                                        {(itemData.image.size / 1024 / 1024).toFixed(2)} MB
+                                    </Text>
+                                )}
                             </Stack>
                         </Group>
                     </Dropzone>
@@ -369,13 +474,27 @@ export function ManitouPDIForm() {
                             {imageError}
                         </Text>
                     )}
+                    
+                    {itemData.image && (
+                        <Group justify="flex-end">
+                            <Button
+                                variant="subtle"
+                                size="xs"
+                                onClick={() => retryUpload(sectionKey, itemKey)}
+                                loading={uploading}
+                                leftSection={<IconRefresh size={14} />}
+                            >
+                                Retry Upload
+                            </Button>
+                        </Group>
+                    )}
+
                     <TextInput
                         placeholder="Add Image Caption"
                         mt="xs"
                         value={itemData?.notes || ''}
                         leftSection={<IconPencil size={20}/>}
                         onChange={(event) => form.setFieldValue(`${path}.notes`, event.target.value)}
-                        error={notesError}
                     />
                 </Stack>
             </Grid.Col>
@@ -398,6 +517,15 @@ export function ManitouPDIForm() {
             </Card>
         );
     };
+
+    if (loading) {
+        return (
+            <Box maw="100%" mx="auto" px="md" ta="center">
+                <Title order={1} mt="md" mb="lg">Loading Form Data...</Title>
+                <Loader size="lg" />
+            </Box>
+        );
+    }
     
     return (
         <Box maw="100%" mx="auto" px="md">
@@ -406,7 +534,8 @@ export function ManitouPDIForm() {
                 mt="md"
                 mb="lg"
                 style={{ color: '#000000 !important' }}
-            > Pre Delivery Inspection Form
+            > 
+                Pre Delivery Inspection Form
             </Title>
 
             <form onSubmit={form.onSubmit(handleSubmit)}>
@@ -553,8 +682,15 @@ export function ManitouPDIForm() {
                     mb="xl"
                     {...form.getInputProps('generalRemarks')}
                 />
+                
                 <Group justify="flex-end" mt="md">
-                    <Button type="submit">Submit</Button>
+                    <Button 
+                        type="submit"
+                        loading={uploading}
+                        disabled={uploading}
+                    >
+                        {uploading ? 'Submitting...' : 'Submit'}
+                    </Button>
                 </Group>
             </form>
         </Box>

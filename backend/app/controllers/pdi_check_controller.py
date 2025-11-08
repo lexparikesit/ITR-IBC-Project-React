@@ -1,6 +1,6 @@
 import os
 import uuid
-from flask import json, jsonify, request, g
+from flask import json, jsonify, request, current_app, g
 from app import db
 from app.models.manitou_pdi_form import PDIFormModel_MA
 from app.models.manitou_pdi_items import PDIChecklistItemModel_MA
@@ -10,15 +10,16 @@ from app.models.sdlg_pdi_form import PDIFormModel_Sdlg, PDI_sdlg_defect_remarks
 from app.models.sdlg_pdi_items import PDIChecklistItemModel_SDLG
 from app.controllers.auth_controller import jwt_required
 from app.controllers.province_controller import get_province_name_by_code
+from app.utils.gcs_utils import upload_pdi_file, get_bucket, get_folder_prefix, upload_blob_with_bucket
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
-# from google.cloud import Storage
 
-# configuartion of GCS Environment
-# GCS_Bucket_Name = os.environ.get('GCS_BUCKET_NAME')
-# CDN_BASE_URL = os.environ.get('CDN_BASE_URL', 'https://cdn.example.com')
-
-# initiate GCS Client
-# storage_client = storage.Client()
+# mapping for brand Models
+BRAND_MODELS = {
+    'manitou': PDIFormModel_MA,
+    'renault': PDIFormModel_RT,
+    'sdlg': PDIFormModel_Sdlg,
+}
 
 def parse_date(date_string):
     """handle date parsing"""
@@ -65,13 +66,6 @@ def converted_renault_status_to_int(status):
             return 0
     return None
 
-# mapping for brand Models
-BRAND_MODELS = {
-    'manitou': PDIFormModel_MA,
-    'renault': PDIFormModel_RT,
-    'sdlg': PDIFormModel_Sdlg,
-}
-
 @jwt_required
 def submit_pdi_form(brand):
     """Handles form submissions for Commissioning for various brands."""
@@ -88,7 +82,7 @@ def submit_pdi_form(brand):
             return jsonify({"error": "Invalid JSON data in 'data' part"}), 400
     
         uploaded_files = request.files
-        print(f"DEBUG: Files received: {list(uploaded_files.keys())}")
+        current_app.logger.debug(f"PDI upload: Files received: {list(uploaded_files.keys())}")
 
     else:
         data = request.get_json()
@@ -131,25 +125,123 @@ def submit_pdi_form(brand):
             db.session.add(pdi_entry)
             db.session.flush()
 
+            missing_photos = []
+
+            # Prepare GCS context and containers
+            user_id = str(g.user_id)
+            brand_lower = brand.lower()
+            bucket = get_bucket()
+            folder_prefix = get_folder_prefix('pdi', brand_lower, user_id)
+
+            pending_uploads = {}
+            item_records = []  # collect items for bulk insert after uploads
+
             for section_key, items in checklist_item_payloads.items():
                 if isinstance(items, dict):
                     for item_key, item_details in items.items():
                         if isinstance(item_details, dict):
-                            image_url = None # will None as long as GCS/ CDN is commenting
+                            status = item_details.get('status')
+                            primary_key = f"image-{section_key}-{item_key}"
+                            alt_key = f"{section_key}.{item_key}.image"
+                            file = uploaded_files.get(primary_key) or uploaded_files.get(alt_key)
 
-                            new_item = PDIChecklistItemModel_MA(
-                                pdiID = pdi_entry.pdiID,
-                                section = section_key,
-                                itemName = item_key,
-                                status = converted_manitou_status_to_int(item_details.get('status')),
-                                image_url = image_url,
-                                caption = item_details.get('notes')
-                            )
-                            db.session.add(new_item)
+                            if status in ['Bad', 'Missing']:
+                                if not file or not getattr(file, 'filename', None):
+                                    missing_photos.append(f"{section_key} - {item_key}")
+                            
+                            caption = item_details.get('notes')
 
-            # Commit all changes to the database at once
+                            # Validate and schedule upload if file provided
+                            future = None
+                            if file and getattr(file, 'filename', None):
+                                file.seek(0, 2)
+                                file_size = file.tell()
+                                file.seek(0)
+
+                                if file_size > 2 * 1024 * 1024:
+                                    db.session.rollback()
+                                    return jsonify({
+                                        'message': f'File {section_key} - {item_key} exceeds 2MB limit'
+                                    }), 400
+
+                                allowed_types = {'image/jpeg', 'image/png', 'image/jpg'}
+                                if file.content_type not in allowed_types:
+                                    db.session.rollback()
+                                    return jsonify({
+                                        'message': f'Invalid file type for {section_key} - {item_key}. Only JPG/PNG allowed.'
+                                    }), 400
+
+                                # Defer upload to threadpool
+                                pending_key = (section_key, item_key)
+                                pending_uploads[pending_key] = file
+
+                            # Record base item; image to be attached after uploads
+                            item_records.append({
+                                'section': section_key,
+                                'itemName': item_key,
+                                'status': converted_manitou_status_to_int(item_details.get('status')),
+                                'caption': caption,
+                                'image_blob_name': None,
+                            })
+
+            # If required photos are missing, abort early
+            if missing_photos:
+                db.session.rollback()
+                return jsonify({
+                    'message': 'Photos are required for items with "Bad" or "Missing" status',
+                    'missing_items': missing_photos
+                }), 400
+
+            # Execute uploads in parallel
+            if pending_uploads:
+                max_workers = min(8, len(pending_uploads))
+                future_map = {}
+                with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                    for key, file in pending_uploads.items():
+                        future = executor.submit(upload_blob_with_bucket, file, bucket, folder_prefix)
+                        future_map[future] = key
+
+                    # Collect results
+                    upload_errors = []
+                    results = {}
+                    for future in as_completed(future_map):
+                        sec_key, item_key = future_map[future]
+                        try:
+                            blob_name = future.result()
+                            if not blob_name:
+                                upload_errors.append(f"{sec_key} - {item_key}")
+                            else:
+                                results[(sec_key, item_key)] = blob_name
+                        except Exception as e:
+                            current_app.logger.error(f"Async upload failed for {sec_key} - {item_key}: {str(e)}")
+                            upload_errors.append(f"{sec_key} - {item_key}")
+
+                if upload_errors:
+                    db.session.rollback()
+                    return jsonify({
+                        'message': 'Failed to upload some photos',
+                        'failed_items': upload_errors
+                    }), 500
+
+                # Attach uploaded blob names to corresponding records
+                for rec in item_records:
+                    key = (rec['section'], rec['itemName'])
+                    if key in results:
+                        rec['image_blob_name'] = results[key]
+
+            # Bulk insert all items
+            db.session.add_all([
+                PDIChecklistItemModel_MA(
+                    pdiID=pdi_entry.pdiID,
+                    section=rec['section'],
+                    itemName=rec['itemName'],
+                    status=rec['status'],
+                    image_blob_name=rec['image_blob_name'],
+                    caption=rec['caption'],
+                ) for rec in item_records
+            ])
+                            
             db.session.commit()
-
             return jsonify({
                 'message': 'Manitou Pre Delivery Inspection Form submitted successfully!',
                 'id': str(pdi_entry.pdiID)
@@ -184,34 +276,133 @@ def submit_pdi_form(brand):
             db.session.add(pdi_entry)
             db.session.flush()
 
+            # Prepare parallel upload context
+            missing_photos = []
+            user_id = str(g.user_id)
+            brand_lower = brand.lower()
+            bucket = get_bucket()
+            folder_prefix = get_folder_prefix('pdi', brand_lower, user_id)
+
+            pending_uploads = {}
+            item_records = []
+
             for section_key, items in checklist_item_payloads.items():
                 if isinstance(items, dict):
                     for item_key, item_details in items.items():
                         if isinstance(item_details, dict):
-                            image_url = None 
-                            item_status = converted_renault_status_to_int(item_details.get('value'))
-                            new_item = PDIChecklistItemModel_RT(
-                                pdiID = pdi_entry.pdiID,
-                                section = section_key,
-                                itemName = item_key,
-                                status = item_status,
-                                value = None,
-                                image_url = image_url,
-                                caption = item_details.get('notes'),
-                            )
-                            db.session.add(new_item)
+                            status = item_details.get("value")
+                            primary_key = f"image-{section_key}-{item_key}"
+                            alt_key = f"{section_key}.{item_key}.image"
+                            file = uploaded_files.get(primary_key) or uploaded_files.get(alt_key)
+
+                            # Require photos for specific statuses
+                            if status in ["checked", "recommended_repair", "immediately_repair"]:
+                                if not file or not getattr(file, 'filename', None):
+                                    missing_photos.append(f"{section_key} - {item_key}")
+
+                            caption = item_details.get('notes')
+
+                            # Validate and schedule upload if file present
+                            if file and getattr(file, 'filename', None):
+                                file.seek(0, 2)
+                                file_size = file.tell()
+                                file.seek(0)
+
+                                if file_size > 2 * 1024 * 1024:
+                                    db.session.rollback()
+                                    return jsonify({
+                                        'message': f'File {section_key} - {item_key} exceeds 2MB limit'
+                                    }), 400
+
+                                allowed_types = {'image/jpeg', 'image/png', 'image/jpg'}
+                                if file.content_type not in allowed_types:
+                                    db.session.rollback()
+                                    return jsonify({
+                                        'message': f'Invalid file type for {section_key} - {item_key}. Only JPG/PNG allowed.'
+                                    }), 400
+
+                                pending_uploads[(section_key, item_key)] = file
+
+                            # Record base data; set image later
+                            item_records.append({
+                                'section': section_key,
+                                'itemName': item_key,
+                                'status': converted_renault_status_to_int(status),
+                                'caption': caption,
+                                'image_blob_name': None,
+                                'value': None,
+                            })
+
+            # Early exit if required photos are missing
+            if missing_photos:
+                db.session.rollback()
+                return jsonify({
+                    'message': 'Photos are required for items with "Checked", "Repair Recommended" or "Repair Immediately" status',
+                    'missing_items': missing_photos
+                }), 400
+
+            # Execute uploads in parallel
+            if pending_uploads:
+                max_workers = min(8, len(pending_uploads))
+                future_map = {}
+                with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                    for key, file in pending_uploads.items():
+                        future = executor.submit(upload_blob_with_bucket, file, bucket, folder_prefix)
+                        future_map[future] = key
+
+                    upload_errors = []
+                    results = {}
+                    for future in as_completed(future_map):
+                        sec_key, item_key = future_map[future]
+                        try:
+                            blob_name = future.result()
+                            if not blob_name:
+                                upload_errors.append(f"{sec_key} - {item_key}")
+                            else:
+                                results[(sec_key, item_key)] = blob_name
+                        except Exception as e:
+                            current_app.logger.error(f"Async upload failed for {sec_key} - {item_key}: {str(e)}")
+                            upload_errors.append(f"{sec_key} - {item_key}")
+
+                if upload_errors:
+                    db.session.rollback()
+                    return jsonify({
+                        'message': 'Failed to upload some photos',
+                        'failed_items': upload_errors
+                    }), 500
+
+                # Attach results to records
+                for rec in item_records:
+                    key = (rec['section'], rec['itemName'])
+                    if key in results:
+                        rec['image_blob_name'] = results[key]
+
+            # Bulk insert checklist items
+            db.session.add_all([
+                PDIChecklistItemModel_RT(
+                    pdiID=pdi_entry.pdiID,
+                    section=rec['section'],
+                    itemName=rec['itemName'],
+                    status=rec['status'],
+                    value=rec['value'],
+                    image_blob_name=rec['image_blob_name'],
+                    caption=rec['caption'],
+                ) for rec in item_records
+            ])
             
-            for key, data_value in battery_status_data.items():
-                new_item = PDIChecklistItemModel_RT(
-                    pdiID = pdi_entry.pdiID,
-                    section = 'battery_status',
-                    itemName = key,
-                    value = data_value,
-                    status = None,
-                    image_url = None,
-                    caption = None 
-                )
-                db.session.add(new_item)
+            # Bulk insert battery status rows
+            if isinstance(battery_status_data, dict) and battery_status_data:
+                db.session.add_all([
+                    PDIChecklistItemModel_RT(
+                        pdiID=pdi_entry.pdiID,
+                        section='battery_status',
+                        itemName=key,
+                        value=data_value,
+                        status=None,
+                        image_blob_name=None,
+                        caption=None,
+                    ) for key, data_value in battery_status_data.items()
+                ])
             
             # Commit all changes to the database at once
             db.session.commit()

@@ -1,4 +1,5 @@
 from marshmallow import Schema, fields, post_dump
+from app.utils.gcs_utils import generate_signed_url
 
 class StorageMaintenanceChecklistItemSchema_MA(Schema):
 
@@ -6,7 +7,16 @@ class StorageMaintenanceChecklistItemSchema_MA(Schema):
     section = fields.Str()
     itemName = fields.Str()
     status = fields.Int()
-    image_url = fields.Str()
+    caption = fields.Str(allow_none=True)
+    image_blob_name = fields.Str()
+    image_url = fields.Method("get_signed_url", allow_none=True)
+
+    def get_signed_url(self, obj):
+        """Generate signed URL from image_blob_name"""
+
+        if obj.image_blob_name:
+            return generate_signed_url(obj.image_blob_name, expiration_hours=24)
+        return None
 
 class StorageMaintenanceChecklistItemSchema_RT(Schema):
 
@@ -14,10 +24,18 @@ class StorageMaintenanceChecklistItemSchema_RT(Schema):
     section = fields.Str()
     itemName = fields.Str()
     status = fields.Int()
-    image_url = fields.Str()
     value = fields.Str()
     code = fields.Str()
     caption = fields.Str()
+    image_blob_name = fields.Str(allow_none=True)
+    image_url = fields.Method("get_signed_url", allow_none=True)
+
+    def get_signed_url(self, obj):
+        """Generate signed URL from image_blob_name"""
+        
+        if obj.image_blob_name:
+            return generate_signed_url(obj.image_blob_name, expiration_hours=24)
+        return None
 
 class StorageMaintenanceChecklistItemSchema_SDLG(Schema):
 

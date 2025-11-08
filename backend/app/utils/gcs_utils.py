@@ -11,6 +11,24 @@ GCS_BUCKET_NAME = os.environ.get('GCS_BUCKET_NAME', '')
 if not GCS_BUCKET_NAME:
     raise ValueError("GCS_BUCKET_NAME environment variable not set")
 
+# Cached client/bucket for reuse across uploads
+_storage_client = None
+_bucket = None
+
+def get_storage_client():
+    global _storage_client
+    if _storage_client is None:
+        _storage_client = storage.Client()
+    return _storage_client
+
+def get_bucket():
+    """Return a cached GCS bucket instance."""
+    global _bucket
+    if _bucket is None:
+        client = get_storage_client()
+        _bucket = client.bucket(GCS_BUCKET_NAME)
+    return _bucket
+
 # Mapping Form type to folder structure
 FOLDER_MAP = {
     'arrival_check': 'arrival-check',
@@ -52,9 +70,8 @@ def upload_file_to_gcs_sync(file, folder_prefix):
         return None
     
     try:
-        # initiate GCS Client
-        storage_client = storage.Client()
-        bucket = storage_client.bucket(GCS_BUCKET_NAME)
+        # reuse cached bucket
+        bucket = get_bucket()
 
         # generate Unique filename
         safe_filename = file.filename.replace(' ', '_').replace('/', '_')
@@ -117,6 +134,40 @@ def upload_file_to_gcs(file, folder_prefix, async_upload=False, callback=None):
         return None
     else:
         return upload_file_to_gcs_sync(file, folder_prefix)
+
+def upload_blob_with_bucket(file, bucket, folder_prefix):
+    """Upload using a provided bucket (avoids re-creating client per file).
+
+    Args:
+        file: FileStorage object
+        bucket: google.cloud.storage.bucket.Bucket
+        folder_prefix (str): folder prefix
+
+    Returns:
+        str or None: blob name
+    """
+    if not file or not hasattr(file, 'filename'):
+        try:
+            current_app.logger.warning("Invalid file Object provided for GCS upload")
+        except Exception:
+            pass
+        return None
+    try:
+        safe_filename = file.filename.replace(' ', '_').replace('/', '_')
+        filename = f"{folder_prefix}/{uuid.uuid4()}_{safe_filename}"
+        blob = bucket.blob(filename)
+        blob.upload_from_file(file, content_type=file.content_type)
+        try:
+            current_app.logger.info(f"Successfully uploaded file to GCS: {filename}")
+        except Exception:
+            pass
+        return filename
+    except Exception as e:
+        try:
+            current_app.logger.error(f"Failed to upload file to GCS (with bucket): {str(e)}")
+        except Exception:
+            pass
+        return None
 
 def generate_signed_url(blob_name, expiration_hours=1):
     """Generate signed URL for secure file access.

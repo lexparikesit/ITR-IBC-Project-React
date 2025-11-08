@@ -15,18 +15,22 @@ import {
     Grid,
     Select,
     Card,
+    Loader,
 } from '@mantine/core';
 import { DateInput } from '@mantine/dates';
 import { useForm } from '@mantine/form';
 import { notifications } from '@mantine/notifications';
 import { IconCalendar } from "@tabler/icons-react";
 import { IconPlus, IconTrash } from '@tabler/icons-react';
+import apiClient from '@/libs/api';
 
 export default function SDLGStorageMaintenanceForm() {
     const [unitModels, setUnitModels] = useState([]);
     const [woNumbers, setWoNumbers] = useState([]);
     const [technicians, setTechnicians] = useState([]);
     const [approvers, setApprovers] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [uploading, setUploading] = useState(false);
     
     const form = useForm({
         initialValues: {
@@ -87,52 +91,31 @@ export default function SDLGStorageMaintenanceForm() {
             try {
                 const brandId = "SDLG"; // 'SDLG' for SDLG
                 const groupId = "SM"; // 'SM' for Storage Maintenance
+                const [
+                    modelRes,
+                    woRes,
+                    techRes,
+                    supervisorRes,
+                    techHeadRes,
+                ] = await Promise.all([
+                    apiClient.get(`/unit-types/${brandId}`),
+                    apiClient.get(`/work-orders?brand_id=${brandId}&group_id=${groupId}`),
+                    apiClient.get("/users/by-role/Technician"),
+                    apiClient.get("/users/by-role/Supervisor"),
+                    apiClient.get("/users/by-role/Technical Head")
+                ])
 
-                // model/ Type SDLG API
-                const modelResponse = await fetch('http://127.0.0.1:5000/api/unit-types/SDLG');
-                if (!modelResponse.ok) throw new Error(`HTTP error! status: ${modelResponse.status}`);
-                const modelData = await modelResponse.json();
-                const formattedModels = modelData
-                    .filter(item => item.value !== null && item.value !== undefined && item.label !== null && item.label !== undefined)
-                    .map(item => ({
-                        value: item.value,
-                        label: item.label
-                    }));
+                const formattedModels = modelRes.data
+                    .filter(item => item.value !== null && item.label !== null)
+                    .map(item => ({ value: item.value, label: item.label }));
                 setUnitModels(formattedModels);
 
-                // wo Number API
-				const woResponse = await fetch(`http://127.0.0.1:5000/api/work-orders?brand_id=${brandId}&group_id=${groupId}`);
-				if (!woResponse.ok) throw new Error(`HTTP error! status: ${woResponse.status}`);
-				const woData = await woResponse.json();
-				const formattedWoData = woData.map(wo => ({ 
-					value: wo.WONumber, 
-					label: wo.WONumber 
-				}));
-				setWoNumbers(formattedWoData);
-
-                // dummy Technicians API
-                const dummyTechniciansData = [
-                    { value: "tech1", label: "John Doe" },
-                    { value: "tech2", label: "Jane Smith" },
-                    { value: "tech3", label: "Peter Jones" }
-                ];
-                setTechnicians(dummyTechniciansData);
-
-                // dummy Approvers API
-                const dummyApproverData = [
-                    { value: "app1", label: "Alice Brown" },
-                    { value: "app2", label: "Bob White" },
-                    { value: "app3", label: "John Green" }
-                ];
-                setApprovers(dummyApproverData);
-
-                // dummy Approvers API
-				const dummyApprovers = [
-					{ value: "app1", label: "Alice Brown" },
-					{ value: "app2", label: "Bob White" },
-					{ value: "app3", label: "John Green" }
-				];
-				setApprovers(dummyApprovers);
+                setWoNumbers(woRes.data.map(wo => ({ value: wo.WONumber, label: wo.WONumber })));
+                setTechnicians(techRes.data);
+                setApprovers([
+                    ...supervisorRes.data,
+                    ...techHeadRes.data,
+                ]);
                 
             } catch (error) {
                 console.error("Failed to fetch models:", error);
@@ -141,8 +124,11 @@ export default function SDLGStorageMaintenanceForm() {
                     message: "Failed to load models. Please try again!",
                     color: "red",
                 });
+
+            } finally {
+                setLoading(false);
             }
-        }
+        };
         fetchData();
     }, []);
 
@@ -195,89 +181,71 @@ export default function SDLGStorageMaintenanceForm() {
         return `${year}-${month}-${day}`;
     };
 
-    const handleSubmit = async (values) => { 
-        const token = localStorage.getItem('access_token');
-        
-        if (!token) {
-            notifications.show({
-                title: "Authentication Required",
-                message: "Please log in again. Authentication token is missing.",
-                color: "red",
-            });
-            return;
-        }
-        
-        console.log("Form submitted with values:", values);
-
-        const inspectionPayload = Object.entries(values.inspectionItems).reduce((acc, [key, value]) => {
-            const index = key.replace('item', '');
-            acc[`inspection${index}`] = value;
-            return acc;
-        }, {});
-
-        const testingPayload = Object.entries(values.testingItems).reduce((acc, [key, value]) => {
-            const index = key.replace('item', '');
-            acc[`testing${index}`] = value;
-            return acc;
-        }, {});
-
-        const payload = {
-            brand: 'SDLG',
-            model: values.machineModel,
-            woNumber: values.woNumber,
-            vehicleNumber: values.vehicleNumber,
-            workingHours: values.workingHours,
-            inspector: values.inspector,
-            approvalBy: values.approvalBy,
-
-            vehicleArrival: formatDate(values.vehicleArrivalDate),
-            inspectionDate: formatDate(values.inspectionDate),
-
-            ...inspectionPayload,
-            ...testingPayload,
-
-            signatureInspector: values.signatureInspectorName,
-            signatureInspectorDate: formatDate(values.signatureInspectorDate),
-            signatureSupervisor: values.supervisorName,
-            signatureSupervisorDate: formatDate(values.supervisorDate),
-            
-            observedConditions: values.observedConditions,
-        };
-
-        console.log("Payload sent to backend:", payload);
-
+    const handleSubmit = async (values) => {
+        setUploading(true);
         try {
-            const response = await fetch(`http://127.0.0.1:5000/api/storage-maintenance/sdlg/submit`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify(payload),
-            });
+            const inspectionPayload = Object.entries(values.inspectionItems).reduce((acc, [key, value]) => {
+                const index = key.replace('item', '');
+                acc[`inspection${index}`] = value;
+                return acc;
+            }, {});
 
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.message || "Failed to submit SDLG Storage Maintenance Checklist");
-            }
+            const testingPayload = Object.entries(values.testingItems).reduce((acc, [key, value]) => {
+                const index = key.replace('item', '');
+                acc[`testing${index}`] = value;
+                return acc;
+            }, {});
 
-            const result = await response.json();
+            const payload = {
+                brand: 'SDLG',
+                model: values.machineModel,
+                woNumber: values.woNumber,
+                vehicleNumber: values.vehicleNumber,
+                workingHours: values.workingHours,
+                inspector: values.inspector,
+                approvalBy: values.approvalBy,
+                vehicleArrival: formatDate(values.vehicleArrivalDate),
+                inspectionDate: formatDate(values.inspectionDate),
+                ...inspectionPayload,
+                ...testingPayload,
+                signatureInspector: values.signatureInspectorName,
+                signatureInspectorDate: formatDate(values.signatureInspectorDate),
+                signatureSupervisor: values.supervisorName,
+                signatureSupervisorDate: formatDate(values.supervisorDate),
+                observedConditions: values.observedConditions,
+            };
+
+            const response = await apiClient.post(`/storage-maintenance/sdlg/submit`, payload);
+
             notifications.show({
-                title: "Submission Successful!",
-                message: result.message || "Form Submitted Successfully.",
+                title: "Success!",
+                message: "Form Submitted Successfully!",
                 color: "green",
             })
             form.reset();
-        
+
         } catch (error) {
-            console.log('Error submitting form:', error);
+            console.error('Error submitting form:', error);
+            const errorMessage = error.response?.data?.message || error.message || "Failed to submit checklist";
             notifications.show({
                 title: "Submission Error",
-                message: `Failed to submit form: ${error.message}`,
+                message: `Error: ${errorMessage}`,
                 color: "red",
             });
+        
+        } finally {
+            setUploading(false);
         }
     };
+
+    if (loading) {
+        return (
+            <Box maw="100%" mx="auto" px="md" ta="center">
+                <Title order={1} mt="md" mb="lg">Loading Form Data...</Title>
+                <Loader size="lg" />
+            </Box>
+        );
+    }
         
     return (
         <Box maw="100%" mx="auto" px="md">
@@ -286,7 +254,8 @@ export default function SDLGStorageMaintenanceForm() {
                 mt="md"
                 mb="lg"
                 style={{ color: '#000000 !important' }}
-            > Storage Maintenance
+            > 
+                Storage Maintenance
             </Title>
             
             <form onSubmit={form.onSubmit(handleSubmit)}>
@@ -336,7 +305,6 @@ export default function SDLGStorageMaintenanceForm() {
                             <DateInput
                                 label="Vehicle Arrival Date"
                                 placeholder="Select Date"
-                                valueFormat="DD-MM-YYYY"
                                 {...form.getInputProps('vehicleArrivalDate')}
                                 rightSection={<IconCalendar size={16} />}
                             />
@@ -345,7 +313,6 @@ export default function SDLGStorageMaintenanceForm() {
                             <DateInput
                                 label="Date of Check"
                                 placeholder="Select date"
-                                valueFormat="DD-MM-YYYY"
                                 {...form.getInputProps('inspectionDate')}
                                 rightSection={<IconCalendar size={16} />}
                             />
@@ -512,7 +479,6 @@ export default function SDLGStorageMaintenanceForm() {
                         <DateInput
                             label="Date"
                             placeholder="Select Date"
-                            valueFormat="DD-MM-YYYY"
                             {...form.getInputProps('signatureInspectorDate')}
                             rightSection={<IconCalendar size={16} />}
                         />
@@ -529,14 +495,20 @@ export default function SDLGStorageMaintenanceForm() {
                         <DateInput
                             label="Date"
                             placeholder="Select date"
-                            valueFormat="DD-MM-YYYY"
                             {...form.getInputProps('supervisorDate')}
                             rightSection={<IconCalendar size={16} />}
                         />
                     </Group>
                 </Card>
-                <Group justify="flex-end" mt="xl">
-                    <Button type="submit">Submit</Button>
+                
+                <Group justify="flex-end" mt="md">
+                    <Button 
+                        type="submit"
+                        loading={uploading}
+                        disabled={uploading}
+                    >
+                        {uploading ? 'Submitting...' : 'Submit'}
+                    </Button>
                 </Group>
             </form>
         </Box>

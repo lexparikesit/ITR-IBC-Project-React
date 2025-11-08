@@ -17,12 +17,15 @@ import {
     Table,
     Select,
     rem,
+    Loader,
 } from "@mantine/core";
 import { DateInput } from "@mantine/dates";
-import { IconCalendar, IconPencil, IconUpload, IconX, IconFile } from "@tabler/icons-react";
+import { IconCalendar, IconPencil, IconUpload, IconX, IconFile, IconRefresh } from "@tabler/icons-react";
 import { useForm } from "@mantine/form";
 import { notifications } from "@mantine/notifications";
 import { Dropzone, MIME_TYPES } from "@mantine/dropzone";
+import apiClient from "@/libs/api";
+import imageCompression from "browser-image-compression";
 
 const renaultChecklistItemDefinition = {
     operationsInCab: [
@@ -89,54 +92,78 @@ const renaultChecklistItemDefinition = {
     ],
 };
 
-const initialChecklistValues = Object.keys(renaultChecklistItemDefinition).reduce((acc, sectionKey) => {
-    acc[sectionKey] = renaultChecklistItemDefinition[sectionKey].reduce((itemAcc, item) => {
-        itemAcc[item.itemKey] = {
-            value: '',
-            notes: '',
-            image: null,
-        };
-        return itemAcc;
-    }, {});
-    return acc;
-}, {});
-
-const initialRenaultValues = {
-    vinNo: '',
-    unitModel: null,
-    engineTypeNo: '',
-    transmissionTypeNo: '',
-    hourMeter: '',
-    mileage: '',
-    // repairOrderNo: null,
-    repairOrderNo: '',
-    dateOfCheck: null,
-    technician: null,
-    approvalBy: null,
-
-    checklistItems: initialChecklistValues,
-
-    batteryInspection: [
-        { batteryCheck: 'Front Battery', electrolyteLevel: '', voltage: '', statusOnBatteryAnalyzer: '' },
-        { batteryCheck: 'Rear Battery', electrolyteLevel: '', voltage: '', statusOnBatteryAnalyzer: '' },
-    ],
-
-    faultCodes: [
-        { faultCode: '', status: null },
-        { faultCode: '', status: null },
-        { faultCode: '', status: null },
-        { faultCode: '', status: null },
-        { faultCode: '', status: null },
-    ],
-
-    repairNotes: '',
-};
+const MAX_FILE_SIZE = 2 * 1024 * 1024;
+const MAX_ACCEPTED_SIZE = 5 * 1024 * 1024;
+const COMPRESS_OPTIONS = {
+    maxSizeMB: 1.8,
+    maxWidthOrHeight: 1920,
+    useWebWorker: true,
+    fileType: 'image/jpeg',
+}
 
 export function RenaultStorageMaintenanceForm() {
     const [unitModels, setUnitModels] = useState([]);
     const [technicians, setTechnicians] = useState([]);
     const [approvers, setApprovers] = useState([]);
     const [woNumbers, setWoNumbers] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [uploading, setUploading] = useState(false);
+
+    const processImage = async (file, sectionKey, itemKey) => {
+        try {
+            if (file.size > MAX_ACCEPTED_SIZE) {
+                notifications.show({
+                    title: "File Too Large",
+                    message: "Maximum file size is 5MB. Please choose a smaller file.",
+                    color: "red",
+                });
+                return null;
+            }
+
+            let processedFile = file;
+
+            if (file.size > MAX_FILE_SIZE) {
+                notifications.show({
+                    title: "Optimizing Image",
+                    message: `Compressing ${file.name}...`,
+                    color: "blue",
+                    autoClose: false,
+                    id: `compress-${sectionKey}-${itemKey}`
+                });
+            
+                processedFile = await imageCompression(file, COMPRESS_OPTIONS);
+
+                if (processedFile.size > MAX_FILE_SIZE) {
+                    notifications.update({
+                        id: `compress-${sectionKey}-${itemKey}`,
+                        title: "Compression Failed",
+                        message: "Unable to compress below 2MB. Please choose a different image.",
+                        color: "red",
+                        autoClose: 5000
+                    });
+                    return null;
+                }
+
+                notifications.update({
+                    id: `compress-${sectionKey}-${itemKey}`,
+                    title: "Image Optimized",
+                    message: `Compressed to ${(processedFile.size / 1024 / 1024).toFixed(2)} MB`,
+                    color: "green",
+                    autoClose: 3000
+                });
+            }
+            return processedFile;
+
+        } catch (error) {
+            console.error("Image processing error:", error);
+            notifications.show({
+                title: "Processing Error",
+                message: "Failed to process image. Please try again.",
+                color: "red",
+            });
+            return null;
+        }
+    };
 
     const buildChecklistValidation = () => {
         let validationRules = {};
@@ -144,6 +171,10 @@ export function RenaultStorageMaintenanceForm() {
             renaultChecklistItemDefinition[sectionKey].forEach(item => {
                 const fieldKey = `checklistItems.${sectionKey}.${item.itemKey}`;
                 validationRules[fieldKey] = (itemValue) => {
+                    if (!itemValue) {
+                        return "This Field is Required!";
+                    }
+
                     const status = itemValue.value;
                     const image = itemValue.image;
 
@@ -162,7 +193,46 @@ export function RenaultStorageMaintenanceForm() {
     };
 
     const form = useForm({
-        initialValues: initialRenaultValues,
+        initialValues: (() => {
+            const initialRenaultValues = {
+                vinNo: "",
+                unitModel: null,
+                engineTypeNo: "",
+                transmissionTypeNo: "",
+                hourMeter: "",
+                mileage: "",
+                repairOrderNo: "",
+                dateOfCheck: null,
+                technician: null,
+                approvalBy: null,
+                
+                batteryInspection: [
+                    { batteryCheck: 'Front Battery', electrolyteLevel: '', voltage: '', statusOnBatteryAnalyzer: '' },
+                    { batteryCheck: 'Rear Battery', electrolyteLevel: '', voltage: '', statusOnBatteryAnalyzer: '' },
+                ],
+                
+                faultCodes: [
+                    { faultCode: '', status: null },
+                    { faultCode: '', status: null },
+                    { faultCode: '', status: null },
+                    { faultCode: '', status: null },
+                    { faultCode: '', status: null },
+                ],
+                repairNotes: "",
+                checklistItems: {}, 
+            };
+            Object.keys(renaultChecklistItemDefinition).forEach(sectionKey => {
+                initialRenaultValues.checklistItems[sectionKey] = {};
+                renaultChecklistItemDefinition[sectionKey].forEach(item => {
+                    initialRenaultValues.checklistItems[sectionKey][item.itemKey] = { 
+                        value: "", 
+                        notes: "",
+                        image: null 
+                    };
+                });
+            });
+            return initialRenaultValues;
+        })(),
         validate: {
             vinNo: (value) => (value ? null : "VIN is Required!"),
             unitModel: (value) => (value ? null: "Type/ Model is Required!"),
@@ -183,39 +253,28 @@ export function RenaultStorageMaintenanceForm() {
             try {
                 const brandId = "RT"; // 'RT' for Renault
                 const groupId = "SM"; // 'SM' for Storage Maintenance
+                const [
+                    modelRes,
+                    woRes,
+                    techRes,
+                    supervisorRes,
+                    techHeadRes,
+                ] = await Promise.all([
+                    apiClient.get(`/unit-types/${brandId}`),
+                    apiClient.get(`/work-orders?brand_id=${brandId}&group_id=${groupId}`),
+                    apiClient.get("/users/by-role/Technician"),
+                    apiClient.get("/users/by-role/Supervisor"),
+                    apiClient.get("/users/by-role/Technical Head")
+                ])
 
-                // model/ type RT API
-				const modelResponse = await fetch(`http://127.0.0.1:5000/api/unit-types/RT`);
-				if (!modelResponse.ok) throw new Error(`HTTP error! status: ${modelResponse.status}`);
-				const modelData = await modelResponse.json();
-				setUnitModels(modelData);
-
-                // wo Number API
-                const woResponse = await fetch(`http://127.0.0.1:5000/api/work-orders?brand_id=${brandId}&group_id=${groupId}`);
-                if (!woResponse.ok) throw new Error(`HTTP error! status: ${woResponse.status}`);
-                const woData = await woResponse.json();
-                const formattedWoData = woData.map(wo => ({
-                    value: wo.WONumber,
-                    label: wo.WONumber
-                }));
-                setWoNumbers(formattedWoData);
-
-                // dummy Technicians API
-                const dummyTechniciansData = [
-                    { value: "tech1", label: "John Doe" },
-                    { value: "tech2", label: "Jane Smith" },
-                    { value: "tech3", label: "Peter Jones" }
-                ];
-                setTechnicians(dummyTechniciansData);
-
-                // dummy Approvers API
-                const dummyApproverData = [
-                    { value: "app1", label: "Alice Brown" },
-                    { value: "app2", label: "Bob White" },
-                    { value: "app3", label: "John Green" }
-                ];
-                setApprovers(dummyApproverData);
-
+                setUnitModels(modelRes.data);
+                setWoNumbers(woRes.data.map(wo => ({ value: wo.WONumber, label: wo.WONumber })));
+                setTechnicians(techRes.data);
+                setApprovers([
+                    ...supervisorRes.data,
+                    ...techHeadRes.data,
+                ]);
+                
             } catch (error) {
                 console.error("Failed to fetch models:", error);
                 notifications.show({
@@ -223,95 +282,166 @@ export function RenaultStorageMaintenanceForm() {
                     message: "Failed to load models. Please try again!",
                     color: "red",
                 });
+            
+            } finally {
+                setLoading(false);
             }
         };
         fetchData();
     }, []);
 
-    const handleSubmit = async (values) => {
-        const token = localStorage.getItem('access_token');
+    const retryUpload = async (sectionKey, itemKey) => {
+        const currentFile = form.values.checklistItems[sectionKey]?.[itemKey]?.image;
+        if (!currentFile) return;
 
-        if (!token) {
-            notifications.show({
-                title: "Authentication Error",
-                message: "Please log in again. Authentication token is missing.",
-                color: "red",
-            });
-            console.log("Authentication token is missing.");
-            return;
-        }
-
-        console.log('Form Submitted (Frontend Data)', values);
-
-        const payload = {
-            brand: 'renault',
-            unitInfo: {
-                vinNo: values.vinNo,
-                unitModel: values.unitModel,
-                engineTypeNo: values.engineTypeNo,
-                transmissionTypeNo: values.transmissionTypeNo,
-                hourMeter: values.hourMeter,
-                mileage: values.mileage,
-                repairOrderNo: values.repairOrderNo,
-                dateOfCheck: values.dateOfCheck,
-                technician: values.technician,
-                approvalBy: values.approvalBy,
-            },
-            checklistItems: values.checklistItems,
-            batteryInspection: values.batteryInspection,
-            faultCodes: values.faultCodes,
-            repairNotes: values.repairNotes,
-        };
-
-        console.log("Payload to backend: ", payload);
-
+        setUploading(true);
         try {
-            const response = await fetch(`http://127.0.0.1:5000/api/storage-maintenance/renault/submit`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify(payload),
-            });
+            const processedFile = await processImage(currentFile, sectionKey, itemKey);
+            if (processedFile) {
+                form.setFieldValue(`checklistItems.${sectionKey}.${itemKey}.image`, processedFile);
+            }
+        } finally {
+            setUploading(false);
+        }
+    };
 
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.message || "Failed to submit Renault Storage Maintenance Checklist");
+    // Build payload and FormData immutably (avoid mutating form values)
+    const buildPayloadAndFormData = (values) => {
+        const builtChecklistItems = {};
+        const formData = new FormData();
+        const missingItems = [];
+
+        Object.entries(renaultChecklistItemDefinition).forEach(([sectionKey, items]) => {
+            builtChecklistItems[sectionKey] = {};
+
+            items.forEach((item) => {
+                const itemData = values.checklistItems?.[sectionKey]?.[item.itemKey] ?? { value: "", notes: "", image: null };
+
+                if (!itemData.value) {
+                    missingItems.push(`${sectionKey} - ${item.label}`);
+                    return;
+                }
+
+                if ((itemData.value === "recommended_repair" || itemData.value === "immediately_repair") && !itemData.image) {
+                    missingItems.push(`${sectionKey} - ${item.label}`);
+                    return;
+                }
+
+                builtChecklistItems[sectionKey][item.itemKey] = {
+                    value: itemData.value,
+                    notes: itemData.notes || "",
+                };
+
+                if (itemData.image) {
+                    const imageKey = `image-${sectionKey}-${item.itemKey}`;
+                    const notesKey = `notes-${sectionKey}-${item.itemKey}`;
+                    formData.append(imageKey, itemData.image);
+                    formData.append(notesKey, itemData.notes || "");
+                }
+            });
+        });
+
+        return { builtChecklistItems, formData, missingItems };
+    };
+
+    const handleSubmit = async (values) => {
+        setUploading(true);
+        
+        try {
+            const token = localStorage.getItem('access_token');
+            if (!token) {
+                notifications.show({
+                    title: "Authentication Error",
+                    message: "Please log in again. Authentication token is missing.",
+                    color: "red",
+                });
+                console.log("Authentication token is missing.");
+                return;
             }
 
-            const result = await response.json();
+            console.log('Form Submitted (Frontend Data)', values);
+
+            const { builtChecklistItems, formData, missingItems } = buildPayloadAndFormData(values);
+
+            if (missingItems.length > 0) {
+                notifications.show({
+                    title: "Missing Items",
+                    message: `Please complete all required fields: ${missingItems.join(', ')}`,
+                    color: "red",
+                });
+                return;
+            }
+
+            const payload = {
+                brand: 'renault',
+                unitInfo: {
+                    vinNo: values.vinNo,
+                    unitModel: values.unitModel,
+                    engineTypeNo: values.engineTypeNo,
+                    transmissionTypeNo: values.transmissionTypeNo,
+                    hourMeter: values.hourMeter,
+                    mileage: values.mileage,
+                    repairOrderNo: values.repairOrderNo,
+                    dateOfCheck: values.dateOfCheck,
+                    technician: values.technician,
+                    approvalBy: values.approvalBy,
+                },
+                checklistItems: builtChecklistItems,
+                batteryInspection: values.batteryInspection,
+                faultCodes: values.faultCodes,
+                repairNotes: values.repairNotes,
+            };
+
+            formData.append('data', JSON.stringify(payload));
+
+            await apiClient.post(`/storage-maintenance/renault/submit`, formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data'
+                },
+                timeout: 50000
+            });
+
             notifications.show({
-                title: "Submission Successful!",
-                message: result.message || "Form Submitted Successfully.",
+                title: "Success!",
+                message: "Form Submitted Successfully!",
                 color: "green",
             });
             form.reset();
 
         } catch (error) {
-            console.log('Error submitting form:', error);
+            console.error('Error submitting form:', error);
+            const errorMessage = error.response?.data?.message || error.message || "Failed to submit checklist";
             notifications.show({
                 title: "Submission Error",
-                message: `Failed to submit form: ${error.message}`,
+                message: `Error: ${errorMessage}`,
                 color: "red",
             });
+            
+        } finally {
+            setUploading(false);
         }
     };
 
     const renderChecklistItem = (label, sectionKey, itemKey) => {
-        const itemData = form.getInputProps(`checklistItems.${sectionKey}.${itemKey}`);
-        const showConditionalInputs = itemData.value.value === 'recommended_repair' || itemData.value.value === 'immediately_repair';
-        const hasImage = itemData.value.image instanceof File;
+        const itemValue = form.values.checklistItems[sectionKey]?.[itemKey] || { value: '', notes: '', image: null };
+        const showConditionalInputs = itemValue.value === 'recommended_repair' || itemValue.value === 'immediately_repair';
+        const hasImage = itemValue.image instanceof File;
 
         return (
-            <Grid.Col span={{ base: 12 }} key={itemKey}>
+            <Grid.Col span={{ base: 12 }} key={`${sectionKey}-${itemKey}`}>
                 <Stack gap="xs">
                     <Text size="sm" style={{ color: '#000000 !important', fontWeight: 500 }}>{label}</Text>
                     <Text size="xs" style={{ color: 'var(--mantine-color-gray-6)' }}>Select one option</Text>
 
                     <Radio.Group
-                        value={itemData.value.value}
-                        onChange={(statusValue) => form.setFieldValue(`checklistItems.${sectionKey}.${itemKey}.value`, statusValue)}
+                        value={itemValue.value}
+                        onChange={(statusValue) => {
+                            form.setFieldValue(`checklistItems.${sectionKey}.${itemKey}.value`, statusValue);
+                            if (statusValue === "checked") {
+                                form.setFieldValue(`checklistItems.${sectionKey}.${itemKey}.image`, null);
+                                form.setFieldValue(`checklistItems.${sectionKey}.${itemKey}.notes`, "");
+                            }
+                        }}
                         orientation="horizontal"
                         error={form.errors[`checklistItems.${sectionKey}.${itemKey}`]}
                     >
@@ -326,9 +456,12 @@ export function RenaultStorageMaintenanceForm() {
                     {showConditionalInputs && (
                         <>
                             <Dropzone
-                                onDrop={(files) => {
+                                onDrop={async (files) => {
                                     if (files.length > 0) {
-                                        form.setFieldValue(`checklistItems.${sectionKey}.${itemKey}.image`, files[0]);
+                                        const processedFile = await processImage(files[0], sectionKey, itemKey);
+                                        if (processedFile) {
+                                            form.setFieldValue(`checklistItems.${sectionKey}.${itemKey}.image`, processedFile);
+                                        }
                                     }
                                 }}
                                 onReject={(files) => {
@@ -339,6 +472,7 @@ export function RenaultStorageMaintenanceForm() {
                                     });
                                 }}
                                 maxFiles={1}
+                                maxSize={MAX_ACCEPTED_SIZE}
                                 accept={[MIME_TYPES.jpeg, MIME_TYPES.png]}
                                 mt="xs"
                                 error={form.errors[`checklistItems.${sectionKey}.${itemKey}`]}
@@ -358,16 +492,37 @@ export function RenaultStorageMaintenanceForm() {
                                         )}
                                     </Dropzone.Idle>
                                     <Stack align="center" gap={4}>
-                                        <Text size="xs" c="dimmed"> {hasImage ? itemData.value.image.name : 'Drag and drop an image here or click to select'} </Text>
-                                        <Text size="xs" c="dimmed"> Accepted formats: JPG, PNG </Text>
+                                        <Text size="xs" c="dimmed"> 
+                                            {hasImage ? itemValue.image.name : 'Drag and drop an image here or click to select'} 
+                                        </Text>
+                                        <Text size="xs" c="dimmed"> 
+                                            JPG/PNG, max 5MB (will be compressed to ≤2MB)
+                                        </Text>
+                                        {hasImage && (
+                                            <Text size="xs" c="green">
+                                                {(itemValue.image.size / 1024 / 1024).toFixed(2)} MB
+                                            </Text>
+                                        )}
                                     </Stack>
                                 </Group>
                             </Dropzone>
-                            
+                            {hasImage && (
+                                <Group justify="flex-end">
+                                    <Button
+                                        variant="subtle"
+                                        size="xs"
+                                        onClick={() => retryUpload(sectionKey, itemKey)}
+                                        loading={uploading}
+                                        leftSection={<IconRefresh size={14} />}
+                                    >
+                                        Retry Upload
+                                    </Button>
+                                </Group>
+                            )}
                             <TextInput
                                 placeholder="Add Image Caption"
                                 mt="xs"
-                                value={itemData.value.notes}
+                                value={itemValue.notes}
                                 leftSection={<IconPencil size={20}/>}
                                 onChange={(event) => form.setFieldValue(`checklistItems.${sectionKey}.${itemKey}.notes`, event.target.value)}
                             />
@@ -383,19 +538,26 @@ export function RenaultStorageMaintenanceForm() {
             <Card shadow="sm" p="xl" withBorder mb="lg">
                 <Title order={3} mb="md" style={{ color: '#000000 !important' }}>{sectionTitle}</Title>
                 <Grid gutter="xl">
-                    {items.map((item) => {
-                        const fieldName = `checklistItems.${sectionKey}.${item.itemKey}`;
-                        console.log('Rendering field:', fieldName);
-                        return renderChecklistItem(
+                    {items.map((item) => (
+                        renderChecklistItem(
                             `${item.id}. ${item.label}`,
                             sectionKey,
                             item.itemKey
-                        );
-                    })}
+                        )
+                    ))}
                 </Grid>
             </Card>
         );
     };
+
+    if (loading) {
+        return (
+            <Box maw="100%" mx="auto" px="md" ta="center">
+                <Title order={1} mt="md" mb="lg">Loading Form Data...</Title>
+                <Loader size="lg" />
+            </Box>
+        );
+    }
 
     return (
         <Box maw="100%" mx="auto" px="md">
@@ -404,9 +566,10 @@ export function RenaultStorageMaintenanceForm() {
                 mt="md"
                 mb="lg"
                 style={{ color: '#000000 !important' }}
-            > Storage Maintenance List
+            > 
+                Storage Maintenance List
             </Title>
-            <form onSubmit={form.onSubmit(handleSubmit)}>
+            <form onSubmit={form.onSubmit((values) => handleSubmit(values))}>
                 <Card shadow="sm" padding="lg" radius="md" withBorder mb="lg">
                     <Title order={3} mb="md" style={{ color: '#000000 !important' }}> Unit Information </Title>
                     <Grid gutter="xl">
@@ -474,7 +637,6 @@ export function RenaultStorageMaintenanceForm() {
                             <DateInput
                                 label="Date of Check"
                                 placeholder="Select Date"
-                                valueFormat="DD-MM-YYYY"
                                 {...form.getInputProps('dateOfCheck')}
                                 rightSection={<IconCalendar size={16} />}
                             />
@@ -628,7 +790,13 @@ export function RenaultStorageMaintenanceForm() {
                 </Card>
 
                 <Group justify="flex-end" mt="md">
-                    <Button type="submit"> Submit </Button>
+                    <Button
+                        type="submit"
+                        loading={uploading}
+                        disabled={uploading}
+                    >
+                        {uploading ? 'Submitting...' : 'Submit'}
+                    </Button>
                 </Group>
             </form>
         </Box>

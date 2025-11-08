@@ -1,8 +1,11 @@
 from flask import current_app
 from app.models.customer_model import get_customers
 from sqlalchemy.engine.url import make_url
+from app.controllers.auth_controller import jwt_required
 
+@jwt_required
 def get_all_customers_controller():
+    """Retrieve all Customer Data"""
 
     try:
         # get the string config from app.config
@@ -21,6 +24,7 @@ def get_all_customers_controller():
         customers = get_customers(connection_string)
 
         unique_customers = {}
+        
         for cust in customers:
             if cust['CustomerID'] not in unique_customers:
                 unique_customers[cust['CustomerID']] = cust

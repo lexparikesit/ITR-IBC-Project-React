@@ -1,17 +1,17 @@
 // Manitou Section
 const MANITOU_SECTION_MAP = {
-    engine: "01. Engine",
-    transmission: "02. Transmission",
-    axleTransferBox: "03. Axle & Transfer Box",
-    hydraulicHydrostaticCircuits: "04. Hydraulic & Hydrostatic Circuits",
-    brakingCircuits: "05. Braking Circuits",
-    lubrication: "06. Lubrication",
-    boomMastManiscopicManicess: "07. Boom, Mast, Maniscopic & Manicess",
-    mastUnit: "08. Mast Unit",
-    accessories: "09. Accessories",
-    cabProtectiveDeviceElectricCircuit: "10. Cab, Protective Device & Electric Circuit",
-    wheels: "11. Wheels",
-    otherItems: "12. Other Items",
+    engine: "Engine",
+    transmission: "Transmission",
+    axleTransferBox: "Axle & Transfer Box",
+    hydraulicHydrostaticCircuits: "Hydraulic & Hydrostatic Circuits",
+    brakingCircuits: "Braking Circuits",
+    lubrication: "Lubrication",
+    boomMastManiscopicManicess: "Boom, Mast, Maniscopic & Manicess",
+    mastUnit: "Mast Unit",
+    accessories: "Accessories",
+    cabProtectiveDeviceElectricCircuit: "Cab, Protective Device & Electric Circuit",
+    wheels: "Wheels",
+    otherItems: "Other Items",
 };
 
 // Manitou Item
@@ -102,13 +102,13 @@ const MANITOU_ITEM_MAP = {
 
 // Renault Section
 const RENAULT_SECTION_MAP = {
-    vehiclePhysicalCondition: 'I. Vehicle Physical Condition',
-    bodyCarresoryAssembledCondition: 'II. Body Carresory Assembled Condition',
-    vehicleEquipmentAvailability: 'III. Vehicle Equipment Availability',
-    checkLevels: 'IV. Check Levels',
-    majorUnitForLeaks: 'V. Major Unit For Leaks',
-    generalChecking: 'VI. General Checking',
-    roadTest: 'VII. Road Test',
+    vehiclePhysicalCondition: 'Vehicle Physical Condition',
+    bodyCarresoryAssembledCondition: 'Body Carresory Assembled Condition',
+    vehicleEquipmentAvailability: 'Vehicle Equipment Availability',
+    checkLevels: 'Check Levels',
+    majorUnitForLeaks: 'Major Unit For Leaks',
+    generalChecking: 'General Checking',
+    roadTest: 'Road Test',
 };
 
 export const RENAULT_SECTION_ORDER = [

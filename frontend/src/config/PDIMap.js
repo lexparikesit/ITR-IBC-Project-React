@@ -1,11 +1,11 @@
 // Manitou Section
 const MANITOU_SECTION_MAP = {
-    levels: "01. Levels",
-    visualInspection: "02. Visual Inspection",
-    operation: "03. Operation",
-    tests: "04. Test",
-    checkingOfGeneralMachineCondition: "05. Checking of General Machine Condition",
-    transportationDelivery: "06. Transport/Delivery - Remarks Regarding",
+    levels: "Levels",
+    visualInspection: "Visual Inspection",
+    operation: "Operation",
+    tests: "Test",
+    checkingOfGeneralMachineCondition: "Checking of General Machine Condition",
+    transportationDelivery: "Transport/ Delivery - Remarks Regarding",
 };
 
 // Manitou Item

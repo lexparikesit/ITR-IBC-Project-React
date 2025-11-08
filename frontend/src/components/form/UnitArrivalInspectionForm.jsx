@@ -15,6 +15,7 @@ import {
     Box,
     Select,
     Radio,
+    Loader,
 } from "@mantine/core";
 import { DateInput } from "@mantine/dates";
 import { IconCalendar, IconUpload, IconX, IconFile, IconPencil, IconRefresh } from "@tabler/icons-react";
@@ -420,7 +421,7 @@ export function UnitArrivalInspectionForm() {
                 headers: {
                     'Content-Type': 'multipart/form-data'
                 },
-                timeout: 30000
+                timeout: 50000
             });
 
             notifications.show({
@@ -488,12 +489,12 @@ export function UnitArrivalInspectionForm() {
                                     }
                                 }}
                                 onReject={(files) => {
-                                notifications.show({
-                                    title: 'File Rejected',
-                                    message: `${files[0].errors[0].message}`,
-                                    color: 'red',
-                                });
-                            }}
+                                    notifications.show({
+                                        title: 'File Rejected',
+                                        message: `${files[0].errors[0].message}`,
+                                        color: 'red',
+                                    });
+                                }}
                             maxFiles={1}
                             maxSize={MAX_ACCEPTED_SIZE}
                             accept={[MIME_TYPES.jpeg, MIME_TYPES.png]}
@@ -579,6 +580,15 @@ export function UnitArrivalInspectionForm() {
             </Card>
         );
     };
+
+    if (loading) {
+        return (
+            <Box maw="100%" mx="auto" px="md" ta="center">
+                <Title order={1} mt="md" mb="lg">Loading Form Data...</Title>
+                <Loader size="lg" />
+            </Box>
+        );
+    }
 
     return (
         <Box maw="100%" mx="auto" px="md">
