@@ -1,3 +1,7 @@
 .env
 __pycache__/
 *.pyc
+
+# sensitive key and temporary file
+backend/keys/
+git reset --soft HEAD~1

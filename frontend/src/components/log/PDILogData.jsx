@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from "react";
 import {
     Table,
     Button,
@@ -19,71 +19,88 @@ import {
     ScrollArea,
     Stack,
     SimpleGrid,
-} from '@mantine/core';
-import * as XLSX from 'xlsx';
-import { IconSearch, IconEye, IconAlertCircle, IconDownload } from '@tabler/icons-react';
-import { useDisclosure } from '@mantine/hooks';
+} from "@mantine/core";
+import * as XLSX from "xlsx";
+import {
+    IconSearch,
+    IconEye,
+    IconAlertCircle,
+    IconDownload,
+} from "@tabler/icons-react";
+import { useDisclosure } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
-import { BRAND_CHECKLIST_MAP } from '@/config/PDIMap'; 
-import { useUser } from '@/context/UserContext';
+import { BRAND_CHECKLIST_MAP } from "@/config/PDIMap";
+import { useUser } from "@/context/UserContext";
 
-const EXCLUDED_KEYS = ['remarks', 'notes', 'checklist_items', 'id', 'pdiId', 'details', 'generalRemarks', 'remarksTransport', 'vehicle_inspection', 'defect_remarks'];
+const EXCLUDED_KEYS = [
+    "remarks",
+    "notes",
+    "checklist_items",
+    "id",
+    "pdiId",
+    "details",
+    "generalRemarks",
+    "remarksTransport",
+    "vehicle_inspection",
+    "defect_remarks",
+];
+
 const formatKeyToLabel = (key) => {
-    if (!key) return '';
-    if (key === 'technicianSignature') return "Signature Technician";
-    if (key === 'technicianSignatureDate') return "Signature Date (Technician)";
-    if (key === 'approverSignature') return "Signature Approver";
-    if (key === 'approverSignatureDate') return "Signature Date (Approver)";
-    if (key === 'inspectorSignature') return "Signature Technician";
-    if (key === 'customer') return "Customer";
-    if (key === 'mileageHourMeter') return "Mileage";
-    if (key === 'chassisId') return "Chassis ID";
-    if (key === 'registrationNo') return "Registration No";
-    if (key === 'hourMeter') return 'Hour Meter (HM)'; 
-    if (key === 'VIN') return 'VIN';
-    if (key === 'woNumber') return 'WO Number';
-    if (key === 'pdiID') return 'PDI ID';
-    if (key === 'dateOfCheck') return 'Date of Check';
-    if (key === 'generalRemarks') return 'General Remarks';
-    if (key === 'engineType') return 'Engine Type';
-    if (key === 'transmissionType') return 'Transmission Type';
-    if (key === 'vehicleArrivalDate') return 'Vehicle Arrival Date';
-    
-    let label = key.replace(/([A-Z])/g, ' $1').trim();
-    
+    if (!key) return "";
+    if (key === "technicianSignature") return "Signature Technician";
+    if (key === "technicianSignatureDate") return "Signature Date (Technician)";
+    if (key === "approverSignature") return "Signature Approver";
+    if (key === "approverSignatureDate") return "Signature Date (Approver)";
+    if (key === "inspectorSignature") return "Signature Technician";
+    if (key === "customer") return "Customer";
+    if (key === "mileageHourMeter") return "Mileage";
+    if (key === "chassisId") return "Chassis ID";
+    if (key === "registrationNo") return "Registration No";
+    if (key === "hourMeter") return "Hour Meter (HM)";
+    if (key === "VIN") return "VIN";
+    if (key === "woNumber") return "WO Number";
+    if (key === "pdiID") return "PDI ID";
+    if (key === "dateOfCheck") return "Date of Check";
+    if (key === "generalRemarks") return "General Remarks";
+    if (key === "engineType") return "Engine Type";
+    if (key === "transmissionType") return "Transmission Type";
+    if (key === "vehicleArrivalDate") return "Vehicle Arrival Date";
+
+    let label = key.replace(/([A-Z])/g, " $1").trim();
+
     label = label.charAt(0).toUpperCase() + label.slice(1);
-    
-    if (label.includes('By')) label = label.replace('By', ' By');
-    
+
+    if (label.includes("By")) label = label.replace("By", " By");
+
     return label;
 };
 
 const toCapitalCase = (str) => {
-    if (!str) return 'N/A';
+    if (!str) return "N/A";
     return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
 };
 
 // Remove trailing numeric suffixes from section labels (e.g., "01. Engine" -> "Engine")
 const stripSectionIndex = (label) => {
-    if (!label) return '';
+    if (!label) return "";
     const text = String(label).trim();
-    return text.replace(/[\s._-]*\(?0*\d+\)?\.?\s*/i, '').trim() || text;
+    return text.replace(/[\s._-]*\(?0*\d+\)?\.?\s*/i, "").trim() || text;
 };
 
 const BRAND_ID_MAP = {
-    'manitou': 'MA', 
-    'renault': 'RT', 
-    'sdlg': 'SDLG', 
+    manitou: "MA",
+    renault: "RT",
+    sdlg: "SDLG",
 };
 
 const getNormalizedLabel = (brand, sectionKey, itemKey) => {
-    const brandLower = (brand || '').toLowerCase();
+    const brandLower = (brand || "").toLowerCase();
     const map = BRAND_CHECKLIST_MAP[brandLower];
 
-    if (!map || brandLower === 'sdlg') {
+    if (!map || brandLower === "sdlg") {
         return {
-            section: sectionKey || 'N/A',
-            item: itemKey || 'N/A'
+            section: sectionKey || "N/A",
+            item: itemKey || "N/A",
         };
     }
 
@@ -92,28 +109,32 @@ const getNormalizedLabel = (brand, sectionKey, itemKey) => {
 
     if (sectionKey && itemKey) {
         const sectionItems = map.items[sectionKey];
-        
+
         if (sectionItems && Array.isArray(sectionItems)) {
-            const itemKeyLower = (itemKey || '').toLowerCase();
-            
+            const itemKeyLower = (itemKey || "").toLowerCase();
+
             let item;
 
-            item = sectionItems.find(i => (i.itemKey || '').toLowerCase() === itemKeyLower);
+            item = sectionItems.find(
+                (i) => (i.itemKey || "").toLowerCase() === itemKeyLower
+            );
 
             if (!item) {
                 const match = itemKey.match(/_(\d+)$/);
-                const itemID = match ? match[1].padStart(2, '0') : null;
+                const itemID = match ? match[1].padStart(2, "0") : null;
 
                 if (itemID) {
-                    item = sectionItems.find(i => i.id === itemID);
+                    item = sectionItems.find((i) => i.id === itemID);
                 }
             }
-            
-            if (!item && brandLower === 'renault') {
+
+            if (!item && brandLower === "renault") {
                 const allRenaultItems = Object.values(map.items).flat();
-                item = allRenaultItems.find(i => (i.itemKey || '').toLowerCase() === itemKeyLower);
+                item = allRenaultItems.find(
+                    (i) => (i.itemKey || "").toLowerCase() === itemKeyLower
+                );
             }
-            
+
             if (item) {
                 normalizedItem = item.label;
             }
@@ -121,116 +142,118 @@ const getNormalizedLabel = (brand, sectionKey, itemKey) => {
     }
 
     return {
-        section: normalizedSection || 'N/A',
-        item: normalizedItem || 'N/A',
-    }
+        section: normalizedSection || "N/A",
+        item: normalizedItem || "N/A",
+    };
 };
 
 const getStatusLabels = (brand, statusValue) => {
-    const normalizedBrand = (brand || '').toLowerCase();
+    const normalizedBrand = (brand || "").toLowerCase();
     const isTrue = statusValue === 1 || statusValue === true;
-    const isFalse = statusValue === 0 || statusValue === false; 
+    const isFalse = statusValue === 0 || statusValue === false;
 
-    if (normalizedBrand === 'sdlg') {
+    if (normalizedBrand === "sdlg") {
         if (isTrue) {
-            return { text: 'Yes', color: 'green' }; 
+            return { text: "Yes", color: "green" };
         } else if (isFalse) {
-            return { text: 'No', color: 'red' }; 
+            return { text: "No", color: "red" };
         } else {
-            return { text: 'N/A', color: 'gray' };
+            return { text: "N/A", color: "gray" };
         }
-    }
-    else if (normalizedBrand === 'renault') {
+    } else if (normalizedBrand === "renault") {
         if (statusValue === 1) {
-            return { text: 'Checked, Without Notes', color: 'green' }
+            return { text: "Checked, Without Notes", color: "green" };
         } else if (statusValue === 2) {
-            return { text: 'Repair Recommended', color: 'orange' }
+            return { text: "Repair Recommended", color: "orange" };
         } else if (statusValue === 3) {
-            return { text: 'Repair Immediately', color: 'red' }
+            return { text: "Repair Immediately", color: "red" };
         } else if (statusValue === 0) {
-            return { text: 'Not Applicable', color: 'gray' }
+            return { text: "Not Applicable", color: "gray" };
         } else {
-            return { text: 'N/A', color: 'gray' };
+            return { text: "N/A", color: "gray" };
         }
-    } 
-    else {
+    } else {
         if (isTrue) {
-            return { text: 'Good', color: 'green' };
-        } else if (isFalse) { 
-            return { text: 'Bad', color: 'orange' };
-        } else { 
-            return { text: 'Missing', color: 'gray' };
+            return { text: "Good", color: "green" };
+        } else if (isFalse) {
+            return { text: "Bad", color: "orange" };
+        } else {
+            return { text: "Missing", color: "gray" };
         }
     }
 };
 
 const formatLocalTime = (isoString) => {
-    if (!isoString) return 'N/A';
+    if (!isoString) return "N/A";
 
     let finalString = isoString;
-    
-    if (isoString.includes('T') && !isoString.includes('Z')) {
+
+    if (isoString.includes("T") && !isoString.includes("Z")) {
         finalString = `${isoString}Z`;
     }
 
-    let date = new Date(finalString); 
-    
+    let date = new Date(finalString);
+
     if (isNaN(date.getTime())) {
-        return isoString; 
+        return isoString;
     }
 
-    const formattedDateTime = date.toLocaleString('id-ID', {
-        year: 'numeric', month: '2-digit', day: '2-digit',
-        hour: '2-digit', minute: '2-digit', second: '2-digit',
-        hour12: false, 
-        timeZone: 'Asia/Jakarta' 
+    const formattedDateTime = date.toLocaleString("id-ID", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: false,
+        timeZone: "Asia/Jakarta",
     });
 
-    const parts = formattedDateTime.split(', ');
+    const parts = formattedDateTime.split(", ");
 
     if (parts.length < 2) return formattedDateTime;
 
     const datePart = parts[0];
     const timePart = parts[1];
-    const correctedTimePart = timePart.replace(/\./g, ':');
+    const correctedTimePart = timePart.replace(/\./g, ":");
 
     return `${datePart}, ${correctedTimePart}`;
 };
 
 const formatDateOnly = (toDateTimeString) => {
-    if (!toDateTimeString) return 'N/A';
+    if (!toDateTimeString) return "N/A";
 
     try {
         const dateObj = new Date(toDateTimeString);
 
-        if (isNaN(dateObj.getTime())) return 'N/A';
+        if (isNaN(dateObj.getTime())) return "N/A";
 
-        return dateObj.toLocaleDateString('id-ID');
+        return dateObj.toLocaleDateString("id-ID");
     } catch (e) {
-        return 'N/A';
+        return "N/A";
     }
 };
 
 const LogData = ({ title, apiUrl }) => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null; 
+    const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
     const [logs, setLogs] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [modalOpened, { open: openModal, close: closeModal }] = useDisclosure(false);
     const [selectedLogDetails, setSelectedLogDetails] = useState(null);
-    const [searchQuery, setSearchQuery] = useState('');
+    const [searchQuery, setSearchQuery] = useState("");
     const [activePage, setActivePage] = useState(1);
-    const [rowsPerPage, setRowsPerPage] = useState('10');
+    const [rowsPerPage, setRowsPerPage] = useState("10");
     const [lookupTables, setLookupTables] = useState({
         models: {},
         technicians: {},
         approvers: {},
         customers: {},
     });
-    const { user } = useUser()
+    const { user } = useUser();
 
     const downloadExcel = () => {
-        if (!user?.permissions?.includes('download_pdi_log')) {
+        if (!user?.permissions?.includes("download_pdi_log")) {
             notifications.show({
                 title: "Permission Denied",
                 message: "You don't have permission to download this log.",
@@ -241,30 +264,33 @@ const LogData = ({ title, apiUrl }) => {
 
         const excelData = logs.map((log, index) => ({
             No: index + 1,
-            'WO Number': log.woNumber || 'N/A',
-            'Type/Model': lookupTables.models[log.model] || log.model || 'N/A',
-            Brand: log.brand === 'manitou'
-                ? 'Manitou'
-                : log.brand === 'renault'
-                    ? 'Renault Trucks'
-                        : log.brand === 'sdlg'
-                        ? 'SDLG'
-                            : log.brand || 'N/A',
-            VIN: log.VIN || 'N/A',
-            'Date of Check': log.dateOfCheck
-                ? new Date(log.dateOfCheck).toLocaleDateString('id-ID')
-                : 'N/A',
-            Technician: lookupTables.technicians[log.technician] || log.technician || 'N/A',
-            'Approval By': lookupTables.approvers[log.approvalBy] || log.approvalBy || 'N/A',
-            'Created By': log.createdBy || 'N/A',
-            'Created On': formatLocalTime(log.createdOn)
+            "WO Number": log.woNumber || "N/A",
+            "Type/Model": lookupTables.models[log.model] || log.model || "N/A",
+            Brand:
+                log.brand === "manitou"
+                    ? "Manitou"
+                    : log.brand === "renault"
+                        ? "Renault Trucks"
+                        : log.brand === "sdlg"
+                            ? "SDLG"
+                            : log.brand || "N/A",
+            VIN: log.VIN || "N/A",
+            "Date of Check": log.dateOfCheck
+                ? new Date(log.dateOfCheck).toLocaleDateString("id-ID")
+                : "N/A",
+            Technician:
+                lookupTables.technicians[log.technician] || log.technician || "N/A",
+            "Approval By":
+                lookupTables.approvers[log.approvalBy] || log.approvalBy || "N/A",
+            "Created By": log.createdBy || "N/A",
+            "Created On": formatLocalTime(log.createdOn),
         }));
-        
+
         const ws = XLSX.utils.json_to_sheet(excelData);
-        const wb = XLSX.utils.book_new()
+        const wb = XLSX.utils.book_new();
 
         XLSX.utils.book_append_sheet(wb, ws, "PDI Data Log");
-        XLSX.writeFile(wb, `pdi_log_${new Date().toISOString().split('T')[0]}.xlsx`)
+        XLSX.writeFile(wb,`pdi_log_${new Date().toISOString().split("T")[0]}.xlsx`);
     };
 
     const getUnitInformationData = (details, lookupTables) => {
@@ -272,94 +298,116 @@ const LogData = ({ title, apiUrl }) => {
 
         const dataArray = [];
         const keys = Object.keys(details);
-        
+
         const priorityKeys = [
-            'woNumber', 'brand', 'model', 'VIN', 'hourMeter',
-            'dateOfCheck', 'technician', 'approvalBy', 'remarks',
-            'generalRemarks', 'createdBy', 'createdOn', 'updatedOn',
-            'engineType', 'transmissionType', 'mileage',
+            "woNumber",
+            "brand",
+            "model",
+            "VIN",
+            "hourMeter",
+            "dateOfCheck",
+            "technician",
+            "approvalBy",
+            "remarks",
+            "generalRemarks",
+            "createdBy",
+            "createdOn",
+            "updatedOn",
+            "engineType",
+            "transmissionType",
+            "mileage",
         ];
-        
-        keys.forEach(key => {
+
+        keys.forEach((key) => {
             const lowerKey = key.toLowerCase();
-            
+
             if (EXCLUDED_KEYS.includes(key) || EXCLUDED_KEYS.includes(lowerKey)) {
                 return;
             }
 
             let value = details[key];
             let label = formatKeyToLabel(key);
-            
-            if (lowerKey === 'model' && lookupTables.models[value]) {
+
+            if (lowerKey === "model" && lookupTables.models[value]) {
                 value = lookupTables.models[value];
-            } else if (lowerKey === 'technician' && lookupTables.technicians[value]) {
+            } else if (lowerKey === "technician" && lookupTables.technicians[value]) {
                 value = lookupTables.technicians[value];
-            } else if (lowerKey === 'approvalby' && lookupTables.approvers[value]) {
+            } else if (lowerKey === "approvalby" && lookupTables.approvers[value]) {
                 value = lookupTables.approvers[value];
-            } else if (lowerKey === 'techniciansignature' && lookupTables.technicians[value]) {
+            } else if (
+                lowerKey === "techniciansignature" &&
+                lookupTables.technicians[value]
+            ) {
                 value = lookupTables.technicians[value];
-            } else if (lowerKey === 'approversignature' && lookupTables.approvers[value]) {
+            } else if (
+                lowerKey === "approversignature" &&
+                lookupTables.approvers[value]
+            ) {
                 value = lookupTables.approvers[value];
-            } else if (lowerKey === 'approversignaturedate' || lowerKey === 'techniciansignaturedate') {
+            } else if (
+                lowerKey === "approversignaturedate" ||
+                lowerKey === "techniciansignaturedate"
+            ) {
                 value = formatDateOnly(value);
-            } 
-            
-            else if (lowerKey === 'customer') {
-                const customerCode = details['customer'] || details['Customer'] || '';
+            } else if (lowerKey === "customer") {
+                const customerCode = details["customer"] || details["Customer"] || "";
                 const customerName = lookupTables.customers?.[customerCode];
 
                 if (customerName) {
                     value = toTitleCase(customerName.trim());
                 } else {
-                    value = customerCode ? String(customerCode) : 'N/A';
+                    value = customerCode ? String(customerCode) : "N/A";
                 }
-            }
-            
-            else if (lowerKey.includes('date') || lowerKey.includes('on')) {
-                if (lowerKey.includes('check')) {
-                    value = value ? new Date(value).toLocaleDateString('id-ID') : 'N/A';
+            } else if (lowerKey.includes("date") || lowerKey.includes("on")) {
+                if (lowerKey.includes("check")) {
+                    value = value ? new Date(value).toLocaleDateString("id-ID") : "N/A";
                 } else {
                     value = formatLocalTime(value);
                 }
+            } else {
+                value =
+                    value !== null && value !== undefined && value !== ""
+                        ? String(value)
+                        : "N/A";
             }
 
-            else {
-                value = value !== null && value !== undefined && value !== '' ? 
-                    String(value) : 'N/A';
-            }
-
-            dataArray.push({ key, label, value, priority: priorityKeys.indexOf(key) });
+            dataArray.push({
+                key,
+                label,
+                value,
+                priority: priorityKeys.indexOf(key),
+            });
         });
-        
+
         return dataArray.sort((a, b) => {
             if (a.priority === -1 && b.priority !== -1) return 1;
             if (a.priority !== -1 && b.priority === -1) return -1;
-            if (a.priority !== -1 && b.priority !== -1) return a.priority - b.priority;
-            
+            if (a.priority !== -1 && b.priority !== -1)
+                return a.priority - b.priority;
+
             return a.label.localeCompare(b.label);
         });
     };
 
     const fetchLookupData = async (brandId) => {
         let modelLookup = {};
-        
+
         if (!brandId || !token) return modelLookup;
-        
+
         const apiUrl = `http://127.0.0.1:5000/api/unit-types/${brandId}`;
-        
+
         try {
             const modelResponse = await fetch(apiUrl, {
-                headers: { 'Authorization': `Bearer ${token}` }
+                headers: { Authorization: `Bearer ${token}` },
             });
-            
+
             if (modelResponse.ok) {
                 const models = await modelResponse.json();
                 modelLookup = models.reduce((acc, item) => {
-                    acc[item.value] = item.label; 
+                    acc[item.value] = item.label;
                     return acc;
                 }, {});
             }
-
         } catch (e) {
             console.error(`[ERROR] Error fetching models for ${brandId}:`, e);
         }
@@ -371,64 +419,65 @@ const LogData = ({ title, apiUrl }) => {
 
         try {
             const response = await fetch(`http://127.0.0.1:5000/api/customers`, {
-                headers: { 'Authorization': `Bearer ${token}` }
+                headers: { Authorization: `Bearer ${token}` },
             });
 
-            if (!response.ok) throw new Error('Failed to fetch customer data.');
+            if (!response.ok) throw new Error("Failed to fetch customer data.");
             const customers = await response.json();
 
             const customerMap = {};
-            customers.forEach(cust => {
+            customers.forEach((cust) => {
                 const id = cust.CustomerID;
                 const name = cust.CustomerName?.trim();
-                
+
                 if (id && name) {
                     customerMap[id] = name;
                 }
             });
 
             return customerMap;
-
         } catch (e) {
             console.error(`[ERROR] Error fetching customer data:`, e);
             return {};
         }
-    }
+    };
 
     const toTitleCase = (str) => {
-        if (!str) return 'N/A';
+        if (!str) return "N/A";
 
         const ptRegex = /^(pt\.?|p\.?t\.?)$/i;
-        const words = str.split(' ');
-        const formattedWords = words.map(word => {
-        const cleanWord = word.replace(/[.,;:!?]+$/, '');
+        const words = str.split(" ");
+        const formattedWords = words.map((word) => {
+            const cleanWord = word.replace(/[.,;:!?]+$/, "");
 
             if (ptRegex.test(cleanWord)) {
-                const punctuation = word.match(/[.,;:!?]+$/) ? word.match(/[.,;:!?]+$/)[0] : '';
-                return 'PT' + punctuation;
+                const punctuation = word.match(/[.,;:!?]+$/)
+                    ? word.match(/[.,;:!?]+$/)[0]
+                    : "";
+                return "PT" + punctuation;
             } else {
                 return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
             }
         });
 
-        return formattedWords.join(' ');
-    }
+        return formattedWords.join(" ");
+    };
 
     const fetchUserLookup = async (token) => {
         if (!token) return { technicians: {}, approvers: {} };
-        
+
         try {
-            const baseUrl = 'http://127.0.0.1:5000/api';
+            const baseUrl = "http://127.0.0.1:5000/api";
             const [techRes, supervisorRes, techHeadRes] = await Promise.all([
                 fetch(`${baseUrl}/users/by-role/Technician`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
+                    headers: { Authorization: `Bearer ${token}` },
                 }),
                 fetch(`${baseUrl}/users/by-role/Supervisor`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
+                    headers: { Authorization: `Bearer ${token}` },
                 }),
                 fetch(`${baseUrl}/users/by-role/Technical Head`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                })
+                    headers: { Authorization: `Bearer ${token}` },
+                }),
             ]);
 
             const techData = techRes.ok ? await techRes.json() : [];
@@ -445,7 +494,6 @@ const LogData = ({ title, apiUrl }) => {
             }, {});
 
             return { technicians: techLookup, approvers: approverLookup };
-        
         } catch (error) {
             console.error("Error fetching user lookup data:", error);
             return { technicians: {}, approvers: {} };
@@ -455,10 +503,10 @@ const LogData = ({ title, apiUrl }) => {
     useEffect(() => {
         const fetchAllData = async () => {
             if (!token) {
-                notifications.show({ 
-                    title: "Authentication Error", 
-                    message: "Please log in again. Authentication token is missing.", 
-                    color: "red" 
+                notifications.show({
+                    title: "Authentication Error",
+                    message: "Please log in again. Authentication token is missing.",
+                    color: "red",
                 });
                 setLoading(false);
                 return;
@@ -466,25 +514,31 @@ const LogData = ({ title, apiUrl }) => {
 
             try {
                 setLoading(true);
-                
-                const logsResponse = await fetch(apiUrl, { headers: { 'Authorization': `Bearer ${token}` }});
+
+                const logsResponse = await fetch(apiUrl, {
+                    headers: { Authorization: `Bearer ${token}` },
+                });
 
                 if (!logsResponse.ok) {
-                    throw new Error('Failed to fetch the Log Data.');
+                    throw new Error("Failed to fetch the Log Data.");
                 }
                 const logData = await logsResponse.json();
-                
+
                 setLogs(logData);
-                
-                const uniqueBrandIds = [...new Set(
-                    logData.map(log => BRAND_ID_MAP[(log.brand || '').toLowerCase()]).filter(id => id) 
-                )];
+
+                const uniqueBrandIds = [
+                    ...new Set(
+                        logData
+                            .map((log) => BRAND_ID_MAP[(log.brand || "").toLowerCase()])
+                            .filter((id) => id)
+                    ),
+                ];
 
                 let allModelLookup = {};
 
                 for (const brandId of uniqueBrandIds) {
                     const modelLookupForBrand = await fetchLookupData(brandId);
-                    allModelLookup = { ...allModelLookup, ...modelLookupForBrand }; 
+                    allModelLookup = { ...allModelLookup, ...modelLookupForBrand };
                 }
 
                 const customerLookup = await fetchCustomerData();
@@ -496,15 +550,13 @@ const LogData = ({ title, apiUrl }) => {
                     approvers: approvers,
                     customers: customerLookup,
                 });
-
             } catch (err) {
                 setError(err.message);
-                notifications.show({ 
-                    title: "Error", 
-                    message: `Failed to Fetch the Data: ${err.message}`, 
-                    color: "red" 
+                notifications.show({
+                    title: "Error",
+                    message: `Failed to Fetch the Data: ${err.message}`,
+                    color: "red",
                 });
-            
             } finally {
                 setLoading(false);
             }
@@ -517,19 +569,19 @@ const LogData = ({ title, apiUrl }) => {
 
     const filteredLogs = useMemo(() => {
         const query = searchQuery.toLowerCase();
-        
+
         if (!query) return logs;
-        
-        return logs.filter(log => {
-            const modelLabel = lookupTables.models[log.model] || ''; 
-            const technicianLabel = lookupTables.technicians[log.technician] || '';
-            const approverLabel = lookupTables.approvers[log.approvalBy] || '';
-            const customerLabel = lookupTables.customers[log.customer] || '';
-            
+
+        return logs.filter((log) => {
+            const modelLabel = lookupTables.models[log.model] || "";
+            const technicianLabel = lookupTables.technicians[log.technician] || "";
+            const approverLabel = lookupTables.approvers[log.approvalBy] || "";
+            const customerLabel = lookupTables.customers[log.customer] || "";
+
             return (
-                (log.VIN || '').toLowerCase().includes(query) ||
-                (log.brand || '').toLowerCase().includes(query) ||
-                (log.woNumber || '').toLowerCase().includes(query) ||
+                (log.VIN || "").toLowerCase().includes(query) ||
+                (log.brand || "").toLowerCase().includes(query) ||
+                (log.woNumber || "").toLowerCase().includes(query) ||
                 modelLabel.toLowerCase().includes(query) ||
                 technicianLabel.toLowerCase().includes(query) ||
                 approverLabel.toLowerCase().includes(query) ||
@@ -545,10 +597,10 @@ const LogData = ({ title, apiUrl }) => {
 
     const handleOpenModal = async (pdiID) => {
         if (!token) {
-            notifications.show({ 
-                title: "Error", 
-                message: "Token missing.", 
-                color: "red" 
+            notifications.show({
+                title: "Error",
+                message: "Token missing.",
+                color: "red",
             });
             return;
         }
@@ -560,58 +612,60 @@ const LogData = ({ title, apiUrl }) => {
 
         try {
             const response = await fetch(detailApiUrl, {
-                headers: { 'Authorization': `Bearer ${token}` }
+                headers: { Authorization: `Bearer ${token}` },
             });
 
             if (!response.ok) {
-                throw new Error('Failed to fetch detail log data. Status: ' + response.status);
+                throw new Error(
+                    "Failed to fetch detail log data. Status: " + response.status
+                );
             }
 
             const details = await response.json();
             setSelectedLogDetails(details);
-
         } catch (err) {
-            notifications.show({ 
-                title: "Error", 
-                message: `Failed to load details: ${err.message}`, 
-                color: "red" 
+            notifications.show({
+                title: "Error",
+                message: `Failed to load details: ${err.message}`,
+                color: "red",
             });
             setSelectedLogDetails({ error: err.message });
         }
-    }
+    };
 
     const rows = paginatedLogs.map((log, index) => {
-        const modelLabel = lookupTables.models[log.model] || log.model || 'N/A';
-        const technicianLabel = lookupTables.technicians[log.technician] || log.technician || 'N/A';
-        const approverLabel = lookupTables.approvers[log.approvalBy] || log.approvalBy || 'N/A';
-        const globalIndex = (activePage - 1) * parseInt(rowsPerPage, 10) + index + 1;
+        const modelLabel = lookupTables.models[log.model] || log.model || "N/A";
+        const technicianLabel =
+            lookupTables.technicians[log.technician] || log.technician || "N/A";
+        const approverLabel =
+            lookupTables.approvers[log.approvalBy] || log.approvalBy || "N/A";
+        const globalIndex =
+            (activePage - 1) * parseInt(rowsPerPage, 10) + index + 1;
 
         return (
             <Table.Tr key={log.id}>
                 <Table.Td>{globalIndex}</Table.Td>
-                <Table.Td>{log.woNumber || 'N/A'}</Table.Td>
-                <Table.Td>{modelLabel}</Table.Td> 
+                <Table.Td>{log.woNumber || "N/A"}</Table.Td>
+                <Table.Td>{modelLabel}</Table.Td>
                 <Table.Td>
-                    {log.brand === 'manitou'
-                        ? 'Manitou'
-                        : log.brand == 'renault'
-                            ? 'Renault Trucks'
-                            : log.brand == 'sdlg'
-                                ? 'SDLG'
-                                : log.brand || 'N/A'}
+                    {log.brand === "manitou"
+                        ? "Manitou"
+                        : log.brand == "renault"
+                            ? "Renault Trucks"
+                            : log.brand == "sdlg"
+                                ? "SDLG"
+                                : log.brand || "N/A"}
                 </Table.Td>
-                <Table.Td>{log.VIN || 'N/A'}</Table.Td>
+                <Table.Td>{log.VIN || "N/A"}</Table.Td>
                 <Table.Td>
-                    {log.dateOfCheck 
-                        ? new Date(log.dateOfCheck).toLocaleDateString('id-ID') 
-                        : 'N/A'}
+                    {log.dateOfCheck
+                        ? new Date(log.dateOfCheck).toLocaleDateString("id-ID")
+                        : "N/A"}
                 </Table.Td>
                 <Table.Td>{technicianLabel}</Table.Td>
                 <Table.Td>{approverLabel}</Table.Td>
-                <Table.Td>{log.createdBy || 'N/A'}</Table.Td>
-                <Table.Td>
-                    {formatLocalTime(log.createdOn)} 
-                </Table.Td>
+                <Table.Td>{log.createdBy || "N/A"}</Table.Td>
+                <Table.Td>{formatLocalTime(log.createdOn)}</Table.Td>
                 <Table.Td>
                     <Button
                         variant="subtle"
@@ -631,9 +685,11 @@ const LogData = ({ title, apiUrl }) => {
         return getUnitInformationData(selectedLogDetails, lookupTables);
     }, [selectedLogDetails, lookupTables]);
 
-    const remarks = selectedLogDetails ? 
-        (selectedLogDetails.generalRemarks || selectedLogDetails.vehicle_inspection || 'No general notes or remarks recorded for this Pre Delivery Inspection.') 
-        : 'N/A';
+    const remarks = selectedLogDetails
+        ? selectedLogDetails.generalRemarks ||
+        selectedLogDetails.vehicle_inspection ||
+        "No general notes or remarks recorded for this Pre Delivery Inspection."
+        : "N/A";
 
     const brand = selectedLogDetails?.brand;
     const checklist_items = selectedLogDetails?.checklist_items;
@@ -641,8 +697,11 @@ const LogData = ({ title, apiUrl }) => {
 
     return (
         <Container size="xl" my="xl">
-            <Title order={1} mb="xl" ta="center"> {title} </Title>
-            
+            <Title order={1} mb="xl" ta="center">
+                {" "}
+                {title}{" "}
+            </Title>
+
             {!loading && !error && (
                 <Text ta="center" c="dimmed" mt="-md" mb="xs">
                     Total Units: {filteredLogs.length}
@@ -661,7 +720,7 @@ const LogData = ({ title, apiUrl }) => {
                     Error Occured: {error}
                 </Text>
             )}
-            
+
             {!loading && !error && (
                 <>
                     <Paper shadow="sm" radius="md" p="md" mb="md">
@@ -676,11 +735,11 @@ const LogData = ({ title, apiUrl }) => {
                                     setActivePage(1);
                                 }}
                                 w={400}
-                                style={{ alignSelf: 'center' }} 
+                                style={{ alignSelf: "center" }}
                             />
                             <Group gap="xs">
-                                {user?.permissions?.includes('download_arrival_log') && (
-                                    <Button 
+                                {user?.permissions?.includes("download_arrival_log") && (
+                                    <Button
                                         onClick={downloadExcel}
                                         variant="outline"
                                         color="#A91D3A"
@@ -689,11 +748,11 @@ const LogData = ({ title, apiUrl }) => {
                                         w={32}
                                         h={32}
                                         style={{
-                                            height: '100%',
-                                            width: '40px',
-                                            paddingTop: '2px',
-                                            paddingBottom: '2px',
-                                            marginTop: '23px'
+                                            height: "100%",
+                                            width: "40px",
+                                            paddingTop: "2px",
+                                            paddingBottom: "2px",
+                                            marginTop: "23px",
                                         }}
                                     >
                                         <IconDownload size={16} />
@@ -702,7 +761,7 @@ const LogData = ({ title, apiUrl }) => {
                                 <Select
                                     label="Show Rows"
                                     placeholder="10"
-                                    data={['10', '20', '30', '40', '50']}
+                                    data={["10", "20", "30", "40", "50"]}
                                     value={rowsPerPage}
                                     onChange={(value) => {
                                         setRowsPerPage(value);
@@ -730,7 +789,7 @@ const LogData = ({ title, apiUrl }) => {
                                     <Table.Th>Created On</Table.Th>
                                     <Table.Th>Action</Table.Th>
                                 </Table.Tr>
-                                </Table.Thead>
+                            </Table.Thead>
                             <Table.Tbody>{rows}</Table.Tbody>
                         </Table>
                     </Paper>
@@ -752,41 +811,43 @@ const LogData = ({ title, apiUrl }) => {
                 onClose={closeModal}
                 title="Detail Pre-Delivery Log"
                 size="1350px"
-                styles={{ 
-                    title: { flexGrow: 1, textAlign: 'center' }
+                styles={{
+                    title: { flexGrow: 1, textAlign: "center" },
                 }}
-                scrollAreaComponent={ScrollArea.Autosize} 
+                scrollAreaComponent={ScrollArea.Autosize}
             >
-                {selectedLogDetails === null ? 
-                (
+                {selectedLogDetails === null ? (
                     <Box ta="center">
                         <Loader size="md" />
                         <Text mt="sm">Loading Details...</Text>
                     </Box>
-                ) : selectedLogDetails.error ? 
-                (
+                ) : selectedLogDetails.error ? (
                     <Alert icon={<IconAlertCircle size={16} />} title="Error" color="red">
                         Failed to load details: {selectedLogDetails.error}
                     </Alert>
                 ) : (
                     <Stack gap="xl">
                         <Box>
-                            <Title 
-                                order={4} 
-                                mb="sm" 
+                            <Title
+                                order={4}
+                                mb="sm"
                                 pb="xs"
-                                style={{ borderBottom: '1px solid var(--mantine-color-gray-2)' }}
+                                style={{
+                                    borderBottom: "1px solid var(--mantine-color-gray-2)",
+                                }}
                             >
                                 Unit Information
                             </Title>
-                            <SimpleGrid 
-                                cols={{ base: 1, sm: 2, lg: 3 }} 
-                                spacing={{ base: 'md', sm: 'xl' }}
+                            <SimpleGrid
+                                cols={{ base: 1, sm: 2, lg: 3 }}
+                                spacing={{ base: "md", sm: "xl" }}
                                 verticalSpacing="sm"
                             >
                                 {unitInfoData.map((data) => (
                                     <Group key={data.key} gap="sm" wrap="nowrap">
-                                        <Text fw={700} w={120} style={{ minWidth: '100px' }}>{data.label}:</Text>
+                                        <Text fw={700} w={120} style={{ minWidth: "100px" }}>
+                                            {data.label}:
+                                        </Text>
                                         <Text>{data.value}</Text>
                                     </Group>
                                 ))}
@@ -794,36 +855,50 @@ const LogData = ({ title, apiUrl }) => {
                         </Box>
 
                         <Box>
-                            <Title 
-                                order={4} 
+                            <Title
+                                order={4}
                                 mt="md"
-                                mb="sm" 
+                                mb="sm"
                                 pb="xs"
-                                style={{ borderBottom: '1px solid var(--mantine-color-gray-2)' }}
+                                style={{
+                                    borderBottom: "1px solid var(--mantine-color-gray-2)",
+                                }}
                             >
-                                Checklist Inspection Items ({toCapitalCase(selectedLogDetails.brand)})
+                                Checklist Inspection Items (
+                                {toCapitalCase(selectedLogDetails.brand)})
                             </Title>
-                            
-                            {selectedLogDetails.checklist_items && selectedLogDetails.checklist_items.length > 0 ? 
-                                (
-                                    <>
-                                        {selectedLogDetails.brand && selectedLogDetails.brand.toLowerCase() === 'renault' ? (
-                                            (() => {
-                                                const allItems = selectedLogDetails.checklist_items || [];
 
-                                                const BACKEND_BATTERY_SECTION_PDI = 'battery_status';
-                                                const BACKEND_BATTERY_SECTION_SM = 'battery_inspection';
-                                                const DISPLAY_BATTERY_TITLE = "Battery Inspection (Renault) - Measurements";
+                            {selectedLogDetails.checklist_items &&
+                                selectedLogDetails.checklist_items.length > 0 ? (
+                                <>
+                                    {selectedLogDetails.brand &&
+                                        selectedLogDetails.brand.toLowerCase() === "renault" ? (
+                                        (() => {
+                                            const allItems = selectedLogDetails.checklist_items || [];
 
-            const smBatteryItems = allItems.filter(item => item.section === BACKEND_BATTERY_SECTION_SM);
-            const pdiBatteryItems = allItems.filter(item => item.section === BACKEND_BATTERY_SECTION_PDI);
+                                            const BACKEND_BATTERY_SECTION_PDI = "battery_status";
+                                            const BACKEND_BATTERY_SECTION_SM = "battery_inspection";
+                                            const DISPLAY_BATTERY_TITLE =
+                                                "Battery Inspection (Renault) - Measurements";
 
-                                                const mainChecklistData = allItems.filter(item => 
-                                                    item.section !== BACKEND_BATTERY_SECTION_PDI &&
-                                                    item.section !== BACKEND_BATTERY_SECTION_SM &&
-                                                    item.section
-                                                ).slice().sort((a, b) => {
-                                                    const brandLower = selectedLogDetails.brand.toLowerCase();
+                                            const smBatteryItems = allItems.filter(
+                                                (item) => item.section === BACKEND_BATTERY_SECTION_SM
+                                            );
+                                            const pdiBatteryItems = allItems.filter(
+                                                (item) => item.section === BACKEND_BATTERY_SECTION_PDI
+                                            );
+
+                                            const mainChecklistData = allItems
+                                                .filter(
+                                                    (item) =>
+                                                        item.section !== BACKEND_BATTERY_SECTION_PDI &&
+                                                        item.section !== BACKEND_BATTERY_SECTION_SM &&
+                                                        item.section
+                                                )
+                                                .slice()
+                                                .sort((a, b) => {
+                                                    const brandLower =
+                                                        selectedLogDetails.brand.toLowerCase();
                                                     const map = BRAND_CHECKLIST_MAP[brandLower];
 
                                                     if (!map) return 0;
@@ -834,159 +909,48 @@ const LogData = ({ title, apiUrl }) => {
                                                     return rankA - rankB;
                                                 });
 
-            // PDI view should show only Battery + Test Code columns
-            let structuredBatteryData = [];
-            if (pdiBatteryItems.length > 0) {
-                const batteryMap = {};
-                pdiBatteryItems.forEach(item => {
-                    if ((item.itemName || '').startsWith('batt_')) {
-                        batteryMap[item.itemName] = { label: item.value, testCode: '' };
-                    }
-                });
-                pdiBatteryItems.forEach(item => {
-                    if ((item.itemName || '').startsWith('test_code_batt_')) {
-                        const key = item.itemName.replace('test_code_', '');
-                        if (batteryMap[key]) batteryMap[key].testCode = item.value;
-                    }
-                });
-                structuredBatteryData = Object.keys(batteryMap).map(key => ({
-                    label: batteryMap[key].label,
-                    testCode: batteryMap[key].testCode || '-',
-                }));
-            }
+                                            // PDI view should show only Battery + Test Code columns
+                                            let structuredBatteryData = [];
+                                            if (pdiBatteryItems.length > 0) {
+                                                const batteryMap = {};
+                                                pdiBatteryItems.forEach((item) => {
+                                                    if ((item.itemName || "").startsWith("batt_")) {
+                                                        batteryMap[item.itemName] = {
+                                                            label: item.value,
+                                                            testCode: "",
+                                                        };
+                                                    }
+                                                });
+                                                pdiBatteryItems.forEach((item) => {
+                                                    if (
+                                                        (item.itemName || "").startsWith("test_code_batt_")
+                                                    ) {
+                                                        const key = item.itemName.replace("test_code_", "");
+                                                        if (batteryMap[key])
+                                                            batteryMap[key].testCode = item.value;
+                                                    }
+                                                });
+                                                structuredBatteryData = Object.keys(batteryMap).map(
+                                                    (key) => ({
+                                                        label: batteryMap[key].label,
+                                                        testCode: batteryMap[key].testCode || "-",
+                                                    })
+                                                );
+                                            }
 
-                                                return (
-                                                    <Stack gap="xl">
-                                                        {/* 1. Main Checklist Inspection Items Section (Tabel Standard) */}
-                                                        {mainChecklistData.length > 0 && (
-                                                            <Box>
-                                                                <Table withRowBorders={true} highlightOnHover>
-                                                                    <Table.Thead>
-                                                                        <Table.Tr>
-                                                                            <Table.Th>Section</Table.Th>
-                                                                            <Table.Th>Item</Table.Th>
-                                                                            <Table.Th style={{ width: '100px' }}>Status</Table.Th>
-                                                                            <Table.Th>Remarks/Caption</Table.Th>
-                                                                            <Table.Th>Image URL</Table.Th>
-                                                                        </Table.Tr>
-                                                                    </Table.Thead>
-                                                                    <Table.Tbody>
-                                                                        {(() => {
-                                                                            const brand = selectedLogDetails.brand;
-                                                                            const rows = mainChecklistData.map(it => {
-                                                                                const { section: normSec, item: normItem } = getNormalizedLabel(brand, it.section, it.itemName);
-                                                                                return { section: stripSectionIndex(normSec), itemLabel: normItem, status: it.status, remarks: it.remarks || it.caption || '-', imageUrl: it.image_url };
-                                                                            });
-                                                                            const counts = {};
-                                                                            rows.forEach(r => { counts[r.section] = (counts[r.section] || 0) + 1; });
-                                                                            const emitted = {};
-                                                                            return rows.map((row, idx) => (
-                                                                                <Table.Tr key={idx}>
-                                                                                    {(!emitted[row.section]) && (
-                                                                                        <Table.Td rowSpan={counts[row.section]} style={{ textAlign: 'center', verticalAlign: 'middle', fontWeight: 600 }}>{row.section}</Table.Td>
-                                                                                    )}{(emitted[row.section] = (emitted[row.section] || 0) + 1) && null}
-                                                                                    <Table.Td>{row.itemLabel}</Table.Td>
-                                                                                    <Table.Td>
-                                                                                        <Text fw={700} c={getStatusLabels(brand, row.status).color}>{getStatusLabels(brand, row.status).text}</Text>
-                                                                                    </Table.Td>
-                                                                                    <Table.Td>{row.remarks}</Table.Td>
-                                                                                    <Table.Td>
-                                                                                        {row.imageUrl && row.imageUrl.startsWith('https://') ? (
-                                                                                            <Box style={{ width: '100px', height: '100px', overflow: 'hidden' }}>
-                                                                                                <img src={row.imageUrl} alt="Inspection" style={{ width: '100%', height: 'auto', objectFit: 'cover' }} onError={(e) => { e.target.style.display = 'none'; e.target.parentElement.innerHTML = '<span style=\"color: red\">Image Failed to Load</span>'; }} />
-                                                                                            </Box>
-                                                                                        ) : '-'}
-                                                                                    </Table.Td>
-                                                                                </Table.Tr>
-                                                                            ));
-                                                                        })()}
-                                                                    </Table.Tbody>
-                                                                </Table>
-                                                            </Box>
-                                                        )}
-
-                                                        {/* --- 2. Battery Inspection Section (Full List) --- */}
-                                                        {structuredBatteryData.length > 0 && (
-                                                            <Box>
-                                                                <Title order={4} mt="md" mb="sm" pb="xs" style={{ borderBottom: '1px solid var(--mantine-color-gray-2)' }}>
-                                                                    {DISPLAY_BATTERY_TITLE}
-                                                                </Title>
-            <Table withRowBorders={true} highlightOnHover>
-                <Table.Thead>
-                    <Table.Tr>
-                        <Table.Th>Battery</Table.Th>
-                        <Table.Th>Test Code</Table.Th>
-                    </Table.Tr>
-                </Table.Thead>
-                <Table.Tbody>
-                    {structuredBatteryData.map((row, index) => (
-                        <Table.Tr key={index}>
-                            <Table.Td>{row.label}</Table.Td>
-                            <Table.Td>{row.testCode}</Table.Td>
-                        </Table.Tr>
-                    ))}
-                </Table.Tbody>
-            </Table>
-                                                                </Box>
-                                                        )}
-                                                    </Stack>
-                                                    );    
-                                                })()
-                                                ) : (
-                                                    <>
-                                                        {selectedLogDetails.brand && selectedLogDetails.brand.toLowerCase() === 'sdlg' ? (
-                                                            <Table withRowBorders={true} highlightOnHover>
-                                                                <Table.Thead>
-                                                                    <Table.Tr>
-                                                                        <Table.Th style={{ width: '50px' }}>No.</Table.Th>
-                                                                        <Table.Th style={{ width: '85%' }}>Technical Requirement</Table.Th>
-                                                                        <Table.Th style={{ width: '15%', textAlign: 'center' }}>Status</Table.Th>
-                                                                    </Table.Tr>
-                                                                </Table.Thead>
-                                                                <Table.Tbody>
-                                                                    {selectedLogDetails.checklist_items
-                                                                        .map((item, index) => {
-                                                                            const sdlgMap = BRAND_CHECKLIST_MAP['sdlg'];
-                                                                            const technicalRequirements = sdlgMap?.technicalRequirements?.mainCheck || [];
-                                                                            const { text: statusText, color: statusColor } = getStatusLabels('sdlg', item.status);
-                                                                            
-                                                                            let itemContent = item.itemName || 'Technical Requirement Missing';
-
-                                                                            if (item.itemKey) {
-                                                                                const foundItem = technicalRequirements.find(req => req.itemKey === item.itemKey);
-                                                                                if (foundItem) {
-                                                                                    itemContent = foundItem.label;
-                                                                                }
-                                                                            }
-
-                                                                            else if (item.id !== undefined) {
-                                                                                const foundItem = technicalRequirements.find(req => req.id === item.id);
-                                                                                if (foundItem) {
-                                                                                    itemContent = foundItem.label;
-                                                                                }
-                                                                            }
-
-                                                                            return (
-                                                                                <Table.Tr key={index}>
-                                                                                    <Table.Td>{index + 1}</Table.Td>
-                                                                                    <Table.Td>{itemContent}</Table.Td>
-                                                                                    <Table.Td style={{ textAlign: 'center' }}>
-                                                                                        <Text fw={700} c={statusColor}>
-                                                                                            {statusText}
-                                                                                        </Text>
-                                                                                    </Table.Td>
-                                                                                </Table.Tr>
-                                                                            );
-                                                                        })}
-                                                                </Table.Tbody>
-                                                            </Table>
-                                                        ) : (
+                                            return (
+                                                <Stack gap="xl">
+                                                    {/* 1. Main Checklist Inspection Items Section (Tabel Standard) */}
+                                                    {mainChecklistData.length > 0 && (
+                                                        <Box>
                                                             <Table withRowBorders={true} highlightOnHover>
                                                                 <Table.Thead>
                                                                     <Table.Tr>
                                                                         <Table.Th>Section</Table.Th>
                                                                         <Table.Th>Item</Table.Th>
-                                                                        <Table.Th style={{ width: '100px' }}>Status</Table.Th>
+                                                                        <Table.Th style={{ width: "100px" }}>
+                                                                            Status
+                                                                        </Table.Th>
                                                                         <Table.Th>Remarks/Caption</Table.Th>
                                                                         <Table.Th>Image URL</Table.Th>
                                                                     </Table.Tr>
@@ -994,125 +958,395 @@ const LogData = ({ title, apiUrl }) => {
                                                                 <Table.Tbody>
                                                                     {(() => {
                                                                         const brand = selectedLogDetails.brand;
-                                                                        const sorted = selectedLogDetails.checklist_items
-                                                                            .slice()
-                                                                            .sort((a, b) => {
-                                                                                const map = BRAND_CHECKLIST_MAP[(brand || '').toLowerCase()];
-                                                                                if (!map) return 0;
-                                                                                const sectionKeys = Object.keys(map.sections);
-                                                                                const rankA = sectionKeys.indexOf(a.section);
-                                                                                const rankB = sectionKeys.indexOf(b.section);
-                                                                                if (rankA !== rankB) return rankA - rankB;
-                                                                                return 0;
-                                                                            })
-                                                                            .map((it) => {
-                                                                                const { section: normSec, item: normItem } = getNormalizedLabel(brand, it.section, it.itemName);
-                                                                                return {
-                                                                                    section: normSec,
-                                                                                    itemLabel: normItem,
-                                                                                    status: it.status,
-                                                                                    remarks: it.remarks || it.caption || it.notes || '-',
-                                                                                    imageUrl: it.image_url || it.imageUrl || it.image_blob_name,
-                                                                                };
-                                                                            });
-
-                                                                        const counts = {};
-                                                                        sorted.forEach(r => { counts[r.section] = (counts[r.section] || 0) + 1; });
-                                                                        const emitted = {};
-
-                                                                        return sorted.map((row, idx) => {
-                                                                            const { text: statusText, color: statusColor } = getStatusLabels(brand, row.status);
-                                                                            const firstForSection = !emitted[row.section];
-                                                                            emitted[row.section] = (emitted[row.section] || 0) + 1;
-
-                                                                            return (
-                                                                                <Table.Tr key={idx}>
-                                                                                    {firstForSection && (
-                                                                                        <Table.Td rowSpan={counts[row.section]} style={{ textAlign: 'center', verticalAlign: 'middle', fontWeight: 600 }}>
-                                                                                            {row.section}
-                                                                                        </Table.Td>
-                                                                                    )}
-                                                                                    <Table.Td>{row.itemLabel}</Table.Td>
-                                                                                    <Table.Td>
-                                                                                        <Text fw={700} c={statusColor}>{statusText}</Text>
-                                                                                    </Table.Td>
-                                                                                    <Table.Td>{row.remarks}</Table.Td>
-                                                                                    <Table.Td>
-                                                                                        {row.imageUrl && String(row.imageUrl).startsWith('https://') ? (
-                                                                                            <Box style={{ width: '100px', height: '100px', overflow: 'hidden' }}>
-                                                                                                <img
-                                                                                                    src={row.imageUrl}
-                                                                                                    alt="Inspection"
-                                                                                                    style={{ width: '100%', height: 'auto', objectFit: 'cover' }}
-                                                                                                    onError={(e) => {
-                                                                                                        e.target.style.display = 'none';
-                                                                                                        e.target.parentElement.innerHTML = '<span style=\"color: red\">Image Failed to Load</span>';
-                                                                                                    }}
-                                                                                                />
-                                                                                            </Box>
-                                                                                        ) : '-'}
-                                                                                    </Table.Td>
-                                                                                </Table.Tr>
+                                                                        const rows = mainChecklistData.map((it) => {
+                                                                            const {
+                                                                                section: normSec,
+                                                                                item: normItem,
+                                                                            } = getNormalizedLabel(
+                                                                                brand,
+                                                                                it.section,
+                                                                                it.itemName
                                                                             );
+                                                                            return {
+                                                                                section: stripSectionIndex(normSec),
+                                                                                itemLabel: normItem,
+                                                                                status: it.status,
+                                                                                remarks:
+                                                                                    it.remarks || it.caption || "-",
+                                                                                imageUrl: it.image_url,
+                                                                            };
                                                                         });
+                                                                        const counts = {};
+                                                                        rows.forEach((r) => {
+                                                                            counts[r.section] =
+                                                                                (counts[r.section] || 0) + 1;
+                                                                        });
+                                                                        const emitted = {};
+                                                                        return rows.map((row, idx) => (
+                                                                            <Table.Tr key={idx}>
+                                                                                {!emitted[row.section] && (
+                                                                                    <Table.Td
+                                                                                        rowSpan={counts[row.section]}
+                                                                                        style={{
+                                                                                            textAlign: "center",
+                                                                                            verticalAlign: "middle",
+                                                                                            fontWeight: 600,
+                                                                                        }}
+                                                                                    >
+                                                                                        {row.section}
+                                                                                    </Table.Td>
+                                                                                )}
+                                                                                {(emitted[row.section] =
+                                                                                    (emitted[row.section] || 0) + 1) &&
+                                                                                    null}
+                                                                                <Table.Td>{row.itemLabel}</Table.Td>
+                                                                                <Table.Td>
+                                                                                    <Text
+                                                                                        fw={700}
+                                                                                        c={
+                                                                                            getStatusLabels(brand, row.status)
+                                                                                                .color
+                                                                                        }
+                                                                                    >
+                                                                                        {
+                                                                                            getStatusLabels(brand, row.status)
+                                                                                                .text
+                                                                                        }
+                                                                                    </Text>
+                                                                                </Table.Td>
+                                                                                <Table.Td>{row.remarks}</Table.Td>
+                                                                                <Table.Td>
+                                                                                    {row.imageUrl &&
+                                                                                        row.imageUrl.startsWith(
+                                                                                            "https://"
+                                                                                        ) ? (
+                                                                                        <Box
+                                                                                            style={{
+                                                                                                width: "100px",
+                                                                                                height: "100px",
+                                                                                                overflow: "hidden",
+                                                                                            }}
+                                                                                        >
+                                                                                            <img
+                                                                                                src={row.imageUrl}
+                                                                                                alt="Inspection"
+                                                                                                style={{
+                                                                                                    width: "100%",
+                                                                                                    height: "auto",
+                                                                                                    objectFit: "cover",
+                                                                                                }}
+                                                                                                onError={(e) => {
+                                                                                                    e.target.style.display =
+                                                                                                        "none";
+                                                                                                    e.target.parentElement.innerHTML =
+                                                                                                        '<span style="color: red">Image Failed to Load</span>';
+                                                                                                }}
+                                                                                            />
+                                                                                        </Box>
+                                                                                    ) : (
+                                                                                        "-"
+                                                                                    )}
+                                                                                </Table.Td>
+                                                                            </Table.Tr>
+                                                                        ));
                                                                     })()}
                                                                 </Table.Tbody>
                                                             </Table>
-                                                        )}
-                                                    </>
-                                                )}
-                                            </>
-                                    ) : (
-                                        <Text c="gray">No detailed checklist items found for this unit.</Text>
-                                    )}
-                            </Box>
+                                                        </Box>
+                                                    )}
 
-                        {(brand?.toLowerCase() === 'sdlg' && defect_remarks && defect_remarks.length > 0) && (
-                            <Box>
-                                <Title
-                                    order={4}
-                                    mt="md"
-                                    mb="sm"
-                                    pb="xs"
-                                    style={{ borderBottom: '1px solid var(--mantine-color-gray-2)' }}
-                                >
-                                    Defects & Remarks
-                                </Title>
-                                <Table striped highlightOnHover withTableBorder withColumnBorders>
-                                    <Table.Thead>
-                                        <Table.Tr>
-                                            <Table.Th style={{ width: '50px' }}>No.</Table.Th>
-                                            <Table.Th style={{ width: '50%' }}>Defect Description</Table.Th>
-                                            <Table.Th>Remarks / Corrective Action</Table.Th>
-                                        </Table.Tr>
-                                    </Table.Thead>
-                                    <Table.Tbody>
-                                        {defect_remarks.map((defect, index) => (
-                                            <Table.Tr key={defect.defectID || index}>
-                                                <Table.Td>{index + 1}</Table.Td>
-                                                <Table.Td>{defect.description || '-'}</Table.Td>
-                                                <Table.Td>{defect.remarks || '-'}</Table.Td>
+                                                    {/* --- 2. Battery Inspection Section (Full List) --- */}
+                                                    {structuredBatteryData.length > 0 && (
+                                                        <Box>
+                                                            <Title
+                                                                order={4}
+                                                                mt="md"
+                                                                mb="sm"
+                                                                pb="xs"
+                                                                style={{
+                                                                    borderBottom:
+                                                                        "1px solid var(--mantine-color-gray-2)",
+                                                                }}
+                                                            >
+                                                                {DISPLAY_BATTERY_TITLE}
+                                                            </Title>
+                                                            <Table withRowBorders={true} highlightOnHover>
+                                                                <Table.Thead>
+                                                                    <Table.Tr>
+                                                                        <Table.Th>Battery</Table.Th>
+                                                                        <Table.Th>Test Code</Table.Th>
+                                                                    </Table.Tr>
+                                                                </Table.Thead>
+                                                                <Table.Tbody>
+                                                                    {structuredBatteryData.map((row, index) => (
+                                                                        <Table.Tr key={index}>
+                                                                            <Table.Td>{row.label}</Table.Td>
+                                                                            <Table.Td>{row.testCode}</Table.Td>
+                                                                        </Table.Tr>
+                                                                    ))}
+                                                                </Table.Tbody>
+                                                            </Table>
+                                                        </Box>
+                                                    )}
+                                                </Stack>
+                                            );
+                                        })()
+                                    ) : (
+                                        <>
+                                            {selectedLogDetails.brand &&
+                                                selectedLogDetails.brand.toLowerCase() === "sdlg" ? (
+                                                <Table withRowBorders={true} highlightOnHover>
+                                                    <Table.Thead>
+                                                        <Table.Tr>
+                                                            <Table.Th style={{ width: "50px" }}>No.</Table.Th>
+                                                            <Table.Th style={{ width: "85%" }}>
+                                                                Technical Requirement
+                                                            </Table.Th>
+                                                            <Table.Th
+                                                                style={{ width: "15%", textAlign: "center" }}
+                                                            >
+                                                                Status
+                                                            </Table.Th>
+                                                        </Table.Tr>
+                                                    </Table.Thead>
+                                                    <Table.Tbody>
+                                                        {selectedLogDetails.checklist_items.map(
+                                                            (item, index) => {
+                                                                const sdlgMap = BRAND_CHECKLIST_MAP["sdlg"];
+                                                                const technicalRequirements =
+                                                                    sdlgMap?.technicalRequirements?.mainCheck ||
+                                                                    [];
+                                                                const { text: statusText, color: statusColor } =
+                                                                    getStatusLabels("sdlg", item.status);
+
+                                                                let itemContent =
+                                                                    item.itemName ||
+                                                                    "Technical Requirement Missing";
+
+                                                                if (item.itemKey) {
+                                                                    const foundItem = technicalRequirements.find(
+                                                                        (req) => req.itemKey === item.itemKey
+                                                                    );
+                                                                    if (foundItem) {
+                                                                        itemContent = foundItem.label;
+                                                                    }
+                                                                } else if (item.id !== undefined) {
+                                                                    const foundItem = technicalRequirements.find(
+                                                                        (req) => req.id === item.id
+                                                                    );
+                                                                    if (foundItem) {
+                                                                        itemContent = foundItem.label;
+                                                                    }
+                                                                }
+
+                                                                return (
+                                                                    <Table.Tr key={index}>
+                                                                        <Table.Td>{index + 1}</Table.Td>
+                                                                        <Table.Td>{itemContent}</Table.Td>
+                                                                        <Table.Td style={{ textAlign: "center" }}>
+                                                                            <Text fw={700} c={statusColor}>
+                                                                                {statusText}
+                                                                            </Text>
+                                                                        </Table.Td>
+                                                                    </Table.Tr>
+                                                                );
+                                                            }
+                                                        )}
+                                                    </Table.Tbody>
+                                                </Table>
+                                            ) : (
+                                                <Table withRowBorders={true} highlightOnHover>
+                                                    <Table.Thead>
+                                                        <Table.Tr>
+                                                            <Table.Th>Section</Table.Th>
+                                                            <Table.Th>Item</Table.Th>
+                                                            <Table.Th style={{ width: "100px" }}>
+                                                                Status
+                                                            </Table.Th>
+                                                            <Table.Th>Remarks/Caption</Table.Th>
+                                                            <Table.Th>Image URL</Table.Th>
+                                                        </Table.Tr>
+                                                    </Table.Thead>
+                                                    <Table.Tbody>
+                                                        {(() => {
+                                                            const brand = selectedLogDetails.brand;
+                                                            const sorted = selectedLogDetails.checklist_items
+                                                                .slice()
+                                                                .sort((a, b) => {
+                                                                    const map =
+                                                                        BRAND_CHECKLIST_MAP[
+                                                                        (brand || "").toLowerCase()
+                                                                        ];
+                                                                    if (!map) return 0;
+                                                                    const sectionKeys = Object.keys(map.sections);
+                                                                    const rankA = sectionKeys.indexOf(a.section);
+                                                                    const rankB = sectionKeys.indexOf(b.section);
+                                                                    if (rankA !== rankB) return rankA - rankB;
+                                                                    return 0;
+                                                                })
+                                                                .map((it) => {
+                                                                    const { section: normSec, item: normItem } =
+                                                                        getNormalizedLabel(
+                                                                            brand,
+                                                                            it.section,
+                                                                            it.itemName
+                                                                        );
+                                                                    return {
+                                                                        section: normSec,
+                                                                        itemLabel: normItem,
+                                                                        status: it.status,
+                                                                        remarks:
+                                                                            it.remarks ||
+                                                                            it.caption ||
+                                                                            it.notes ||
+                                                                            "-",
+                                                                        imageUrl:
+                                                                            it.image_url ||
+                                                                            it.imageUrl ||
+                                                                            it.image_blob_name,
+                                                                    };
+                                                                });
+
+                                                            const counts = {};
+                                                            sorted.forEach((r) => {
+                                                                counts[r.section] =
+                                                                    (counts[r.section] || 0) + 1;
+                                                            });
+                                                            const emitted = {};
+
+                                                            return sorted.map((row, idx) => {
+                                                                const { text: statusText, color: statusColor } =
+                                                                    getStatusLabels(brand, row.status);
+                                                                const firstForSection = !emitted[row.section];
+                                                                emitted[row.section] =
+                                                                    (emitted[row.section] || 0) + 1;
+
+                                                                return (
+                                                                    <Table.Tr key={idx}>
+                                                                        {firstForSection && (
+                                                                            <Table.Td
+                                                                                rowSpan={counts[row.section]}
+                                                                                style={{
+                                                                                    textAlign: "center",
+                                                                                    verticalAlign: "middle",
+                                                                                    fontWeight: 600,
+                                                                                }}
+                                                                            >
+                                                                                {row.section}
+                                                                            </Table.Td>
+                                                                        )}
+                                                                        <Table.Td>{row.itemLabel}</Table.Td>
+                                                                        <Table.Td>
+                                                                            <Text fw={700} c={statusColor}>
+                                                                                {statusText}
+                                                                            </Text>
+                                                                        </Table.Td>
+                                                                        <Table.Td>{row.remarks}</Table.Td>
+                                                                        <Table.Td>
+                                                                            {row.imageUrl &&
+                                                                                String(row.imageUrl).startsWith(
+                                                                                    "https://"
+                                                                                ) ? (
+                                                                                <Box
+                                                                                    style={{
+                                                                                        width: "100px",
+                                                                                        height: "100px",
+                                                                                        overflow: "hidden",
+                                                                                    }}
+                                                                                >
+                                                                                    <img
+                                                                                        src={row.imageUrl}
+                                                                                        alt="Inspection"
+                                                                                        style={{
+                                                                                            width: "100%",
+                                                                                            height: "auto",
+                                                                                            objectFit: "cover",
+                                                                                        }}
+                                                                                        onError={(e) => {
+                                                                                            e.target.style.display = "none";
+                                                                                            e.target.parentElement.innerHTML =
+                                                                                                '<span style="color: red">Image Failed to Load</span>';
+                                                                                        }}
+                                                                                    />
+                                                                                </Box>
+                                                                            ) : (
+                                                                                "-"
+                                                                            )}
+                                                                        </Table.Td>
+                                                                    </Table.Tr>
+                                                                );
+                                                            });
+                                                        })()}
+                                                    </Table.Tbody>
+                                                </Table>
+                                            )}
+                                        </>
+                                    )}
+                                </>
+                            ) : (
+                                <Text c="gray">
+                                    No detailed checklist items found for this unit.
+                                </Text>
+                            )}
+                        </Box>
+
+                        {brand?.toLowerCase() === "sdlg" &&
+                            defect_remarks &&
+                            defect_remarks.length > 0 && (
+                                <Box>
+                                    <Title
+                                        order={4}
+                                        mt="md"
+                                        mb="sm"
+                                        pb="xs"
+                                        style={{
+                                            borderBottom: "1px solid var(--mantine-color-gray-2)",
+                                        }}
+                                    >
+                                        Defects & Remarks
+                                    </Title>
+                                    <Table
+                                        striped
+                                        highlightOnHover
+                                        withTableBorder
+                                        withColumnBorders
+                                    >
+                                        <Table.Thead>
+                                            <Table.Tr>
+                                                <Table.Th style={{ width: "50px" }}>No.</Table.Th>
+                                                <Table.Th style={{ width: "50%" }}>
+                                                    Defect Description
+                                                </Table.Th>
+                                                <Table.Th>Remarks / Corrective Action</Table.Th>
                                             </Table.Tr>
-                                        ))}
-                                    </Table.Tbody>
-                                </Table>
-                            </Box>
-                        )}
+                                        </Table.Thead>
+                                        <Table.Tbody>
+                                            {defect_remarks.map((defect, index) => (
+                                                <Table.Tr key={defect.defectID || index}>
+                                                    <Table.Td>{index + 1}</Table.Td>
+                                                    <Table.Td>{defect.description || "-"}</Table.Td>
+                                                    <Table.Td>{defect.remarks || "-"}</Table.Td>
+                                                </Table.Tr>
+                                            ))}
+                                        </Table.Tbody>
+                                    </Table>
+                                </Box>
+                            )}
 
                         <Box>
-                            <Title 
-                                order={4} 
+                            <Title
+                                order={4}
                                 mt="md"
-                                mb="sm" 
+                                mb="sm"
                                 pb="xs"
-                                style={{ borderBottom: '1px solid var(--mantine-color-gray-2)' }}
+                                style={{
+                                    borderBottom: "1px solid var(--mantine-color-gray-2)",
+                                }}
                             >
                                 General Notes / Remarks
                             </Title>
                             <Paper withBorder p="md" radius="md">
-                                <Text style={{ whiteSpace: 'pre-wrap' }}>
-                                    {remarks}
-                                </Text>
+                                <Text style={{ whiteSpace: "pre-wrap" }}>{remarks}</Text>
                             </Paper>
                         </Box>
                     </Stack>
