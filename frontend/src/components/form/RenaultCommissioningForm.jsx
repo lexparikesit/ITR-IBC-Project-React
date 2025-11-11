@@ -20,11 +20,13 @@ import {
     TableTbody,
     TableTd,
     Select,
+    Loader,
 } from "@mantine/core";
 import { useForm } from '@mantine/form';
 import { DateInput } from "@mantine/dates";
 import { IconCalendar } from "@tabler/icons-react";
 import { notifications } from "@mantine/notifications";
+import apiClient from "@/libs/api";
 
 const renaultCommissioningItem = {
     vehiclePhysicalCondition: [
@@ -157,7 +159,9 @@ export function RenaultCommissioningForm() {
     const [technicians, setTechnicians] = useState([]);
     const [approvers, setApprovers] = useState([]);
     const [provinces, setProvinces] = useState([]);
-    const [dealerCode, setDealerCode] = useState('');
+    const [dealerCode, setDealerCode] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [uploading, setUploading] = useState(false);
 
     const form = useForm({
         initialValues: (() => {
@@ -230,171 +234,140 @@ export function RenaultCommissioningForm() {
             try {
                 const brandId = "RT"; // 'RT' for Renault
                 const groupId = "COMM"; // 'COMM' for Commissioning
+                const [
+                    modelRes,
+                    woRes,
+                    customerRes,
+                    provinceRes,
+                    techRes,
+                    supervisorRes,
+                    techHeadRes,
+                ] = await Promise.all([
+                    apiClient.get(`/unit-types/${brandId}`),
+                    apiClient.get(`/work-orders?brand_id=${brandId}&group_id=${groupId}`),
+                    apiClient.get("/customers"),
+                    apiClient.get("/provinces"),
+                    apiClient.get("/users/by-role/Technician"),
+                    apiClient.get("/users/by-role/Supervisor"),
+                    apiClient.get("/users/by-role/Technical Head")
+                ])
 
-                // model/ type RT API
-				const modelResponse = await fetch(`http://127.0.0.1:5000/api/unit-types/RT`);
-				if (!modelResponse.ok) throw new Error(`HTTP error! status: ${modelResponse.status}`);
-				const modelData = await modelResponse.json();
-				setUnitModels(modelData);
-
-                // wo Number API
-				const woResponse = await fetch(`http://127.0.0.1:5000/api/work-orders?brand_id=${brandId}&group_id=${groupId}`);
-				if (!woResponse.ok) throw new Error(`HTTP error! status: ${woResponse.status}`);
-				const woData = await woResponse.json();
-				const formattedWoData = woData.map(wo => ({ 
-					value: wo.WONumber, 
-					label: wo.WONumber 
-				}));
-				setWoNumbers(formattedWoData);
-
-                // customers API
-                const customerResponse = await fetch(`http://127.0.0.1:5000/api/customers`);
-                if (!customerResponse.ok) throw new Error(`HTTP error! status: ${customerResponse.status}`);
-                const customerData = await customerResponse.json();
-                const formattedCustomers = customerData.map(customer => ({
-                    value: customer.CustomerID,
-                    label: customer.CustomerName
-                }));
-                setCustomers(formattedCustomers);
-
-                // province API
-                const provincesResponse = await fetch("http://127.0.0.1:5000/api/provinces");
-
-                if (!provincesResponse.ok) {
-                    console.error(`HTTP error! status: ${provincesResponse.status}`);
-                    setProvinces([]); 
-                    return;
-                }
-
-                const provincesObject = await provincesResponse.json();
-
-                if (typeof provincesObject === 'object' && provincesObject !== null) {
-                    const provincesArray = Object.keys(provincesObject).map(code => ({
-                        value: code,
-                        label: provincesObject[code]
-                    }));
-                    
-                    setProvinces(provincesArray);
+                setUnitModels(modelRes.data);
+                setWoNumbers(woRes.data.map(wo => ({ value: wo.WONumber, label: wo.WONumber })));
+                setCustomers(customerRes.data.map((customer => ({ value: customer.CustomerID, label: customer.CustomerName }))));
+                setTechnicians(techRes.data);
+                setApprovers([
+                    ...supervisorRes.data,
+                    ...techHeadRes.data,
+                ]);
                 
+                const provinceObject = provinceRes.data;
+
+                if (typeof provinceObject === 'object' && provinceObject !== null) {
+                    const provinceArray = Object.keys(provinceObject).map((code) => ({
+                        value: code,
+                        label: provinceObject[code],
+                    }));
+                    setProvinces(provinceArray);
                 } else {
-                    console.error("API response is not a valid object for mapping:", provincesObject);
+                    console.log("Invalid provinces response:", provinceObject);
                     setProvinces([]);
-                }
-
-                // dummy Technicians API
-				const dummyTechnicians = [
-					{ value: "tech1", label: "John Doe" },
-					{ value: "tech2", label: "Jane Smith" },
-					{ value: "tech3", label: "Peter Jones" }
-				];
-				setTechnicians(dummyTechnicians);
-
-				// dummy Approvers API
-				const dummyApprovers = [
-					{ value: "app1", label: "Alice Brown" },
-					{ value: "app2", label: "Bob White" },
-					{ value: "app3", label: "John Green" }
-				];
-				setApprovers(dummyApprovers);
+                };
 
                 // delaer Code
                 setDealerCode([{ value: "30479-ITR", label: "30479 - PT. Indo Traktor Utama" }]);
 
             } catch (error) {
-                console.error("Error fetching data:", error);
+                console.error("Failed to fetch models:", error);
                 notifications.show({
                     title: "Error Loading Data",
-                    message: `Failed to load data: ${error.message}. Please try again.`,
+                    message: "Failed to load models. Please try again!",
                     color: "red",
                 });
+            
+            } finally {
+                setLoading(false);
             }
         };
         fetchData();
     }, []);
 
     const handleSubmit = async (values) => {
-        console.log("handleSubmit called with values:", values);
-        const token = localStorage.getItem("access_token");
-
-        if (!token) {
-            notifications.show({
-                title: "Authentication Error",
-                message: "Please log in again. Authentication token is missing.",
-                color: "red",
-            });
-            console.log("Authentication token is missing.");
-            return;
-        }
-        
-        const payload = {
-            brand: 'renault',
-            reportInfo: {
-                jobCardNo: values.jobCardNo,
-                date: values.date,
-                dealer: values.dealer,
-                woNumber: values.woNumber,
-                technician: values.technician,
-                approvalBy: values.approvalBy,
-            },
-            unitInfo: {
-                VIN: values.VIN,
-                CAM: values.CAM,
-                FABNo: values.FABNo,
-                vehicleType: values.vehicleType,
-                deliveryDate: values.deliveryDate,
-                application: values.application,
-                regFleetNo: values.regFleetNo,
-            },
-            customerInfo: {
-                companyName: values.companyName,
-                location: values.location,
-                contactPerson: values.contactPerson,
-            },
-            majorComponents: values.majorComponents,
-            checklist: {
-                items: values.checklistItems,
-                notes: values.checklistNotes,
-            },
-            signatures: {
-                inspectorSignature: values.inspectorSignature,
-                inspectorSignatureDate: values.inspectorSignatureDate,
-                supervisorSignature: values.supervisorSignature,
-                supervisorSignatureDate: values.supervisorSignatureDate,
-            }
-        };
-
-        console.log("handleSubmit called with values:", payload);
+        setUploading(true);
 
         try {
-            const response = await fetch(`http://127.0.0.1:5000/api/commissioning/renault/submit`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify(payload),
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.message || "Failed to submit Renault Commissioning Checklist");
+            const token = localStorage.getItem("access_token");
+            if (!token) {
+                notifications.show({
+                    title: "Authentication Error",
+                    message: "Please log in again. Authentication token is missing.",
+                    color: "red",
+                });
+                console.log("Authentication token is missing.");
+                return;
             }
 
-            const result = await response.json();
-            notifications.show({
-                title: "Submission Successful!",
-                message: result.message || "Form Submitted Successfully.",
-                color: "green",
+            const payload = {
+                brand: 'renault',
+                reportInfo: {
+                    jobCardNo: values.jobCardNo,
+                    date: values.date,
+                    dealer: values.dealer,
+                    woNumber: values.woNumber,
+                    technician: values.technician,
+                    approvalBy: values.approvalBy,
+                },
+                unitInfo: {
+                    VIN: values.VIN,
+                    CAM: values.CAM,
+                    FABNo: values.FABNo,
+                    vehicleType: values.vehicleType,
+                    deliveryDate: values.deliveryDate,
+                    application: values.application,
+                    regFleetNo: values.regFleetNo,
+                },
+                customerInfo: {
+                    companyName: values.companyName,
+                    location: values.location,
+                    contactPerson: values.contactPerson,
+                },
+                majorComponents: values.majorComponents,
+                checklist: {
+                    items: values.checklistItems,
+                    notes: values.checklistNotes,
+                },
+                signatures: {
+                    inspectorSignature: values.inspectorSignature,
+                    inspectorSignatureDate: values.inspectorSignatureDate,
+                    supervisorSignature: values.supervisorSignature,
+                    supervisorSignatureDate: values.supervisorSignatureDate,
+                }
+            };
+
+            console.log("handleSubmit payload:", payload);
+
+            await apiClient.post(`/commissioning/renault/submit`, payload, {
+                timeout: 50000
             });
+
+            notifications.show({
+                title: "Success!",
+                message: "Form Submitted Successfully!",
+                color: "green",
+            })
             form.reset();
 
         } catch (error) {
-            console.log('Error submitting form:', error);
+            console.error('Error submitting form:', error);
+            const errorMessage = error.response?.data?.message || error.message || "Failed to submit checklist";
             notifications.show({
                 title: "Submission Error",
-                message: `Failed to submit form: ${error.message}`,
+                message: `Error: ${errorMessage}`,
                 color: "red",
             });
+        
+        } finally {
+            setUploading(false);
         }
     };
 
@@ -424,19 +397,29 @@ export function RenaultCommissioningForm() {
         );
     };
 
+    if (loading) {
+        return (
+            <Box maw="100%" mx="auto" px="md" ta="center">
+                <Title order={1} mt="md" mb="lg">Loading Form Data...</Title>
+                <Loader size="lg" />
+            </Box>
+        );
+    }
+
     return (
         <Box maw="100%" mx="auto" px="md">
             <Title
                 order={1}
                 mt="md"
                 mb="lg"
-                style={{ color: '#000000 !important' }}
-            > Commissioning Form
+                c="var(--mantine-color-text)"
+            > 
+                Commissioning Form
             </Title>
 
             <form onSubmit={form.onSubmit(handleSubmit)}>
                 <Card shadow="sm" p="xl" withBorder mb="lg">
-                    <Title order={3} mb="md" style={{ color: '#000000 !important' }}> Report Information </Title>
+            <Title order={3} mb="md" c="var(--mantine-color-text)"> Report Information </Title>
                     <Grid>
                         <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
                             <TextInput
@@ -493,7 +476,7 @@ export function RenaultCommissioningForm() {
                 </Card>
 
                 <Card shadow="sm" p="xl" withBorder mb="lg">
-                    <Title order={3} mb="md" style={{ color: '#000000 !important' }}> Vehicle Details </Title>
+                    <Title order={3} mb="md" c="var(--mantine-color-text)"> Vehicle Details </Title>
                     <Grid>
                         <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
                             <Select
@@ -525,7 +508,7 @@ export function RenaultCommissioningForm() {
                 </Card>
 
                 <Card shadow="sm" p="xl" withBorder mb="lg">
-                    <Title order={3} mb="md" style={{ color: '#000000 !important' }}> Customer Details </Title>
+                    <Title order={3} mb="md" c="var(--mantine-color-text)"> Customer Details </Title>
                     <Grid>
                         <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
                             <Select
@@ -560,7 +543,7 @@ export function RenaultCommissioningForm() {
                 </Card>
 
                 <Card shadow="sm" p="xl" withBorder mb="lg">
-                    <Title order={3} mb="md" style={{ color: '#000000 !important' }}> Major Components </Title>
+                    <Title order={3} mb="md" c="var(--mantine-color-text)"> Major Components </Title>
                     <Table striped withRowBorders={false}>
                         <TableThead>
                             <TableTr>
@@ -613,7 +596,7 @@ export function RenaultCommissioningForm() {
                 </Card>
 
                 <Card shadow="sm" p="xl" withBorder mb="lg">
-                    <Title order={3} mb="md" style={{ color: '#000000 !important' }}> Inspection Test </Title>
+                    <Title order={3} mb="md" c="var(--mantine-color-text)"> Inspection Test </Title>
                     {Object.keys(renaultCommissioningItem).map(sectionKey => (
                         <div key={sectionKey}>
                             {renderChecklistSection(
@@ -634,7 +617,7 @@ export function RenaultCommissioningForm() {
                 </Card>
 
                 <Card shadow="sm" p="xl" withBorder mb="lg">
-                    <Title order={3} mb="md" style={{ color: '#000000 !important' }}> Signature </Title>
+                    <Title order={3} mb="md" c="var(--mantine-color-text)"> Signature </Title>
                     <Grid gutter="xl">
                         <Grid.Col span={{ base: 12, md: 6 }}>
                             <Select
@@ -673,8 +656,14 @@ export function RenaultCommissioningForm() {
                     </Grid>
                 </Card>
 
-                <Group justify="flex-end" mt="xl">
-                    <Button type="submit">Submit</Button>
+                <Group justify="flex-end" mt="md">
+                    <Button
+                        type="submit"
+                        loading={uploading}
+                        disabled={uploading}
+                    >
+                        {uploading ? 'Submitting...' : 'Submit'}
+                    </Button>
                 </Group>
             </form>
         </Box>

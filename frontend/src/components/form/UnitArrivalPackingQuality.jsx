@@ -271,14 +271,14 @@ export function ArrivingPackingQuality() {
                 order={1}
                 mt="md"
                 mb="lg"
-                style={{ color: '#000000 !important' }}
+                c="var(--mantine-color-text)"
             >
                 Unit Arrival Check
             </Title>
             
             <form onSubmit={form.onSubmit(handleSubmit)}>
                 <Card shadow="sm" p="xl" withBorder mb="lg">
-                    <Title order={3} mb="md"> Unit Information </Title>
+                    <Title order={3} mb="md" c="var(--mantine-color-text)"> Unit Information </Title>
                     <Grid gutter="xl">
                         <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
                             <Select
@@ -432,7 +432,7 @@ export function ArrivingPackingQuality() {
                         ))}
                     </Box>
                 
-                    <Title order={3} mb="md" style={{ color: '#000000 !important' }}> Remarks </Title>
+                    <Title order={3} mb="md" c="var(--mantine-color-text)"> Remarks </Title>
                     <Textarea
                         mb="xl"
                         placeholder="Describe any other issue or remark..."

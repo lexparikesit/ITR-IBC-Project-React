@@ -546,7 +546,7 @@ const IBCLogData = ({ title, apiUrl }) => {
                                 w={400}
                             />
                             <Group gap="xs">
-                                {user?.permissions?.includes('download_arrival_log') && (
+                                {user?.permissions?.includes('download_ibc_log') && (
                                     <Button 
                                         onClick={downloadExcel}
                                         variant="outline"

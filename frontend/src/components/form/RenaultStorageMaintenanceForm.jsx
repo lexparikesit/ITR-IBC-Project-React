@@ -430,7 +430,7 @@ export function RenaultStorageMaintenanceForm() {
         return (
             <Grid.Col span={{ base: 12 }} key={`${sectionKey}-${itemKey}`}>
                 <Stack gap="xs">
-                    <Text size="sm" style={{ color: '#000000 !important', fontWeight: 500 }}>{label}</Text>
+                    <Text size="sm" style={{ color: 'var(--mantine-color-text)', fontWeight: 500 }}>{label}</Text>
                     <Text size="xs" style={{ color: 'var(--mantine-color-gray-6)' }}>Select one option</Text>
 
                     <Radio.Group
@@ -446,10 +446,10 @@ export function RenaultStorageMaintenanceForm() {
                         error={form.errors[`checklistItems.${sectionKey}.${itemKey}`]}
                     >
                         <Group mt="xs" justify="space-between" style={{ width: '100%' }}>
-                            <Radio value="checked" label={<Text style={{ color: '#000000 !important' }}> Checked, Without Notes </Text>} />
-                            <Radio value="recommended_repair" label={<Text style={{ color: '#000000 !important' }}> Repair Recommended </Text>} />
-                            <Radio value="immediately_repair" label={<Text style={{ color: '#000000 !important' }}> Repair Immediately </Text>} />
-                            <Radio value="not_applicable" label={<Text style={{ color: '#000000 !important' }}> Not Applicable </Text>} />
+                            <Radio value="checked" label={<Text style={{ color: 'var(--mantine-color-text)' }}> Checked, Without Notes </Text>} />
+                            <Radio value="recommended_repair" label={<Text style={{ color: 'var(--mantine-color-text)' }}> Repair Recommended </Text>} />
+                            <Radio value="immediately_repair" label={<Text style={{ color: 'var(--mantine-color-text)' }}> Repair Immediately </Text>} />
+                            <Radio value="not_applicable" label={<Text style={{ color: 'var(--mantine-color-text)' }}> Not Applicable </Text>} />
                         </Group>
                     </Radio.Group>
                     
@@ -536,7 +536,7 @@ export function RenaultStorageMaintenanceForm() {
     const renderChecklistSection = (sectionTitle, sectionKey, items) => {
         return (
             <Card shadow="sm" p="xl" withBorder mb="lg">
-                <Title order={3} mb="md" style={{ color: '#000000 !important' }}>{sectionTitle}</Title>
+                <Title order={3} mb="md" style={{ color: 'var(--mantine-color-text)' }}>{sectionTitle}</Title>
                 <Grid gutter="xl">
                     {items.map((item) => (
                         renderChecklistItem(
@@ -553,7 +553,7 @@ export function RenaultStorageMaintenanceForm() {
     if (loading) {
         return (
             <Box maw="100%" mx="auto" px="md" ta="center">
-                <Title order={1} mt="md" mb="lg">Loading Form Data...</Title>
+                <Title order={1} mt="md" mb="lg" c="var(--mantine-color-text)">Loading Form Data...</Title>
                 <Loader size="lg" />
             </Box>
         );
@@ -565,13 +565,13 @@ export function RenaultStorageMaintenanceForm() {
                 order={1}
                 mt="md"
                 mb="lg"
-                style={{ color: '#000000 !important' }}
+                c="var(--mantine-color-text)"
             > 
                 Storage Maintenance List
             </Title>
             <form onSubmit={form.onSubmit((values) => handleSubmit(values))}>
                 <Card shadow="sm" padding="lg" radius="md" withBorder mb="lg">
-                    <Title order={3} mb="md" style={{ color: '#000000 !important' }}> Unit Information </Title>
+                    <Title order={3} mb="md" c="var(--mantine-color-text)"> Unit Information </Title>
                     <Grid gutter="xl">
                         <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
                             {/* <Select
@@ -663,12 +663,12 @@ export function RenaultStorageMaintenanceForm() {
                         </Grid.Col>
                     </Grid>
                 </Card>
-                <Divider my="xl" label={<Text style={{ color: '#000000 !important' }}>Legend</Text>} labelPosition="center" />
+                <Divider my="xl" label={<Text c="var(--mantine-color-text)">Legend</Text>} labelPosition="center" />
                 <Group justify="center" gap="xl" mb="lg">
-                    <Text style={{ color: '#000000 !important' }}> 1: Checked, Without Notes </Text>
-                    <Text style={{ color: '#000000 !important' }}> 2: Repair Recommended </Text>
-                    <Text style={{ color: '#000000 !important' }}> 3: Repair Immediately </Text>
-                    <Text style={{ color: '#000000 !important' }}> 0: Not Applicable </Text>
+                    <Text c="var(--mantine-color-text)"> 1: Checked, Without Notes </Text>
+                    <Text c="var(--mantine-color-text)"> 2: Repair Recommended </Text>
+                    <Text c="var(--mantine-color-text)"> 3: Repair Immediately </Text>
+                    <Text c="var(--mantine-color-text)"> 0: Not Applicable </Text>
                 </Group>
                 <Divider my="xl" />
 
@@ -701,39 +701,39 @@ export function RenaultStorageMaintenanceForm() {
 
                 {/* Battery Inspection Data */}
                 <Card shadow="sm" p="xl" withBorder mb="lg">
-                    <Title order={3} mb="md" style={{ color: '#000000 !important' }}> Battery Inspection Data </Title>
+                    <Title order={3} mb="md" style={{ color: 'var(--mantine-color-text)' }}> Battery Inspection Data </Title>
                     <Table striped highlightOnHover withTableBorder withColumnBorders>
                         <Table.Thead>
                             <Table.Tr>
-                                <Table.Th style={{ color: '#000000 !important' }}>Battery, Check</Table.Th>
-                                <Table.Th style={{ color: '#000000 !important' }}>Electrolyte Level</Table.Th>
-                                <Table.Th style={{ color: '#000000 !important' }}>Voltage</Table.Th>
-                                <Table.Th style={{ color: '#000000 !important' }}>Status on Battery Analyzer</Table.Th>
+                                <Table.Th style={{ color: 'var(--mantine-color-text)' }}>Battery, Check</Table.Th>
+                                <Table.Th style={{ color: 'var(--mantine-color-text)' }}>Electrolyte Level</Table.Th>
+                                <Table.Th style={{ color: 'var(--mantine-color-text)' }}>Voltage</Table.Th>
+                                <Table.Th style={{ color: 'var(--mantine-color-text)' }}>Status on Battery Analyzer</Table.Th>
                             </Table.Tr>
                         </Table.Thead>
                         <Table.Tbody>
                             {form.values.batteryInspection.map((row, index) => (
                                 <Table.Tr key={index}>
-                                    <Table.Td style={{ color: '#000000 !important' }}>{row.batteryCheck}</Table.Td>
+                                    <Table.Td style={{ color: 'var(--mantine-color-text)' }}>{row.batteryCheck}</Table.Td>
                                     <Table.Td>
                                         <TextInput
                                             placeholder="Level"
                                             {...form.getInputProps(`batteryInspection.${index}.electrolyteLevel`)}
-                                            styles={{ input: { color: '#000000 !important' } }}
+                                            styles={{ input: { color: 'var(--mantine-color-text)' } }}
                                         />
                                     </Table.Td>
                                     <Table.Td>
                                         <TextInput
                                             placeholder="Voltage"
                                             {...form.getInputProps(`batteryInspection.${index}.voltage`)}
-                                            styles={{ input: { color: '#000000 !important' } }}
+                                            styles={{ input: { color: 'var(--mantine-color-text)' } }}
                                         />
                                     </Table.Td>
                                     <Table.Td>
                                         <TextInput
                                             placeholder="Status"
                                             {...form.getInputProps(`batteryInspection.${index}.statusOnBatteryAnalyzer`)}
-                                            styles={{ input: { color: '#000000 !important' } }}
+                                            styles={{ input: { color: 'var(--mantine-color-text)' } }}
                                         />
                                     </Table.Td>
                                 </Table.Tr>
@@ -744,12 +744,12 @@ export function RenaultStorageMaintenanceForm() {
 
                 {/* Fault Codes */}
                 <Card shadow="sm" p="xl" withBorder mb="lg">
-                    <Title order={3} mb="md" style={{ color: '#000000 !important' }}> Fault Codes </Title>
+                    <Title order={3} mb="md" style={{ color: 'var(--mantine-color-text)' }}> Fault Codes </Title>
                     <Table striped highlightOnHover withTableBorder withColumnBorders>
                         <Table.Thead>
                             <Table.Tr>
-                                <Table.Th style={{ color: '#000000 !important' }}>Fault Code</Table.Th>
-                                <Table.Th style={{ color: '#000000 !important' }}>Status</Table.Th>
+                                <Table.Th style={{ color: 'var(--mantine-color-text)' }}>Fault Code</Table.Th>
+                                <Table.Th style={{ color: 'var(--mantine-color-text)' }}>Status</Table.Th>
                             </Table.Tr>
                         </Table.Thead>
                         <Table.Tbody>
@@ -759,7 +759,7 @@ export function RenaultStorageMaintenanceForm() {
                                         <TextInput
                                             placeholder="Enter Fault Code"
                                             {...form.getInputProps(`faultCodes.${index}.faultCode`)}
-                                            styles={{ input: { color: '#000000 !important' } }}
+                                            styles={{ input: { color: 'var(--mantine-color-text)' } }}
                                         />
                                     </Table.Td>
                                     <Table.Td>
@@ -780,12 +780,12 @@ export function RenaultStorageMaintenanceForm() {
 
                 {/* Repair Notes */}
                 <Card shadow="sm" p="xl" withBorder mb="lg">
-                    <Title order={3} mb="md" style={{ color: '#000000 !important' }}> Repair Notes </Title>
+                    <Title order={3} mb="md" style={{ color: 'var(--mantine-color-text)' }}> Repair Notes </Title>
                     <Textarea
                         placeholder="Add notes about repairs or other important information..."
                         minRows={4}
                         {...form.getInputProps('repairNotes')}
-                        styles={{ input: { color: '#000000 !important' } }}
+                        styles={{ input: { color: 'var(--mantine-color-text)' } }}
                     />
                 </Card>
 

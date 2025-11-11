@@ -317,7 +317,7 @@ export function UnitArrivalChecklistForm() {
 	if (loading) {
 		return (
 			<Box maw="100%" mx="auto" px="md" ta="center">
-				<Title order={1} mt="md" mb="lg">Loading Form Data...</Title>
+				<Title order={1} mt="md" mb="lg" c="var(--mantine-color-text)">Loading Form Data...</Title>
 				<Loader size="lg" />
 			</Box>
 		);
@@ -325,10 +325,10 @@ export function UnitArrivalChecklistForm() {
 
 	return (
 		<Box maw="100%" mx="auto" px="md">
-			<Title order={1} mt="md" mb="lg"> Unit Arrival Check </Title>
+			<Title order={1} mt="md" mb="lg" c="var(--mantine-color-text)"> Unit Arrival Check </Title>
 			<form onSubmit={form.onSubmit(handleSubmit)}>
 				<Card shadow="sm" padding="lg" radius="md" withBorder mb="lg">
-					<Title order={3} mb="md"> Unit Information </Title>
+					<Title order={3} mb="md" c="var(--mantine-color-text)"> Unit Information </Title>
 					<Grid gutter="md">
 						<Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
 							{/* <Select
@@ -406,10 +406,10 @@ export function UnitArrivalChecklistForm() {
 					</Grid>
 				</Card>
 
-				<Divider my="xl" label={<Text style={{ color: '#000000 !important' }}>Legend</Text>} labelPosition="center" />
+				<Divider my="xl" label={<Text style={{ color: 'var(--mantine-color-text) !important' }}>Legend</Text>} labelPosition="center" />
 					<Group justify="center" gap="xl" mb="lg">
-						<Text style={{ color: '#000000 !important' }}> 1: Check Without Remarks </Text>
-						<Text style={{ color: '#000000 !important' }}> 0: Check With Remarks </Text>
+						<Text style={{ color: 'var(--mantine-color-text) !important' }}> 1: Check Without Remarks </Text>
+						<Text style={{ color: 'var(--mantine-color-text) !important' }}> 0: Check With Remarks </Text>
 					</Group>
 				<Divider my="xl" />
 

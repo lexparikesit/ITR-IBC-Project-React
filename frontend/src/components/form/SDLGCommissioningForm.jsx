@@ -13,11 +13,13 @@ import {
     Card,
     Grid,
     Select,
+    Loader,
 } from '@mantine/core';
 import { DateInput } from '@mantine/dates';
 import { useForm } from '@mantine/form';
 import { notifications } from '@mantine/notifications';
 import { IconCalendar } from '@tabler/icons-react';
+import apiClient from '@/libs/api';
 
 const SDLG_CHECKLIST_ITEMS = [
     // Check of Documents (4 items)
@@ -57,6 +59,8 @@ export default function SDLGCommissioningForm() {
     const [technicians, setTechnicians] = useState([]);
     const [approvers, setApprovers] = useState([]);
     const [customers, setCustomers] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [uploading, setUploading] = useState(false);
 
     const form = useForm({
         initialValues: {
@@ -86,62 +90,42 @@ export default function SDLGCommissioningForm() {
             try {
                 const brandId = "SDLG"; // 'SDLG' for SDLG
                 const groupId = "COMM"; // 'COMM' for Commissioning
+                const [
+                    modelRes,
+                    woRes,
+                    customerRes,
+                    techRes,
+                    supervisorRes,
+                    techHeadRes,
+                ] = await Promise.all([
+                    apiClient.get(`/unit-types/${brandId}`),
+                    apiClient.get(`/work-orders?brand_id=${brandId}&group_id=${groupId}`),
+                    apiClient.get("/customers"),
+                    apiClient.get("/users/by-role/Technician"),
+                    apiClient.get("/users/by-role/Supervisor"),
+                    apiClient.get("/users/by-role/Technical Head")
+                ])
 
-                // model/ Type SDLG API
-                const modelResponse = await fetch('http://127.0.0.1:5000/api/unit-types/SDLG');
-                if (!modelResponse.ok) throw new Error(`HTTP error! status: ${modelResponse.status}`);
-                const modelData = await modelResponse.json();
-                const formattedModels = modelData
-                    .filter(item => item.value !== null && item.value !== undefined && item.label !== null && item.label !== undefined)
-                    .map(item => ({
-                        value: item.value,
-                        label: item.label
-                    }));
-                setUnitModels(formattedModels);
+                setUnitModels(modelRes.data);
+                setWoNumbers(woRes.data.map(wo => ({ value: wo.WONumber, label: wo.WONumber })));
+                setCustomers(customerRes.data.map((customer => ({ value: customer.CustomerID, label: customer.CustomerName }))));
+                setTechnicians(techRes.data);
+                setApprovers([
+                    ...supervisorRes.data,
+                    ...techHeadRes.data,
+                ]);
                 
-                // wo Number API
-				const woResponse = await fetch(`http://127.0.0.1:5000/api/work-orders?brand_id=${brandId}&group_id=${groupId}`);
-				if (!woResponse.ok) throw new Error(`HTTP error! status: ${woResponse.status}`);
-				const woData = await woResponse.json();
-				const formattedWoData = woData.map(wo => ({ 
-					value: wo.WONumber, 
-					label: wo.WONumber 
-				}));
-				setWoNumbers(formattedWoData);
-
-                // customers API
-                const customerResponse = await fetch(`http://127.0.0.1:5000/api/customers`);
-                if (!customerResponse.ok) throw new Error(`HTTP error! status: ${customerResponse.status}`);
-                const customerData = await customerResponse.json();
-                const formattedCustomers = customerData.map(customer => ({
-                    value: customer.CustomerID,
-                    label: customer.CustomerName
-                }));
-                setCustomers(formattedCustomers);
-
-                // dummy Technicians API
-				const dummyTechnicians = [
-					{ value: "tech1", label: "John Doe" },
-					{ value: "tech2", label: "Jane Smith" },
-					{ value: "tech3", label: "Peter Jones" }
-				];
-				setTechnicians(dummyTechnicians);
-
-				// dummy Approvers API
-				const dummyApprovers = [
-					{ value: "app1", label: "Alice Brown" },
-					{ value: "app2", label: "Bob White" },
-					{ value: "app3", label: "John Green" }
-				];
-				setApprovers(dummyApprovers);
 
             } catch (error) {
-                console.error("Error fetching data:", error);
+                console.error("Failed to fetch data:", error);
                 notifications.show({
                     title: "Error Loading Data",
-                    message: `Failed to load data: ${error.message}. Please try again.`,
+                    message: "Failed to load form data. Please try again!",
                     color: "red",
                 });
+            
+            } finally {
+                setLoading(false);
             }
         };
         fetchData();
@@ -157,71 +141,79 @@ export default function SDLGCommissioningForm() {
     };
 
     const handleSubmit = async (values) => {
-        const token = localStorage.getItem('access_token');
-
-        if (!token) {
-            notifications.show({
-                title: "Authentication Required",
-                message: "Please log in again. Authentication token is missing.",
-                color: "red",
-            });
-            return;
-        }
-
-        console.log("Form submitted with values:", values);
-
-        const payload = {
-            brand: 'SDLG',
-            unitInfo: {
-                woNumber: values.woNumber,
-                typeModel: values.machineModel,
-                VIN: values.vehicleNumber,
-                dateOfCheck: formatDate(values.inspectionDate),
-                customer: values.customer,
-                technician: values.inspector,
-                approvalBy: values.approvalBy,
-            },
-            checklistItems: values.checklistItems.map((status, index) => ({
-                id: index + 1,
-                status: status ? 1 : 0,
-                itemName: SDLG_CHECKLIST_ITEMS[index],
-            })),
-        };
-
-        console.log("Payload sent to backend:", payload);
+        setUploading(true);
 
         try {
-            const response = await fetch(`http://127.0.0.1:5000/api/commissioning/sdlg/submit`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify(payload),
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.message || "Failed to submit SDLG Commissioning Checklist");
+            const token = localStorage.getItem('access_token');
+            if (!token) {
+                notifications.show({
+                    title: "Authentication Required",
+                    message: "Please log in again. Authentication token is missing.",
+                    color: "red",
+                });
+                return;
+            } if (!token) {
+                notifications.show({
+                    title: "Authentication Error",
+                    message: "No access token found. Please log in.",
+                    color: "red",
+                });
+                return;
             }
 
-            const result = await response.json();
+            console.log("Form submitted with values:", values);
+
+            const payload = {
+                brand: 'SDLG',
+                unitInfo: {
+                    woNumber: values.woNumber,
+                    typeModel: values.machineModel,
+                    VIN: values.vehicleNumber,
+                    dateOfCheck: formatDate(values.inspectionDate),
+                    customer: values.customer,
+                    technician: values.inspector,
+                    approvalBy: values.approvalBy,
+                },
+                checklistItems: values.checklistItems.map((status, index) => ({
+                    id: index + 1,
+                    status: status ? 1 : 0,
+                    itemName: SDLG_CHECKLIST_ITEMS[index],
+                })),
+            };
+
+            console.log("Payload sent to backend:", payload);
+
+            const response = await apiClient.post(`/commissioning/sdlg/submit`, payload);
+
             notifications.show({
-                title: "Submission Successful!",
-                message: result.message || "Form Submitted Successfully.",
+                title: "Success!",
+                message: "Form Submitted Successfully!",
                 color: "green",
             })
             form.reset();
         
         } catch (error) {
-            console.log('Error submitting form:', error);
+            console.error('Error submitting form:', error);
+            const errorMessage = error.response?.data?.message || error.message || "Failed to submit checklist";
             notifications.show({
                 title: "Submission Error",
-                message: `Failed to submit form: ${error.message}`,
+                message: `Error: ${errorMessage}`,
                 color: "red",
             });
+
+        } finally {
+            setUploading(false);
         }
     };
+
+    if (loading) {
+        return (
+            <Box maw="100%" mx="auto" px="md" ta="center">
+                <Title order={1} mt="md" mb="lg">Loading Form Data...</Title>
+                <Loader size="lg" />
+            </Box>
+        );
+    }
 
     return (
         <Box maw="100%" mx="auto" px="md">
@@ -229,8 +221,9 @@ export default function SDLGCommissioningForm() {
                 order={1}
                 mt="md"
                 mb="lg"
-                style={{ color: '#000000 !important' }}
-            > Commissioning Form
+                style={{ color: 'var(--mantine-color-text)' }}
+            > 
+                Commissioning Form
             </Title>
 
             <form onSubmit={form.onSubmit(handleSubmit)}>
@@ -240,7 +233,7 @@ export default function SDLGCommissioningForm() {
                         <Grid.Col span={{ base: 12, md: 6, md: 3 }}>
                             <Select
                                 label="WO Number"
-                                placeholder="Select Wo Number"
+                                placeholder="Select WO Number"
                                 data={woNumbers}
                                 searchable
                                 clearable
@@ -332,8 +325,15 @@ export default function SDLGCommissioningForm() {
                         </Table.Tbody>
                 </Table>
                 </Card>
-                <Group justify="flex-end" mt="xl">
-                    <Button type="submit">Submit</Button>
+                
+                <Group justify="flex-end" mt="md">
+                    <Button 
+                        type="submit"
+                        loading={uploading}
+                        disabled={uploading}
+                    >
+                        {uploading ? 'Submitting...' : 'Submit'}
+                    </Button>
                 </Group>
             </form>
         </Box>

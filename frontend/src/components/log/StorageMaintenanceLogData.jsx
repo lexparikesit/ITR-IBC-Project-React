@@ -601,7 +601,7 @@ const LogData = ({ title, apiUrl }) => {
                                 style={{ alignSelf: 'center' }} 
                             />
                             <Group gap="xs">
-                                {user?.permissions?.includes('download_arrival_log') && (
+                                {user?.permissions?.includes('download_access_maintenance_log') && (
                                     <Button 
                                         onClick={downloadExcel}
                                         variant="outline"

@@ -388,7 +388,7 @@ export function ManitouPDIForm() {
         return (
             <Grid.Col span={{ base: 12, sm: 6, md: 4 }} key={`${sectionKey}-${itemKey}`}>
                 <Stack gap="xs">
-                    <Text size="sm" style={{ color: '#000000 !important', fontWeight: 500 }}>{label}</Text>
+                    <Text size="sm" style={{ color: 'var(--mantine-color-text)', fontWeight: 500 }}>{label}</Text>
                     <Text size="xs" style={{ color: 'var(--mantine-color-gray-6)' }}>Select one option</Text>
 
                     <Radio.Group
@@ -407,9 +407,9 @@ export function ManitouPDIForm() {
                         spacing="xl"
                     >
                         <Group mt="xs">
-                            <Radio value="Good" label={<Text style={{ color: '#000000 !important' }}>Good</Text>} />
-                            <Radio value="Bad" label={<Text style={{ color: '#000000 !important' }}>Bad</Text>} />
-                            <Radio value="Missing" label={<Text style={{ color: '#000000 !important' }}>Missing</Text>} />
+                            <Radio value="Good" label={<Text style={{ color: 'var(--mantine-color-text)' }}>Good</Text>} />
+                            <Radio value="Bad" label={<Text style={{ color: 'var(--mantine-color-text)' }}>Bad</Text>} />
+                            <Radio value="Missing" label={<Text style={{ color: 'var(--mantine-color-text)' }}>Missing</Text>} />
                         </Group>
                     </Radio.Group>
                     
@@ -504,7 +504,7 @@ export function ManitouPDIForm() {
     const renderChecklistSection = (sectionTitle, sectionKey, items) => {
         return (
             <Card shadow="sm" p="xl" withBorder mb="lg" key={sectionKey}>
-                <Title order={3} mb="md" style={{ color: '#000000 !important' }}>{sectionTitle}</Title>
+                <Title order={3} mb="md" c="var(--mantine-color-text)">{sectionTitle}</Title>
                 <Grid gutter="xl">
                     {items.map((item) => ( 
                         renderChecklistItem(
@@ -533,14 +533,14 @@ export function ManitouPDIForm() {
                 order={1}
                 mt="md"
                 mb="lg"
-                style={{ color: '#000000 !important' }}
+                c="var(--mantine-color-text)"
             > 
                 Pre Delivery Inspection Form
             </Title>
 
             <form onSubmit={form.onSubmit(handleSubmit)}>
                 <Card shadow="sm" p="xl" withBorder mb="lg">
-                    <Title order={3} mb="md" style={{ color: '#000000 !important' }}> Unit Information </Title>
+                    <Title order={3} mb="md" c="var(--mantine-color-text)"> Unit Information </Title>
                     <Grid gutter="xl">
                         <Grid.Col span={{ base: 12, md: 6, md: 3 }}>
                             <Select 
@@ -640,11 +640,11 @@ export function ManitouPDIForm() {
                     </Grid>
                 </Card>
                 
-                <Divider my="xl" label={<Text style={{ color: '#000000 !important' }}>Legend</Text>} labelPosition="center" />
+                <Divider my="xl" label={<Text c="var(--mantine-color-text)">Legend</Text>} labelPosition="center" />
                     <Group justify="center" gap="xl" mb="lg">
-                        <Text style={{ color: '#000000 !important' }}> 1: Good </Text>
-                        <Text style={{ color: '#000000 !important' }}> 2: Bad </Text>
-                        <Text style={{ color: '#000000 !important' }}> 0: Missing </Text>
+                        <Text c="var(--mantine-color-text)"> 1: Good </Text>
+                        <Text c="var(--mantine-color-text)"> 2: Bad </Text>
+                        <Text c="var(--mantine-color-text)"> 0: Missing </Text>
                     </Group>
                 <Divider my="xl" />
 
@@ -666,7 +666,7 @@ export function ManitouPDIForm() {
                 ))}
             
                 <Divider my="xl" />
-                <Title order={3} mb="md" style={{ color: '#000000 !important' }}> Possible Remarks on Transport and Delivery </Title>
+                <Title order={3} mb="md" c="var(--mantine-color-text)"> Possible Remarks on Transport and Delivery </Title>
                 <Textarea
                     placeholder="Add Any Comments Here..."
                     minRows={4}
@@ -675,7 +675,7 @@ export function ManitouPDIForm() {
                 />
 
                 <Divider my="xl" />
-                <Title order={3} mb="md" style={{ color: '#000000 !important' }}> Comments Regarding Technical Problems </Title>
+                <Title order={3} mb="md" c="var(--mantine-color-text)"> Comments Regarding Technical Problems </Title>
                 <Textarea
                     placeholder="Add Any Comments Here..."
                     minRows={4}

@@ -5,7 +5,16 @@ from app import db
 from app.models.KHO_models import KHODocumentFormModel
 from app.utils.gcs_utils import upload_kho_file, generate_signed_url
 from app.controllers.auth_controller import jwt_required
+from app.controllers.province_controller import get_province_name_by_code
 from uuid import UUID
+
+BRAND_FOLDER_MAP = {
+    'RT': 'renault',
+    'MA': 'manitou',
+    'SDLG': 'sdlg',
+    'KA': 'kalmar',
+    'MTN': 'mantsinen',
+}
 
 @jwt_required
 def submit_kho_document():
@@ -38,17 +47,23 @@ def submit_kho_document():
             if not unit_info.get(field):
                 return jsonify({"message": f"Field '{field}' is required."}), 400
 
-        current_user = g.current_user
+        vin_number = unit_info['vinNumber']
+        vin_exists, existing_kho_id = is_vin_registered(vin_number)
         
-        if not current_user:
-            return jsonify({"message": "User not authenticated."}), 500
+        if vin_exists:
+            return jsonify({
+                "message": f"VIN '{vin_number}' has already been registered in the system.",
+                "documentID": existing_kho_id
+            }), 409
 
-        created_by_value = getattr(current_user, 'username', None) or str(getattr(current_user, 'id', 'unknown'))
-
+        user_id = str(g.user_id)
+        raw_brand = unit_info['brand']
+        brand_folder = BRAND_FOLDER_MAP.get(raw_brand, raw_brand.lower())
+    
         blob_name = upload_kho_file(
             file=pdf_file,
-            brand=unit_info['brand'],
-            user_id=created_by_value,
+            brand=brand_folder,
+            user_id=user_id,
             async_upload=False
         )
 
@@ -62,16 +77,20 @@ def submit_kho_document():
         except ValueError:
             return jsonify({"message": "Invalid date format. Use YYYY-MM-DD."}), 400
 
+        # Convert province code to human-readable label (e.g., "64" -> "Kalimantan Timur")
+        province_code = unit_info.get('location')
+        location_label = get_province_name_by_code(province_code)
+
         new_doc = KHODocumentFormModel(
             dealerCode=unit_info['dealerCode'],
             customer=unit_info['customerName'],
-            location=unit_info['location'],
+            location=location_label,
             brand=unit_info['brand'],
             typeModel=unit_info['typeModel'],
             VIN=unit_info['vinNumber'],
             bastDate=bast_date,
             pdfDocumentUrl=blob_name,
-            createdBy=created_by_value
+            createdBy=g.user_name,
         )
 
         db.session.add(new_doc)
@@ -117,3 +136,16 @@ def get_kho_document_pdf(kho_id):
     except Exception as e:
         current_app.logger.error(f"Error generating KHO PDF URL: {str(e)}")
         return jsonify({"message": "Internal server error."}), 500
+    
+def is_vin_registered(vin_number):
+    """Check if VIN already exists in KHO_unit_form table."""
+    
+    if not vin_number:
+        return False, None
+    
+    doc = KHODocumentFormModel.query.filter_by(VIN=vin_number.strip()).first()
+
+    if doc:
+        return True, str(doc.khoID)
+    
+    return False, None

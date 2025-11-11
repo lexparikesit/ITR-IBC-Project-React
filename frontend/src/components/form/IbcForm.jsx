@@ -425,10 +425,10 @@ export function MultiStepIbcForm() {
 
     return (
         <Box maw="100%" mx="auto" px="md">
-        <Title order={1} mt="md" mb="lg" style={{ color: "#000000" }}> Indotraktor Business Case Form </Title>
+        <Title order={1} mt="md" mb="lg" c="var(--mantine-color-text)"> Indotraktor Business Case Form </Title>
 
         <Card shadow="sm" p="xl" withBorder mb="lg">
-            <Title order={3} mb="md" style={{ color: "#000000" }}> Header Form </Title>
+            <Title order={3} mb="md" c="var(--mantine-color-text)"> Header Form </Title>
             <form onSubmit={headerForm.onSubmit(handleHeaderSubmit)}>
             <Grid gutter="xl">
                 <Grid.Col span={{ base: 12, md: 6 }}>
@@ -528,7 +528,7 @@ export function MultiStepIbcForm() {
 
         {step >= 2 && (
             <Card shadow="sm" p="xl" withBorder mb="lg">
-                <Title order={3} mb="md" style={{ color: "#000000" }}> Detail Form </Title>
+                <Title order={3} mb="md" c="var(--mantine-color-text)"> Detail Form </Title>
                 <form onSubmit={detailForm.onSubmit(handleDetailSubmit)}>
                     <Grid gutter="xl">
                         <Grid.Col span={{ base: 12, md: 6 }}>
@@ -597,7 +597,7 @@ export function MultiStepIbcForm() {
 
         {step >= 3 && (
             <Card shadow="sm" p="xl" withBorder mb="lg">
-                <Title order={3} mb="md" style={{ color: "#000000" }}> Detail Accessories </Title>
+                <Title order={3} mb="md" c="var(--mantine-color-text)"> Detail Accessories </Title>
                 <form onSubmit={accessoriesForm.onSubmit(handleFinalSubmit)}>
                     <Divider
                         my="sm"
@@ -606,8 +606,8 @@ export function MultiStepIbcForm() {
                     <Table striped highlightOnHover withTableBorder>
                         <Table.Thead>
                             <Table.Tr>
-                                <Table.Th style={{ width: "50%", color: "#000000" }}>Packages Type</Table.Th>
-                                <Table.Th style={{ width: "50%", color: "#000000" }}>Package Description</Table.Th>
+                                <Table.Th style={{ width: "50%", color: "var(--mantine-color-text)" }}>Packages Type</Table.Th>
+                                <Table.Th style={{ width: "50%", color: "var(--mantine-color-text)" }}>Package Description</Table.Th>
                                 <Table.Th></Table.Th>
                             </Table.Tr>
                         </Table.Thead>
@@ -636,12 +636,12 @@ export function MultiStepIbcForm() {
                         </Button>
                     </Group>
 
-                    <Divider my="sm" label={<Text style={{ color: "#000000" }}>Accessories</Text>} />
+                    <Divider my="sm" label={<Text style={{ color: "var(--mantine-color-text)" }}>Accessories</Text>} />
                     <Table striped highlightOnHover withTableBorder>
                         <Table.Thead>
                             <Table.Tr>
-                                <Table.Th style={{ width: "50%", color: "#000000" }}>Accessories</Table.Th>
-                                <Table.Th style={{ width: "50%", color: "#000000" }}>Accessories Description</Table.Th>
+                                <Table.Th style={{ width: "50%", color: "var(--mantine-color-text)" }}>Accessories</Table.Th>
+                                <Table.Th style={{ width: "50%", color: "var(--mantine-color-text)" }}>Accessories Description</Table.Th>
                                 <Table.Th></Table.Th>
                             </Table.Tr>
                         </Table.Thead>

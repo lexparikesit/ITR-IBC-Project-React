@@ -123,4 +123,10 @@ def create_app():
     from app.routes.user_routes import user_bp
     app.register_blueprint(user_bp)
 
+    from app.routes.kho_routes import kho_bp
+    app.register_blueprint(kho_bp)
+
+    from app.routes.kho_log_routes import kho_log_bp
+    app.register_blueprint(kho_log_bp)
+
     return app

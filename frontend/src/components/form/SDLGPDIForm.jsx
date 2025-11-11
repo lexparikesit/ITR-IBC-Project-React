@@ -156,8 +156,7 @@ export function SdlgPDIForm() {
                     color: "red",
                 });
                 return;
-            }
-                if (!token) {
+            } if (!token) {
                 notifications.show({
                     title: "Authentication Error",
                     message: "No access token found. Please log in.",
@@ -228,7 +227,7 @@ export function SdlgPDIForm() {
                 order={1}
                 mt="md"
                 mb="lg"
-                style={{ color: '#000000 !important' }}
+                style={{ color: 'var(--mantine-color-text)' }}
             > 
                 Pre Delivery Inspection Form
             </Title>
@@ -236,7 +235,7 @@ export function SdlgPDIForm() {
             <form onSubmit={form.onSubmit(handleSubmit)}>
                 {/* Header: Unit Information */}
                 <Card shadow="sm" p="xl" withBorder mb="lg">
-                    <Title order={3} mb="md" style={{ color: '#000000 !important' }}> Unit Information </Title>
+                    <Title order={3} mb="md" style={{ color: 'var(--mantine-color-text)' }}> Unit Information </Title>
                     <Grid gutter="xl">
                         <Grid.Col span={{ base: 12, md: 6, md: 3 }}>
                             {/* <Select

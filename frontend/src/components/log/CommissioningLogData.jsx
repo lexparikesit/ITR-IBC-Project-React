@@ -22,12 +22,12 @@ import {
     Grid,
     Checkbox,
 } from '@mantine/core';
-import { IconSearch, IconEye, IconAlertCircle } from '@tabler/icons-react';
+import * as XLSX from "xlsx";
+import { IconSearch, IconEye, IconAlertCircle, IconDownload } from '@tabler/icons-react';
 import { useDisclosure } from '@mantine/hooks';
 import { notifications } from "@mantine/notifications";
 import { BRAND_CHECKLIST_MAP, RENAULT_SECTION_ORDER } from '@/config/CommissioningMap';
-import { toDateTimeString } from '@mantine/dates';
-import { all } from 'axios';
+import { useUser } from "@/context/UserContext";
 
 const EXCLUDED_KEYS = ['remarks', 'notes', 'checklist_items', 'id', 'details', 'major_components', 'generalRemarks'];
 const formatKeyToLabel = (key) => {
@@ -140,8 +140,7 @@ const getStatusLabels = (brand, statusValue) => {
         } else {
             return { text: 'N/A', color: 'gray' };
         }
-    }
-    else  {
+    } else  {
         if (isTrue) {
             return { text: 'Good', color: 'green' };
         } else if (isFalse) {
@@ -194,15 +193,14 @@ const formatDateOnly = (toDateTimeString) => {
         if (isNaN(dateObj.getTime())) return 'N/A';
 
         return dateObj.toLocaleDateString('id-ID');
+
     } catch (e) {
         return 'N/A';
     }
 };
 
 const LogData = ({ title, apiUrl }) => {
-    const token = typeof window !== 'undefined' ? 
-        localStorage.getItem('access_token') : null;
-    
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
     const [logs, setLogs] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
@@ -210,13 +208,55 @@ const LogData = ({ title, apiUrl }) => {
     const [selectedLogDetails, setSelectedLogDetails] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [activePage, setActivePage] = useState(1);
-    const [rowsPerPage, setRowsPerPage] = useState(10);
+    const [rowsPerPage, setRowsPerPage] = useState("10");
     const [lookupTables, setLookupTables] = useState({
         models: {},
         technicians: {},
         approvers: {},
         customers: {},
     });
+    const { user } = useUser();
+
+    const downloadExcel = () => {
+        if (!user?.permissions?.includes('download_commissioning_log')) {
+            notifications.show({
+                title: "Permission Denied",
+                message: "You don't have permission to download this log.",
+                color: "red",
+            });
+            return;
+        }
+
+        const excelData = logs.map((log, index) => ({
+            No: index + 1,
+            "WO Number": log.woNumber || 'N/A',
+            "Type/Model": lookupTables.models[log.model] || log.model || 'N/A',
+            Brand:
+                log.brand || "manitou"
+                    ? "Manitou"
+                    : log.brand === "renault"
+                        ? "Renault Trucks"
+                        : log.brand === "sdlg"
+                            ? "SDLG"
+                            : log.brand || "N/A",
+            VIN: log.VIN || "N/A",
+            "Date of Check": log.dateOfCheck
+                ? new Date(log.dateOfCheck).toLocaleDateString("id-ID")
+                : "N/A",
+            Technician:
+                lookupTables.technicians[log.technician] || log.technician || "N/A",
+            "Approval By":
+                lookupTables.approvers[log.approvalBy] || log.approvalBy || "N/A",
+            "Created By": log.createdBy || "N/A",
+            "Created On": formatLocalTime(log.createdOn),
+        }))
+
+        const ws = XLSX.utils.json_to_sheet(excelData);
+        const wb = XLSX.utils.book_new();
+
+        XLSX.utils.book_append_sheet(wb, ws, "Commissioning Log");
+        XLSX.writeFile(wb,`commissioning_log_${new Date().toISOString().split("T")[0]}.xlsx`);
+    };
 
     const getUnitInformationData = (details, lookupTables) => {
         if (!details) return [];
@@ -283,8 +323,7 @@ const LogData = ({ title, apiUrl }) => {
             }
 
             else {
-                value = value !== null && value !== undefined && value !== '' ?
-                    String(value) : 'N/A';
+                value = value !== null && value !== undefined && value !== "" ? String(value) : 'N/A';
             }
 
             dataArray.push({ label, value, key, priority: priorityKeys.indexOf(key) });
@@ -352,23 +391,61 @@ const LogData = ({ title, apiUrl }) => {
         }
     }
 
-    const toTitleCase = (str) => {
-        if (!str) return 'N/A';
+const toTitleCase = (str) => {
+    if (!str) return 'N/A';
 
-        const ptRegex = /^(pt\.?|p\.?t\.?)$/i;
-        const words = str.split(' ');
-        const formattedWords = words.map(word => {
+    const ptRegex = /^(pt\.?|p\.?t\.?)$/i;
+    const words = String(str).split(' ');
+    const formattedWords = words.map((word) => {
         const cleanWord = word.replace(/[.,;:!?]+$/, '');
 
-            if (ptRegex.test(cleanWord)) {
-                const punctuation = word.match(/[.,;:!?]+$/) ? word.match(/[.,;:!?]+$/)[0] : '';
-                return 'PT' + punctuation;
-            } else {
-                return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
-            }
-        });
+        if (ptRegex.test(cleanWord)) {
+            // Normalize any PT variants and drop trailing punctuation (e.g., "PT.")
+            return 'PT';
+        }
 
-        return formattedWords.join(' ');
+        return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+    });
+
+    return formattedWords.join(' ');
+};
+
+    const fetchUserLookup = async (token) => {
+        if (!token) return { technicians: {}, approvers: {} };
+
+        try {
+            const baseUrl = "http://127.0.0.1:5000/api";
+            const [techRes, supervisorRes, techHeadRes] = await Promise.all([
+                fetch(`${baseUrl}/users/by-role/Technician`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                }),
+                fetch(`${baseUrl}/users/by-role/Supervisor`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                }),
+                fetch(`${baseUrl}/users/by-role/Technical Head`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                }),
+            ]);
+
+            const techData = techRes.ok ? await techRes.json() : [];
+            const supervisorData = supervisorRes.ok ? await supervisorRes.json() : [];
+            const techHeadData = techHeadRes.ok ? await techHeadRes.json() : [];
+            const allApprovers = [...supervisorData, ...techHeadData];
+            const techLookup = techData.reduce((acc, user) => {
+                acc[user.value] = user.label;
+                return acc;
+            }, {});
+            const approverLookup = allApprovers.reduce((acc, user) => {
+                acc[user.value] = user.label;
+                return acc;
+            }, {});
+
+            return { technicians: techLookup, approvers: approverLookup };
+        
+        } catch (error) {
+            console.error("Error fetching user lookup data:", error);
+            return { technicians: {}, approvers: {} };
+        }
     };
 
     useEffect(() => {
@@ -386,7 +463,9 @@ const LogData = ({ title, apiUrl }) => {
             try {
                 setLoading(true);
                 
-                const logsResponse = await fetch(apiUrl, { headers: { 'Authorization': `Bearer ${token}` }});
+                const logsResponse = await fetch(apiUrl, { 
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
 
                 if (!logsResponse.ok) {
                     throw new Error('Failed to fetch the Log Data.');
@@ -398,12 +477,6 @@ const LogData = ({ title, apiUrl }) => {
                 const uniqueBrandIds = [...new Set(
                     logData.map(log => BRAND_ID_MAP[(log.brand || '').toLowerCase()]).filter(id => id) 
                 )];
-                
-                const dummyTechnicians = [{ value: "tech1", label: "John Doe" }, { value: "tech2", label: "Jane Smith" }, { value: "tech3", label: "Peter Jones" }];
-                const techLookup = dummyTechnicians.reduce((acc, item) => { acc[item.value] = item.label; return acc; }, {});
-                const dummyApprovers = [{ value: "app1", label: "Alice Brown" }, { value: "app2", label: "Bob White" }, { value: "app3", label: "John Green"}];
-                const approverLookup = dummyApprovers.reduce((acc, item) => { acc[item.value] = item.label; return acc; }, {});
-                const customerLookup = await fetchCustomerData(); 
 
                 let allModelLookup = {};
 
@@ -412,19 +485,22 @@ const LogData = ({ title, apiUrl }) => {
                     allModelLookup = { ...allModelLookup, ...modelLookupForBrand }; 
                 }
 
+                const customerLookup = await fetchCustomerData();
+                const { technicians, approvers } = await fetchUserLookup(token);
+
                 setLookupTables({
                     models: allModelLookup,
-                    technicians: techLookup,
-                    approvers: approverLookup,
+                    technicians: technicians,
+                    approvers: approvers,
                     customers: customerLookup,
                 });
 
             } catch (err) {
                 setError(err.message);
-                notifications.show({ 
-                    title: "Error", 
-                    message: `Failed to Fetch the Data: ${err.message}`, 
-                    color: "red" 
+                notifications.show({
+                    title: "Error",
+                    message: `Failed to Fetch the Data: ${err.message}`,
+                    color: "red",
                 });
             
             } finally {
@@ -502,18 +578,28 @@ const LogData = ({ title, apiUrl }) => {
         }
     }
 
-    const rows = paginatedLogs.map((log) => {
+    const rows = paginatedLogs.map((log, index) => {
         const modelLabel = lookupTables.models[log.model] || log.model || 'N/A';
         const technicianLabel = lookupTables.technicians[log.technician] || log.technician || 'N/A';
         const approverLabel = lookupTables.approvers[log.approvalBy] || log.approvalBy || 'N/A';
         const rawCustomerName = lookupTables.customers[log.customer] || '';
         const customerLabel = rawCustomerName ? toTitleCase(rawCustomerName) : '';
+        const globalIndex = (activePage - 1) * parseInt(rowsPerPage, 10) + index + 1;
         
         return (
-            <Table.Tr key={log.id}> 
+            <Table.Tr key={log.id}>
+                <Table.Td>{globalIndex}</Table.Td> 
                 <Table.Td>{log.woNumber || 'N/A'}</Table.Td>
                 <Table.Td>{modelLabel}</Table.Td> 
-                <Table.Td>{log.brand || 'N/A'}</Table.Td>
+                <Table.Td>
+                    {log.brand === "manitou"
+                        ? "Manitou"
+                        : log.brand === "renault"
+                            ? "Renault Trucks"
+                            : log.brand === "sdlg"
+                                ? "SDLG"
+                                : log.brand || "N/A"}
+                </Table.Td>
                 <Table.Td>{log.VIN || 'N/A'}</Table.Td>
                 <Table.Td>
                     {log.dateOfCheck 
@@ -524,9 +610,7 @@ const LogData = ({ title, apiUrl }) => {
                 <Table.Td>{technicianLabel}</Table.Td>
                 <Table.Td>{approverLabel}</Table.Td>
                 <Table.Td>{log.createdBy || 'N/A'}</Table.Td>
-                <Table.Td>
-                    {formatLocalTime(log.createdOn)} 
-                </Table.Td>
+                <Table.Td>{formatLocalTime(log.createdOn)}</Table.Td>
                 <Table.Td>
                     <Button
                         variant="subtle"
@@ -554,37 +638,31 @@ const LogData = ({ title, apiUrl }) => {
     const checklist_items = selectedLogDetails?.checklist_items;
     const major_components = selectedLogDetails?.major_components;
 
+    if (loading) {
+        return (
+            <Box maw="100%" mx="auto" px="md" ta="center">
+                <Title order={1} mt="md" mb="lg">Loading Form Data...</Title>
+                <Loader size="lg" />
+            </Box>
+        );
+    }
+
+    if (error) {
+        return (
+            <Text c="red" ta="center" mt="xl">Error: {error}</Text>
+        );
+    }
+
     return (
         <Container size="xl" my="xl">
             <Title order={1} mb="xl" ta="center"> {title} </Title>
-
-            {!loading && !error && (
-                <Text ta="center" c="dimmed" mt="-md" mb="xs">
-                    Total Units: {filteredLogs.length}
-                </Text>
-            )}
-
-            {loading && (
-                <Box ta="center">
-                    <Loader size="lg" />
-                    <Text mt="md">Load Data...</Text>
-                </Box>
-            )}
-            
-            {error && (
-                <Text c="read" ta="center">
-                    Error Occured: {error}
-                </Text>
-            )}
-            
-            {!loading && !error && (
                 <>
                     <Paper shadow="sm" radius="md" p="md" mb="md">
                         <Group justify="space-between" align="flex-end" mb="md">
                             <TextInput
                                 label="Search Unit"
                                 icon={<IconSearch size={14} />}
-                                placeholder="by WO Number, VIN Number, Brand/ Product, or Unit Type)"
+                                placeholder="by WO Number, VIN Number, Brand/ Product, or Unit Type"
                                 value={searchQuery}
                                 onChange={(event) => {
                                     setSearchQuery(event.currentTarget.value);
@@ -593,24 +671,47 @@ const LogData = ({ title, apiUrl }) => {
                                 w={400}
                                 style={{ alignSelf: 'center' }} 
                             />
-                            <Select
-                                label="Show Rows"
-                                placeholder="10"
-                                data={['10', '20', '30', '40', '50']}
-                                value={rowsPerPage}
-                                onChange={(value) => {
-                                    setRowsPerPage(value);
-                                    setActivePage(1);
-                                }}
-                                w={80}
-                            />
+                            <Group gap="xs">
+                                {user?.permissions?.includes("download_commissioning_log") && (
+                                    <Button
+                                        onClick={downloadExcel}
+                                        variant="outline"
+                                        color="#A91D3A"
+                                        size="lg"
+                                        p={0}
+                                        w={32}
+                                        h={32}
+                                        style={{
+                                            height: "100%",
+                                            width: "40px",
+                                            paddingTop: "2px",
+                                            paddingBottom: "2px",
+                                            marginTop: "23px",
+                                        }}
+                                    >
+                                        <IconDownload size={16} />
+                                    </Button>
+                                )}
+                                <Select
+                                    label="Show Rows"
+                                    placeholder="10"
+                                    data={["10", "20", "30", "40", "50"]}
+                                    value={rowsPerPage}
+                                    onChange={(value) => {
+                                        setRowsPerPage(value);
+                                        setActivePage(1);
+                                    }}
+                                    w={80}
+                                />
+                            </Group>
                         </Group>
                     </Paper>
 
                     <Paper shadow="sm" radius="md" p="md">
-                        <Table stickyHeader striped highlightOnHover>
+                        <Table stickyHeader highlightOnHover>
                             <Table.Thead>
                                 <Table.Tr>
+                                    <Table.Th>No.</Table.Th>
                                     <Table.Th>WO Number</Table.Th>
                                     <Table.Th>Type/Model</Table.Th>
                                     <Table.Th>Brand</Table.Th>
@@ -638,7 +739,6 @@ const LogData = ({ title, apiUrl }) => {
                         </Box>
                     )}
                 </>
-            )}
 
             <Modal
                 opened={modalOpened}
@@ -650,18 +750,17 @@ const LogData = ({ title, apiUrl }) => {
                 }}
                 scrollAreaComponent={ScrollArea.Autosize}
             >
-                {selectedLogDetails === null ?
-                (
+                {selectedLogDetails === null ? (
                     <Box ta="center">
                         <Loader size="md" />
                         <Text mt="sm">Loading Details...</Text>
                     </Box>
-                ) : selectedLogDetails.error ?
-                (
+                ) : selectedLogDetails.error ? (
                     <Alert icon={<IconAlertCircle size={16} />} title="Error" color="red">
                         Failed to load details: {selectedLogDetails.error}
                     </Alert>
                 ) : (
+                    <>
                     <Stack gap="xl">
                         <Box>
                             <Title
@@ -829,58 +928,97 @@ const LogData = ({ title, apiUrl }) => {
                                                     </Table.Tbody>
                                                 </Table>
                                             ) : (
-                                                <Table withRowBorders={true} striped highlightOnHover>
+                                                <Table withRowBorders={true} highlightOnHover>
                                                     <Table.Thead>
                                                         <Table.Tr>
                                                             <Table.Th>Section</Table.Th>
                                                             <Table.Th>Item</Table.Th>
                                                             <Table.Th style={{ width: '100px' }}>Status</Table.Th>
                                                             <Table.Th>Remarks/Caption</Table.Th>
-                                                            <Table.Th>Image URL</Table.Th>
+                                                            <Table.Th>Image</Table.Th>
                                                         </Table.Tr>
                                                     </Table.Thead>
                                                     <Table.Tbody>
-                                                        {selectedLogDetails.checklist_items
-                                                            .slice()
-                                                            .sort((a, b) => {
-                                                                const brandLower = (selectedLogDetails.brand || '').toLowerCase();
-                                                                const map = BRAND_CHECKLIST_MAP[brandLower];
+                                                        {(() => {
+                                                            const brand = selectedLogDetails.brand;
+                                                            const brandLower = (brand || '').toLowerCase();
+                                                            const map = BRAND_CHECKLIST_MAP[brandLower];
+                                                            const sectionOrder = (sectionKey) => {
+                                                                if (!map) return 9999;
+                                                                const keys = Object.keys(map.sections || {});
+                                                                const idx = keys.indexOf(sectionKey);
+                                                                return idx === -1 ? 9999 : idx;
+                                                            };
+                                                            const itemOrder = (sectionKey, itemKey, normItem) => {
+                                                                if (!map || !map.items || !map.items[sectionKey]) return 9999;
+                                                                const arr = map.items[sectionKey];
+                                                                let idx = arr.findIndex(i => (i.itemKey || '').toLowerCase() === (itemKey || '').toLowerCase());
+                                                                if (idx === -1) idx = arr.findIndex(i => (i.label || '').toLowerCase() === (normItem || '').toLowerCase());
+                                                                return idx === -1 ? 9999 : idx;
+                                                            };
 
-                                                                if (!map) return 0;
+                                                            const raw = (selectedLogDetails.checklist_items || []).slice();
+                                                            const rows = raw.map((it) => {
+                                                                const { section: normSec, item: normItem } = getNormalizedLabel(brand, it.section, it.itemName);
+                                                                return {
+                                                                    rawSection: it.section,
+                                                                    section: normSec,
+                                                                    itemKey: it.itemName,
+                                                                    itemLabel: normItem,
+                                                                    status: it.status,
+                                                                    remarks: it.remarks || it.caption || '-',
+                                                                    imageUrl: it.image_url,
+                                                                };
+                                                            });
 
-                                                                const sectionKeys = Object.keys(map.sections);
-                                                                const rankA = sectionKeys.indexOf(a.section);
-                                                                const rankB = sectionKeys.indexOf(b.section);
+                                                            rows.sort((a, b) => {
+                                                                const sec = sectionOrder(a.rawSection) - sectionOrder(b.rawSection);
+                                                                if (sec !== 0) return sec;
+                                                                return itemOrder(a.rawSection, a.itemKey, a.itemLabel) - itemOrder(b.rawSection, b.itemKey, b.itemLabel);
+                                                            });
 
-                                                                if (rankA !== rankB) {
-                                                                    return rankA - rankB;
-                                                                }
+                                                            const counts = {};
+                                                            rows.forEach(r => { counts[r.section] = (counts[r.section] || 0) + 1; });
+                                                            const emitted = {};
 
-                                                                return 0;
-                                                            })
-                                                            .map((item, index) => {
-                                                                const brand = selectedLogDetails.brand;
-                                                                const { section: normalizedSection, item: normalizedItem } =getNormalizedLabel(brand, item.section, item.itemName);
-                                                                const { text: statusText, color: statusColor } = getStatusLabels(brand, item.status);
-
-                                                                return (
-                                                                    <Table.Tr key={index}>
-                                                                        <Table.Td>{normalizedSection}</Table.Td>
-                                                                        <Table.Td>{normalizedItem}</Table.Td>
-                                                                        <Table.Td>
-                                                                            <Text fw={700} c={statusColor}>
-                                                                                {statusText}
-                                                                            </Text>
+                                                            return rows.map((row, idx) => (
+                                                                <Table.Tr key={idx}>
+                                                                    {!emitted[row.section] && (
+                                                                        <Table.Td
+                                                                            rowSpan={counts[row.section]}
+                                                                            style={{ textAlign: 'center', verticalAlign: 'middle', fontWeight: 600 }}
+                                                                        >
+                                                                            {row.section}
                                                                         </Table.Td>
-                                                                        <Table.Td>{item.remarks || item.caption || '-'}</Table.Td>
-                                                                        <Table.Td>
-                                                                            {item.image_url ? (
-                                                                                <a href={item.image_url} target="_blank" rel="noopener noreferrer" style={{color: 'var(--mantine-color-blue-6)'}}>Picture</a>
-                                                                            ) : '-'}
-                                                                        </Table.Td>
-                                                                    </Table.Tr>
-                                                                );
-                                                            })}
+                                                                    )}
+                                                                    {(emitted[row.section] = (emitted[row.section] || 0) + 1) && null}
+                                                                    <Table.Td>{row.itemLabel}</Table.Td>
+                                                                    <Table.Td>
+                                                                        <Text fw={700} c={getStatusLabels(brand, row.status).color}>
+                                                                            {getStatusLabels(brand, row.status).text}
+                                                                        </Text>
+                                                                    </Table.Td>
+                                                                    <Table.Td>{row.remarks}</Table.Td>
+                                                                    <Table.Td>
+                                                                        {row.imageUrl && row.imageUrl.startsWith('https://') ? (
+                                                                            <Box style={{ width: '100px', height: '100px', overflow: 'hidden' }}>
+                                                                                <img
+                                                                                    src={row.imageUrl}
+                                                                                    alt="Inspection"
+                                                                                    style={{ width: '100%', height: 'auto', objectFit: 'cover' }}
+                                                                                    onError={(e) => {
+                                                                                        e.target.style.display = 'none';
+                                                                                        e.target.parentElement.innerHTML = '<span style="color: red">Image Failed to Load</span>';
+                                                                                    }}
+                                                                                />
+                                                                            </Box>
+                                                                        ) : (
+                                                                            '-'
+                                                                        )}
+                                                                    </Table.Td>
+                                                                </Table.Tr>
+                                                            ));
+                                                        })()}
                                                     </Table.Tbody>
                                                 </Table>
                                             )}
@@ -892,24 +1030,26 @@ const LogData = ({ title, apiUrl }) => {
                         )}     
                         </Box>
                     </Stack>
+                
+                    {/* Render general notes only after details have loaded */}
+                    <Box>
+                        <Title
+                            order={4}
+                            mt="md"
+                            mb="sm"
+                            pb="xs"
+                            stye={{ borderBottom: '1px solid var(--mantine-color-gray-2)' }}
+                        >
+                            General Notes / Remarks
+                        </Title>
+                        <Paper withBorder p="md" radius="md">
+                            <Text style={{ whiteSpace: 'pre-wrap' }}>
+                                {remarks}
+                            </Text>
+                        </Paper>
+                    </Box>
+                    </>
                 )}
-
-                <Box>
-                    <Title
-                        order={4}
-                        mt="md"
-                        mb="sm"
-                        pb="xs"
-                        stye={{ borderBottom: '1px solid var(--mantine-color-gray-2)' }}
-                    >
-                        General Notes / Remarks
-                    </Title>
-                    <Paper withBorder p="md" radius="md">
-                        <Text style={{ whiteSpace: 'pre-wrap' }}>
-                            {remarks}
-                        </Text>
-                    </Paper>
-                </Box>
             </Modal>
         </Container>
     )

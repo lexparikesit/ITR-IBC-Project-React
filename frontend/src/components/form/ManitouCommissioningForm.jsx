@@ -15,13 +15,16 @@ import {
     Box,
     Select,
     Radio,
+    Loader,
 } from "@mantine/core";
 import { DateInput } from "@mantine/dates";
-import { IconCalendar, IconUpload, IconX, IconFile, IconPencil } from "@tabler/icons-react";
+import { IconCalendar, IconUpload, IconX, IconFile, IconPencil, IconRefresh } from "@tabler/icons-react";
 import { useForm } from '@mantine/form';
 import { notifications } from "@mantine/notifications";
 import { Dropzone, MIME_TYPES } from "@mantine/dropzone";
 import { rem } from "@mantine/core";
+import apiClient from "@/libs/api";
+import imageCompression from "browser-image-compression";
 
 const ManitouCommissioningChecklistForm = {
     engine: [
@@ -108,56 +111,125 @@ const ManitouCommissioningChecklistForm = {
     ],
 };
 
+const MAX_FILE_SIZE = 2 * 1024 *  1024;
+const MAX_ACCEPTED_SIZE = 5 * 1024 * 1024;
+const COMPRESS_OPTIONS = {
+    maxSizeMB: 1.8,
+    maxWidthOrHeight: 1920,
+    useWebWorker: true,
+    fileType: 'image/jpeg',
+}
+
 export function ManitouCommissioningForm() {
     const [unitModels, setUnitModels] = useState([]);
     const [woNumbers, setWoNumbers] = useState([]);
     const [customers, setCustomers] = useState([]);
     const [technicians, setTechnicians] = useState([]);
     const [approvers, setApprovers] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [uploading, setUploading] = useState(false);
+
+    const processImage  = async (file, sectionKey, itemKey) => {
+        try {
+            if (file.size > MAX_ACCEPTED_SIZE) {
+                notifications.show({
+                    title: "File Too Large",
+                    message: "Maximum file size is 5MB. Please choose a smaller file.",
+                    color: "red",
+                });
+                return null;
+            }
+
+            let processedFile = file;
+
+            if (file.size > MAX_FILE_SIZE) {
+                notifications.show({
+                    title: "Optimizing Image",
+                    message: `Compressing ${file.name}...`,
+                    color: "blue",
+                    autoClose: false,
+                    id: `compress-${sectionKey}-${itemKey}`
+                });
+
+                processedFile = await imageCompression(file, COMPRESS_OPTIONS);
+
+                if (processedFile.size > MAX_FILE_SIZE) {
+                    notifications.update({
+                        id: `compress-${sectionKey}-${itemKey}`,
+                        title: "Compression Failed",
+                        message: "Unable to compress below 2MB. Please choose a different image.",
+                        color: "red",
+                        autoClose: 5000
+                    });
+                    return null;
+                }
+
+                notifications.update({
+                    id: `compress-${sectionKey}-${itemKey}`,
+                    title: "Image Optimized",
+                    message: `Compressed to ${(processedFile.size / 1024 / 1024).toFixed(2)} MB`,
+                    color: "green",
+                    autoClose: 3000
+                });
+            }
+            return processedFile;
+        
+        } catch (error) {
+            console.error("Image processing error:", error);
+            notifications.show({
+                title: "Processing Error",
+                message: "Failed to process image. Please try again.",
+                color: "red",
+            });
+            return null;
+        }
+    };
 
     const generateChecklistValidation = () => {
-        let validationRules = {};
-        Object.keys(ManitouCommissioningChecklistForm).forEach(sectionKey => {
-            ManitouCommissioningChecklistForm[sectionKey].forEach(item => {
+        const rules = {};
+        Object.keys(ManitouCommissioningChecklistForm).forEach((sectionKey) => {
+            ManitouCommissioningChecklistForm[sectionKey].forEach((item) => {
                 const itemKey = item.itemKey;
-                validationRules[`checklistItems.${sectionKey}.${itemKey}.value`] = (value) => (
-                    value ? null : 'This field is Required!'
-                );
-                validationRules[`checklistItems.${sectionKey}.${itemKey}.image`] = (value) => (
-                    value ? null : 'An Image is Required for This Item!'
-                );
+                // Require a choice for every item
+                rules[`checklistItems.${sectionKey}.${itemKey}.value`] = (v) => (v ? null : 'This field is Required!');
+                // Only require image for Bad/Missing
+                rules[`checklistItems.${sectionKey}.${itemKey}.image`] = (_img, values) => {
+                    const selected = values?.checklistItems?.[sectionKey]?.[itemKey]?.value;
+                    const image = values?.checklistItems?.[sectionKey]?.[itemKey]?.image;
+                    if (!selected) return null; // Let value rule trigger first
+                    if (selected === 'Bad' || selected === 'Missing') {
+                        return image ? null : 'Photo is required for Bad/Missing';
+                    }
+                    return null; // Good does not require image
+                };
             });
         });
-        return validationRules;
+        return rules;
     };
 
     const form = useForm({
         initialValues: (() => {
-            const initialChecklist = {};
-            Object.keys(ManitouCommissioningChecklistForm).forEach(sectionKey => {
-                initialChecklist[sectionKey] = {};
-                ManitouCommissioningChecklistForm[sectionKey].forEach(item => {
-                    initialChecklist[sectionKey][item.itemKey] = {
-                        value: '',
-                        notes: '',
-                        image: null,
-                    };
-                });
-            });
-
-            return {
+            const initialManitouValues = {
                 woNumber: null,
                 unitModel: null,
-                VIN: '',
-                hourMeter: '',
+                VIN: "",
+                hourMeter: "",
                 deliveryDate: null,
                 commissioningDate: null,
                 customer: null,
                 inspectorSignature: null,
                 approvalBy: null,
-                generalRemarks: '',
-                checklistItems: initialChecklist,
+                generalRemarks: "",
             };
+
+            initialManitouValues.checklistItems = {};
+            Object.keys(ManitouCommissioningChecklistForm).forEach(sectionKey => {
+                initialManitouValues.checklistItems[sectionKey] = {};
+                ManitouCommissioningChecklistForm[sectionKey].forEach(item => {
+                    initialManitouValues.checklistItems[sectionKey][item.itemKey] = { value: "", image: null, notes: "" };
+                });
+            });
+            return initialManitouValues;
         })(),
 
         validate: {
@@ -179,69 +251,66 @@ export function ManitouCommissioningForm() {
             try {
                 const brandId = "MA"; // 'MA' for Manitou
                 const groupId = "COMM"; // 'COMM' for Commissioning
+                const [
+                    modelRes,
+                    woRes,
+                    customerRes,
+                    techRes,
+                    supervisorRes,
+                    techHeadRes,
+                ] = await Promise.all([
+                    apiClient.get(`/unit-types/${brandId}`),
+                    apiClient.get(`/work-orders?brand_id=${brandId}&group_id=${groupId}`),
+                    apiClient.get("/customers"),
+                    apiClient.get("/users/by-role/Technician"),
+                    apiClient.get("/users/by-role/Supervisor"),
+                    apiClient.get("/users/by-role/Technical Head"),
+                ])
 
-                // model/ Type MA API
-                const modelResponse = await fetch(`http://127.0.0.1:5000/api/unit-types/${brandId}`);
-                if (!modelResponse.ok) throw new Error(`HTTP error! status: ${modelResponse.status}`);
-                const modelData = await modelResponse.json();
-                const formattedModels = modelData
-                    .filter(item => item.value !== null && item.value !== undefined && item.label !== null && item.label !== undefined)
-                    .map(item => ({
-                        value: item.value,
-                        label: item.label
-                    }));
-                setUnitModels(formattedModels);
-                console.log("Formatted Unit Models:", formattedModels);
-                
-                // wo Number API
-                const woResponse = await fetch(`http://127.0.0.1:5000/api/work-orders?brand_id=${brandId}&group_id=${groupId}`);
-                if (!woResponse.ok) throw new Error(`HTTP error! status: ${woResponse.status}`);
-                const woData = await woResponse.json();
-                const formattedWoData = woData.map(wo => ({
-                    value: wo.WONumber,
-                    label: wo.WONumber
-                }));
-                setWoNumbers(formattedWoData);
-
-                // customers API
-                const customerResponse = await fetch(`http://127.0.0.1:5000/api/customers`);
-                if (!customerResponse.ok) throw new Error(`HTTP error! status: ${customerResponse.status}`);
-                const customerData = await customerResponse.json();
-                const formattedCustomers = customerData.map(customer => ({
-                    value: customer.CustomerID,
-                    label: customer.CustomerName
-                }));
-                setCustomers(formattedCustomers);
-
-                // dummy Technicians API
-                const dummyTechnicians = [
-                    { value: "tech1", label: "John Doe" },
-                    { value: "tech2", label: "Jane Smith" },
-                    { value: "tech3", label: "Peter Jones" }
-                ];
-                setTechnicians(dummyTechnicians);
-
-                // dummy Approvers API
-                const dummyApprover = [
-                    { value: "app1", label: "Alice Brown" },
-                    { value: "app2", label: "Bob White" },
-                    { value: "app3", label: "John Green" }
-                ];
-                setApprovers(dummyApprover);
+                setUnitModels(modelRes.data);
+                setWoNumbers(woRes.data.map(wo => ({ value: wo.WONumber, label: wo.WONumber })));
+                setCustomers(customerRes.data.map((customer => ({ value: customer.CustomerID, label: customer.CustomerName }))));
+                setTechnicians(techRes.data);
+                setApprovers([
+                    ...supervisorRes.data,
+                    ...techHeadRes.data,
+                ]);
 
             } catch (error) {
+                console.error("Failed to fetch data:", error);
                 notifications.show({
                     title: "Error Loading Data",
                     message: "Failed to load form data. Please try again!",
                     color: "red",
                 });
+            
+            } finally {
+                setLoading(false);
             }
         };
         fetchData();
     }, []);
 
+    const retryUpload = async (sectionKey, itemKey) => {
+        const currentFile = form.values.checklistItems[sectionKey]?.[itemKey]?.image;
+        if (!currentFile) return;
+
+        setUploading(true);
+        try {
+            const processedFile = await processImage(currentFile, sectionKey, itemKey);
+            if (processedFile) {
+                form.setFieldValue(`checklistItems.${sectionKey}.${itemKey}.image`, processedFile);
+            }
+
+        } finally {
+            setUploading(false);
+        }
+    }
+
     const handleSubmit = async (values) => {
         console.log("Form values before submission:", values);
+        setUploading(true);
+
         const token = localStorage.getItem('access_token');
         if(!token) {
             notifications.show({
@@ -252,30 +321,7 @@ export function ManitouCommissioningForm() {
             return;
         }
 
-        const formData = new FormData();
-        const checklistItemsPayload = {};
-
-        Object.keys(ManitouCommissioningChecklistForm).forEach(sectionKey => {
-            const items = ManitouCommissioningChecklistForm[sectionKey];
-            items.forEach(item => {
-                const itemData = values.checklistItems[sectionKey]?.[item.itemKey];
-                
-                if (itemData && itemData.value) {
-                    if (!checklistItemsPayload[sectionKey]) {
-                        checklistItemsPayload[sectionKey] = {};
-                    }
-                    checklistItemsPayload[sectionKey][item.itemKey] = {
-                        status: itemData.value,
-                        notes: itemData.notes || '',
-                    };
-
-                    if (itemData.image) {
-                        const imageKey = `${sectionKey}.${item.itemKey}.image`;
-                        formData.append(imageKey, itemData.image);
-                    }
-                }
-            });
-        });
+        let checklistItemsPayload = {};
 
         const payload = {
             brand: "Manitou",
@@ -294,71 +340,125 @@ export function ManitouCommissioningForm() {
             checklistItems: checklistItemsPayload,
         };
 
+        const formData = new FormData();
+
+        let missingPhotos = [];
+
+        Object.keys(ManitouCommissioningChecklistForm).forEach(sectionKey => {
+            const items = ManitouCommissioningChecklistForm[sectionKey];
+            items.forEach(item => {
+                const itemData = values.checklistItems[sectionKey]?.[item.itemKey];
+                
+                if (itemData && itemData.value) {
+                    if (!checklistItemsPayload[sectionKey]) {
+                        checklistItemsPayload[sectionKey] = {};
+                    }
+                    checklistItemsPayload[sectionKey][item.itemKey] = {
+                        status: itemData.value,
+                        caption: itemData.notes || '',
+                    };
+
+                    if (itemData.image) {
+                        const imageKey = `image-${sectionKey}-${item.itemKey}`;
+                        formData.append(imageKey, itemData.image);
+                    }
+                }
+            });
+        });
+
+        Object.keys(ManitouCommissioningChecklistForm).forEach((sectionKey) => {
+            const items = ManitouCommissioningChecklistForm[sectionKey];
+            items.forEach((item) => {
+                const itemData = values.checklistItems?.[sectionKey]?.[item.itemKey] || { value: '', image: null };
+                if ((itemData.value === 'Bad' || itemData.value === 'Missing') && !itemData.image) {
+                    missingPhotos.push(`${sectionKey} - ${item.label}`);
+                }
+            });
+        });
+
+        if (missingPhotos.length > 0) {
+            notifications.show({
+                title: "Missing Photos",
+                message: `Please upload photos for: ${missingPhotos.join(', ')}`,
+                color: "red",
+            });
+            setUploading(false);
+            return;
+        }
+
+        console.log("Payload to Backend: ", payload);
         formData.append('data', JSON.stringify(payload));
 
         try {
-            const response = await fetch(`http://localhost:5000/api/commissioning/manitou/submit`, {
-                method: 'POST',
+            const response = await apiClient.post(`/commissioning/manitou/submit`, formData, {
                 headers: {
-                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'multipart/form-data',
                 },
-                body: formData
+                timeout: 50000
             });
 
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.message || "Failed to submit Manitou Commissioning Inspection");
-            }
-
-            const result = await response.json();
             notifications.show({
-                title: "Submission Successful!",
-                message: result.message || "Form Submitted Successfully.",
+                title: "Success!",
+                message: "Form Submitted Successfully!",
                 color: "green",
             })
             form.reset();
 
         } catch (error) {
             console.error('Error submitting form:', error);
+            const errorMessage = error.response?.data?.message || error.message || "Failed to submit checklist";
             notifications.show({
                 title: "Submission Error",
-                message: `Failed to submit form: ${error.message}`,
+                message: `Error: ${errorMessage}`,
                 color: "red",
             });
+
+        } finally {
+            setUploading(false);
         }
     };
 
     const renderChecklistItem = (label, sectionKey, itemKey) => {
         const path = `checklistItems.${sectionKey}.${itemKey}`;
         const itemData = form.values.checklistItems[sectionKey]?.[itemKey];
-        const hasImage = itemData?.image instanceof File;
         const imageError = form.errors[`${path}.image`];
-        const notesError = form.errors[`${path}.notes`];
 
         return (
             <Grid.Col span={{ base: 12, sm: 6, md: 4 }} key={`${sectionKey}-${itemKey}`}>
                 <Stack gap="xs">
-                    <Text size="sm" style={{ color: '#000000 !important', fontWeight: 500 }}>{label}</Text>
+                    <Text size="sm" c="var(--mantine-color-text)" style={{ fontWeight: 500 }}>{label}</Text>
                     <Text size="xs" style={{ color: 'var(--mantine-color-gray-6)' }}>Select one option</Text>
 
                     <Radio.Group
                         value={itemData?.value || ''}
-                        onChange={(statusValue) => form.setFieldValue(`${path}.value`, statusValue)}
+                        onChange={(statusValue) => {
+                            form.setFieldValue(`${path}.value`, statusValue);
+                            const img = form.values.checklistItems[sectionKey]?.[itemKey]?.image;
+                            if ((statusValue === 'Bad' || statusValue === 'Missing') && !img) {
+                                form.setFieldError(`${path}.image`, 'Photo is required for Bad/Missing');
+                            } else {
+                                form.clearFieldError(`${path}.image`);
+                            }
+                        }}
                         orientation="horizontal"
                         error={form.errors[`${path}.value`]}
                         spacing="xl"
                     >
                         <Group mt="xs">
-                            <Radio value="Good" label={<Text style={{ color: '#000000 !important' }}>Good</Text>} />
-                            <Radio value="Bad" label={<Text style={{ color: '#000000 !important' }}>Bad</Text>} />
-                            <Radio value="Missing" label={<Text style={{ color: '#000000 !important' }}>Missing</Text>} />
+                            <Radio value="Good" label={<Text c="var(--mantine-color-text)">Good</Text>} />
+                            <Radio value="Bad" label={<Text c="var(--mantine-color-text)">Bad</Text>} />
+                            <Radio value="Missing" label={<Text c="var(--mantine-color-text)">Missing</Text>} />
                         </Group>
                     </Radio.Group>
 
                     <Dropzone
-                        onDrop={(files) => {
+                        onDrop={async (files) => {
                             if (files.length > 0) {
-                                form.setFieldValue(`${path}.image`, files[0]);
+                                const processedFile = await processImage(files[0], sectionKey, itemKey);
+                                if (processedFile) {
+                                    form.setFieldValue(`${path}.image`, processedFile);
+                                    form.clearFieldError(`${path}.image`);
+                                }
                             }
                         }}
                         onReject={(files) => {
@@ -369,24 +469,41 @@ export function ManitouCommissioningForm() {
                             });
                         }}
                         maxFiles={1}
+                        maxSize={MAX_ACCEPTED_SIZE}
                         accept={[MIME_TYPES.jpeg, MIME_TYPES.png]}
-                        mt="xs"
                         error={imageError}
-                        style={{ borderColor: imageError ? 'red' : undefined }}
                     >
                         <Group justify="center" gap="xs" style={{ minHeight: rem(80), pointerEvents: 'none' }}>
                             <Dropzone.Accept>
-                                <IconUpload style={{ width: rem(40), height: rem(40), color: 'var(--mantine-color-blue-6)' }} stroke={1.5} />
+                                <IconUpload
+                                    style={{ width: rem(30), height: rem(30) }}
+                                    stroke={1.5}
+                                />
                             </Dropzone.Accept>
                             <Dropzone.Reject>
-                                <IconX style={{ width: rem(40), height: rem(40), color: 'var(--mantine-color-red-6)' }} stroke={1.5} />
+                                <IconX
+                                    style={{ width: rem(30), height: rem(30) }}
+                                    stroke={1.5}
+                                />
                             </Dropzone.Reject>
                             <Dropzone.Idle>
-                                <IconFile style={{ width: rem(40), height: rem(40), color: 'var(--mantine-color-dimmed)' }} stroke={1.5} />
+                                <IconFile
+                                    style={{ width: rem(30), height: rem(30) }}
+                                    stroke={1.5}
+                                />
                             </Dropzone.Idle>
                             <Stack align="center" gap={4}>
-                                <Text size="xs" c="dimmed"> {hasImage ? itemData.image.name : 'Drag and drop an image here or click to select'} </Text>
-                                <Text size="xs" c="dimmed"> Accepted formats: JPG, PNG </Text>
+                                <Text size="xs" c="dimmed"> 
+                                    {itemData.image ? itemData.image.name : 'Drag and drop an image here or click to select'} 
+                                </Text>
+                                <Text size="xs" c="dimmed"> 
+                                    JPG/PNG, max 5MB (will be compressed to ≤2MB)
+                                </Text>
+                                {itemData.image && (
+                                    <Text size="xs" c="green">
+                                        {(itemData.image.size / 1024 / 1024).toFixed(2)} MB
+                                    </Text>
+                                )}
                             </Stack>
                         </Group>
                     </Dropzone>
@@ -395,13 +512,27 @@ export function ManitouCommissioningForm() {
                             {imageError}
                         </Text>
                     )}
+
+                    {itemData.image && (
+                        <Group justify="flex-end">
+                            <Button
+                                variant="subtle"
+                                size="xs"
+                                onClick={() => retryUpload(sectionKey, itemKey)}
+                                loading={uploading}
+                                leftSection={<IconRefresh size={14} />}
+                            >
+                                Retry Upload
+                            </Button>
+                        </Group>
+                    )}
+
                     <TextInput
                         placeholder="Add Image Caption"
                         mt="xs"
                         value={itemData?.notes || ''}
                         leftSection={<IconPencil size={20}/>}
                         onChange={(event) => form.setFieldValue(`${path}.notes`, event.target.value)}
-                        error={notesError}
                     />
                 </Stack>
             </Grid.Col>
@@ -411,7 +542,7 @@ export function ManitouCommissioningForm() {
     const renderChecklistSection = (sectionTitle, sectionKey, items) => {
         return (
             <Card shadow="sm" p="xl" withBorder mb="lg" key={sectionKey}>
-                <Title order={3} mb="md" style={{ color: '#000000 !important' }}>{sectionTitle}</Title>
+                <Title order={3} mb="md" c="var(--mantine-color-text)">{sectionTitle}</Title>
                 <Grid gutter="xl">
                     {items.map((item) => ( 
                         renderChecklistItem(
@@ -425,19 +556,29 @@ export function ManitouCommissioningForm() {
         );
     };
 
+    if (loading) {
+        return (
+            <Box maw="100%" mx="auto" px="md" ta="center">
+                <Title order={1} mt="md" mb="lg">Loading Form Data...</Title>
+                <Loader size="lg" />
+            </Box>
+        );
+    }      
+
     return (
         <Box maw="100%" mx="auto" px="md">
             <Title
                 order={1}
                 mt="md"
                 mb="lg"
-                style={{ color: '#000000 !important' }}
-            > Commissioning Form
+                c="var(--mantine-color-text)"
+            > 
+                Commissioning Form
             </Title>
 
             <form onSubmit={form.onSubmit(handleSubmit)}>
                 <Card shadow="sm" p="xl" withBorder mb="lg">
-                    <Title order={3} mb="md" style={{ color: '#000000 !important' }}> Unit Information </Title>
+                    <Title order={3} mb="md" c="var(--mantine-color-text)"> Unit Information </Title>
                     <Grid gutter="xl">
                         <Grid.Col span={{ base: 12, md: 6, md: 3 }}>
                             <Select 
@@ -487,7 +628,6 @@ export function ManitouCommissioningForm() {
                             <DateInput
                                 label="Delivery Date"
                                 placeholder="Select Date"
-                                valueFormat="DD-MM-YYYY"
                                 {...form.getInputProps('deliveryDate')}
                                 rightSection={<IconCalendar size={16} />}
                             />
@@ -496,7 +636,6 @@ export function ManitouCommissioningForm() {
                             <DateInput
                                 label="Date of Check"
                                 placeholder="Select Date"
-                                valueFormat="DD-MM-YYYY"
                                 {...form.getInputProps('commissioningDate')}
                                 rightSection={<IconCalendar size={16} />}
                             />
@@ -524,11 +663,11 @@ export function ManitouCommissioningForm() {
                     </Grid>
                 </Card>
 
-                <Divider my="xl" label={<Text style={{ color: '#000000 !important' }}>Legend</Text>} labelPosition="center" />
+                <Divider my="xl" label={<Text c="var(--mantine-color-text)">Legend</Text>} labelPosition="center" />
                     <Group justify="center" gap="xl" mb="lg">
-                        <Text style={{ color: '#000000 !important' }}> 1: Good </Text>
-                        <Text style={{ color: '#000000 !important' }}> 2: Bad </Text>
-                        <Text style={{ color: '#000000 !important' }}> 0: Missing </Text>
+                        <Text c="var(--mantine-color-text)"> 1: Good </Text>
+                        <Text c="var(--mantine-color-text)"> 2: Bad </Text>
+                        <Text c="var(--mantine-color-text)"> 0: Missing </Text>
                     </Group>
                 <Divider my="xl" />
 
@@ -556,15 +695,22 @@ export function ManitouCommissioningForm() {
                 ))}
 
                 <Divider my="xl" />
-                <Title order={3} mb="md" style={{ color: '#000000 !important' }}> General Remarks </Title>
+                <Title order={3} mb="md" c="var(--mantine-color-text)"> General Remarks </Title>
                 <Textarea
                     placeholder="Add Any Comments Here..."
                     minRows={10}
                     mb="xl"
                     {...form.getInputProps('generalRemarks')}
                 />
+                
                 <Group justify="flex-end" mt="md">
-                    <Button type="submit">Submit</Button>
+                    <Button 
+                        type="submit"
+                        loading={uploading}
+                        disabled={uploading}
+                    >
+                        {uploading ? 'Submitting...' : 'Submit'}
+                    </Button>
                 </Group>
             </form>
         </Box>

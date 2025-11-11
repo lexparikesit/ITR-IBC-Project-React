@@ -136,6 +136,17 @@ export function KHODocumentUploadForm() {
         form.setFieldValue('typeModel', null); 
     };
 
+    const checkVINExists = async (vin) => {
+        try {
+            const response = await apiClient.get(`/kho-document/check-vin/${vin}`)
+            return response.data.exists;
+        
+        } catch {
+            console.error("VIN check failed:", error);
+            return false
+        }
+    }
+
     const compressPDF = async (file) => {
         try {
             const arrayBuffer = await file.arrayBuffer();
@@ -239,11 +250,20 @@ export function KHODocumentUploadForm() {
         } catch (error) {
             console.error('Submission error:', error);
             setRetryMode(true);
-            notifications.show({
-                title: "Submission Failed",
-                message: error.response?.data?.message || "An error occurred during submission.",
-                color: "red",
-            });
+            
+            if (error.response?.status === 409) {
+                notifications.show({
+                    title: "VIN Already Registered",
+                    message: error.response.data.message,
+                    color: "yellow",
+                })
+            } else {
+                notifications.show({
+                    title: "Submission Failed",
+                    message: error.response?.data?.message || "An error occurred.",
+                    color: "red",
+                });
+            }
 
         } finally {
             setUploading(false);
@@ -265,7 +285,7 @@ export function KHODocumentUploadForm() {
                 order={1}
                 mt="md"
                 mb="lg"
-                style={{ color: '#000000 !important' }}
+                c="var(--mantine-color-text)"
             > 
                 Key Hand Over Document Upload
             </Title>

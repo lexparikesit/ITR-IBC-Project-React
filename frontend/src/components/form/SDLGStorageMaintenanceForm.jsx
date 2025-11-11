@@ -241,7 +241,7 @@ export default function SDLGStorageMaintenanceForm() {
     if (loading) {
         return (
             <Box maw="100%" mx="auto" px="md" ta="center">
-                <Title order={1} mt="md" mb="lg">Loading Form Data...</Title>
+                <Title order={1} mt="md" mb="lg" c="var(--mantine-color-text)">Loading Form Data...</Title>
                 <Loader size="lg" />
             </Box>
         );
@@ -253,7 +253,7 @@ export default function SDLGStorageMaintenanceForm() {
                 order={1}
                 mt="md"
                 mb="lg"
-                style={{ color: '#000000 !important' }}
+                c="var(--mantine-color-text)"
             > 
                 Storage Maintenance
             </Title>

@@ -82,6 +82,7 @@ const mockdata = [
             { label: 'IBC Form Log', icon: IconFolder, link: '/dashboard/ibc-log', requiredPermission: ['access_ibc_log'] },
             { label: 'Pre-Delivery Log', icon: IconFolder, link: '/dashboard/pre-delivery-log', requiredPermission: ['access_pdi_log'] },
             { label: 'Commissioning Log', icon: IconFolder, link: '/dashboard/commissioning-log', requiredPermission: ['access_commissioning_log'] },
+            { label: 'Key Hand Over Log', icon: IconFolder, link: '/dashboard/kho-doc-log', requiredPermission: ['access_kho_log'] },
         ],
     },
     {

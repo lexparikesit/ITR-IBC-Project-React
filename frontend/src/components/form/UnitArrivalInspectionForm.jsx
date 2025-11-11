@@ -453,7 +453,7 @@ export function UnitArrivalInspectionForm() {
         return (
             <Grid.Col span={{ base: 12, sm: 6, md: 4 }} key={key}>
                 <Stack gap="xs">
-                    <Text size="sm" style={{ color: '#000000 !important', fontWeight: 500 }}>{label}</Text>
+                    <Text size="sm" c="var(--mantine-color-text)" style={{ fontWeight: 500 }}>{label}</Text>
                     <Text size="xs" style={{ color: 'var(--mantine-color-gray-6)' }}>Select one option</Text>
 
                     <Radio.Group
@@ -471,9 +471,9 @@ export function UnitArrivalInspectionForm() {
                         spacing="xl"
                     >
                         <Group mt="xs">
-                            <Radio value="Good" label={<Text style={{ color: '#000000 !important' }}>Good</Text>} />
-                            <Radio value="Bad" label={<Text style={{ color: '#000000 !important' }}>Bad</Text>} />
-                            <Radio value="Missing" label={<Text style={{ color: '#000000 !important' }}>Missing</Text>} />
+                            <Radio value="Good" label={<Text c="var(--mantine-color-text)">Good</Text>} />
+                            <Radio value="Bad" label={<Text c="var(--mantine-color-text)">Bad</Text>} />
+                            <Radio value="Missing" label={<Text c="var(--mantine-color-text)">Missing</Text>} />
                         </Group>
                     </Radio.Group>
                     
@@ -565,7 +565,7 @@ export function UnitArrivalInspectionForm() {
     const renderChecklistSection = (sectionTitle, sectionKey, items) => {
         return (
             <Card shadow="sm" p="xl" withBorder mb="lg">
-                <Title order={3} mb="md" style={{ color: '#000000 !important' }}>{sectionTitle}</Title>
+                <Title order={3} mb="md" c="var(--mantine-color-text)">{sectionTitle}</Title>
                 <Grid gutter="xl">
                     {items.map((item) => ( 
                         renderChecklistItem(
@@ -584,7 +584,7 @@ export function UnitArrivalInspectionForm() {
     if (loading) {
         return (
             <Box maw="100%" mx="auto" px="md" ta="center">
-                <Title order={1} mt="md" mb="lg">Loading Form Data...</Title>
+                <Title order={1} mt="md" mb="lg" c="var(--mantine-color-text)">Loading Form Data...</Title>
                 <Loader size="lg" />
             </Box>
         );
@@ -596,14 +596,14 @@ export function UnitArrivalInspectionForm() {
                 order={1}
                 mt="md"
                 mb="lg"
-                style={{ color: '#000000 !important' }}
+                c="var(--mantine-color-text)"
             >
                 Unit Arrival Check
             </Title>
 
             <form onSubmit={form.onSubmit(handleSubmit)}>
                 <Card shadow="sm" padding="lg" radius="md" withBorder mb="lg">
-                    <Title order={3} mb="md" style={{ color: '#000000 !important' }}> Unit Information </Title>
+                    <Title order={3} mb="md" c="var(--mantine-color-text)"> Unit Information </Title>
                     <Grid gutter="xl">
                         <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
                             {/* <Select
@@ -635,7 +635,7 @@ export function UnitArrivalInspectionForm() {
                                 label="VIN"
                                 placeholder="Input VIN Number"
                                 {...form.getInputProps('serialNo')}
-                                styles={{ input: { color: '#000000 !important' } }}
+                                styles={{ input: { color: 'var(--mantine-color-text)' } }}
                             />
                         </Grid.Col>
                         <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
@@ -643,7 +643,7 @@ export function UnitArrivalInspectionForm() {
                                 label="Hour Meter"
                                 placeholder="Input Hour Meter"
                                 {...form.getInputProps('hourMeter')}
-                                styles={{ input: { color: '#000000 !important' } }}
+                                styles={{ input: { color: 'var(--mantine-color-text)' } }}
                             />
                         </Grid.Col>
                         <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
@@ -677,11 +677,11 @@ export function UnitArrivalInspectionForm() {
                     </Grid>
                 </Card>
 
-                <Divider my="xl" label={<Text style={{ color: '#000000 !important' }}>Legend</Text>} labelPosition="center" />
+                <Divider my="xl" label={<Text c="var(--mantine-color-text)">Legend</Text>} labelPosition="center" />
                     <Group justify="center" gap="xl" mb="lg">
-                        <Text style={{ color: '#000000 !important' }}> 1: Good </Text>
-                        <Text style={{ color: '#000000 !important' }}> 2: Bad </Text>
-                        <Text style={{ color: '#000000 !important' }}> 0: Missing </Text>
+                        <Text c="var(--mantine-color-text)"> 1: Good </Text>
+                        <Text c="var(--mantine-color-text)"> 2: Bad </Text>
+                        <Text c="var(--mantine-color-text)"> 0: Missing </Text>
                     </Group>
                 <Divider my="xl" />
 
@@ -709,7 +709,7 @@ export function UnitArrivalInspectionForm() {
                 ))}
 
                 <Divider my="xl" />
-                <Title order={3} mb="md">General Remarks</Title>
+                <Title order={3} mb="md" c="var(--mantine-color-text)">General Remarks</Title>
                 <Textarea
                     placeholder="Add any general remarks here..."
                     minRows={4}

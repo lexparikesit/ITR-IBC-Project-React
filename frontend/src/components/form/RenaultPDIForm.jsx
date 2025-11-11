@@ -434,8 +434,8 @@ export function RenaultPDIForm() {
             <Grid.Col span={{ base: 12 }} key={itemKey}>
                 <Stack gap="xs">
                     {/* Text label */}
-                    <Text size="sm" style={{ color: '#000000 !important', fontWeight: 500 }}>{label}</Text>
-                    <Text size="xs" style={{ color: 'var(--mantine-color-gray-6)' }}>Select one option</Text>
+                    <Text size="sm" c="var(--mantine-color-text)" style={{ fontWeight: 500 }}>{label}</Text>
+                    <Text size="xs" c="var(--mantine-color-gray-6)">Select one option</Text>
 
                     {/* Radio of Button Group */}
                     <Radio.Group
@@ -445,10 +445,10 @@ export function RenaultPDIForm() {
                         error={form.errors[`checklistItems.${sectionKey}.${itemKey}.value`]}
                     >
                         <Group mt="xs" justify="space-between" style={{ width: '100%' }}>
-                            <Radio value="checked" label={<Text style={{ color: '#000000 !important' }}> Checked, Without Notes </Text>} />
-                            <Radio value="recommended_repair" label={<Text style={{ color: '#000000 !important' }}> Repair Recommended </Text>} />
-                            <Radio value="immediately_repair" label={<Text style={{ color: '#000000 !important' }}> Repair Immediately </Text>} />
-                            <Radio value="not_applicable" label={<Text style={{ color: '#000000 !important' }}> Not Applicable </Text>} />
+                            <Radio value="checked" label={<Text style={{ color: 'var(--mantine-color-text)' }}> Checked, Without Notes </Text>} />
+                            <Radio value="recommended_repair" label={<Text style={{ color: 'var(--mantine-color-text)' }}> Repair Recommended </Text>} />
+                            <Radio value="immediately_repair" label={<Text style={{ color: 'var(--mantine-color-text)' }}> Repair Immediately </Text>} />
+                            <Radio value="not_applicable" label={<Text style={{ color: 'var(--mantine-color-text)' }}> Not Applicable </Text>} />
                         </Group>
                     </Radio.Group>
                     
@@ -539,7 +539,7 @@ export function RenaultPDIForm() {
     const renderChecklistSection = (sectionTitle, sectionKey, items) => {
         return (
             <Card shadow="sm" p="xl" withBorder mb="lg">
-                <Title order={3} mb="md" style={{ color: '#000000 !important' }}>{sectionTitle}</Title>
+                <Title order={3} mb="md" style={{ color: 'var(--mantine-color-text)' }}>{sectionTitle}</Title>
                 <Grid gutter="xl">
                     {items.map((item) => (
                         <React.Fragment key={item.itemKey}>
@@ -558,7 +558,7 @@ export function RenaultPDIForm() {
     if (loading) {
         return (
             <Box maw="100%" mx="auto" px="md" ta="center">
-                <Title order={1} mt="md" mb="lg">Loading Form Data...</Title>
+                <Title order={1} mt="md" mb="lg" c="var(--mantine-color-text)">Loading Form Data...</Title>
                 <Loader size="lg" />
             </Box>
         );
@@ -570,7 +570,7 @@ export function RenaultPDIForm() {
                 order={1}
                 mt="md"
                 mb="lg"
-                style={{ color: '#000000 !important' }}
+                c="var(--mantine-color-text)"
             > 
                 Pre Delivery Inspection Form
             </Title>
@@ -578,7 +578,7 @@ export function RenaultPDIForm() {
             <form onSubmit={form.onSubmit(handleSubmit)}>
                 {/* Header Information */}
                 <Card shadow="sm" p="xl" withBorder mb="lg">
-                    <Title order={3} mb="md" style={{ color: '#000000 !important' }}> Unit Information </Title>
+                    <Title order={3} mb="md" c="var(--mantine-color-text)"> Unit Information </Title>
                     <Grid gutter="xl">
                         <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
                             {/* <Select
@@ -625,7 +625,7 @@ export function RenaultPDIForm() {
                                 label="Mileage/ Hour Meter"
                                 placeholder="Input Mileage/ Hour Meter"
                                 {...form.getInputProps('mileageHourMeter')}
-                                styles={{ input: { color: '#000000 !important' } }}
+                                styles={{ input: { color: 'var(--mantine-color-text)' } }}
                             />
                         </Grid.Col>
                         <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
@@ -633,7 +633,7 @@ export function RenaultPDIForm() {
                                 label="Chassis ID"
                                 placeholder="Input Chassis ID"
                                 {...form.getInputProps('chassisId')}
-                                styles={{ input: { color: '#000000 !important' } }}
+                                styles={{ input: { color: 'var(--mantine-color-text)' } }}
                             />
                         </Grid.Col>
                         <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
@@ -641,7 +641,7 @@ export function RenaultPDIForm() {
                                 label="Registration Number"
                                 placeholder="Input Registration Number"
                                 {...form.getInputProps('registrationNo')}
-                                styles={{ input: { color: '#000000 !important' } }}
+                                styles={{ input: { color: 'var(--mantine-color-text)' } }}
                             />
                         </Grid.Col>
                         <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
@@ -697,12 +697,12 @@ export function RenaultPDIForm() {
                     </Grid>
                 </Card>
 
-                <Divider my="xl" label={<Text style={{ color: '#000000 !important' }}>Legend</Text>} labelPosition="center" />
+                <Divider my="xl" label={<Text style={{ color: 'var(--mantine-color-text)' }}>Legend</Text>} labelPosition="center" />
                     <Group justify="center" gap="xl" mb="lg">
-                        <Text style={{ color: '#000000 !important' }}> 1: Checked, Without Notes </Text>
-                        <Text style={{ color: '#000000 !important' }}> 2: Repair Recommended </Text>
-                        <Text style={{ color: '#000000 !important' }}> 3: Repair Immediately </Text>
-                        <Text style={{ color: '#000000 !important' }}> 0: Not Applicable </Text>
+                        <Text style={{ color: 'var(--mantine-color-text)' }}> 1: Checked, Without Notes </Text>
+                        <Text style={{ color: 'var(--mantine-color-text)' }}> 2: Repair Recommended </Text>
+                        <Text style={{ color: 'var(--mantine-color-text)' }}> 3: Repair Immediately </Text>
+                        <Text style={{ color: 'var(--mantine-color-text)' }}> 0: Not Applicable </Text>
                     </Group>
                 <Divider my="xl" />
 
@@ -740,18 +740,18 @@ export function RenaultPDIForm() {
 
                 {/* Battery Status */}
                 <Card shadow="sm" p="xl" withBorder mb="lg">
-                    <Title order={3} mb="md" style={{ color: '#000000 !important' }}> Battery Status </Title>
+                    <Title order={3} mb="md" style={{ color: 'var(--mantine-color-text)' }}> Battery Status </Title>
                     <Table striped highlightOnHover withTableBorder withColumnBorders>
                         <Table.Thead>
                             <Table.Tr>
-                                <Table.Th style={{ color: '#000000 !important' }}>Battery</Table.Th>
-                                <Table.Th style={{ color: '#000000 !important' }}>Test code</Table.Th>
+                                <Table.Th style={{ color: 'var(--mantine-color-text)' }}>Battery</Table.Th>
+                                <Table.Th style={{ color: 'var(--mantine-color-text)' }}>Test code</Table.Th>
                             </Table.Tr>
                         </Table.Thead>
                         <Table.Tbody>
                             {form.values.batteryStatus.map((row, index) => (
                                 <Table.Tr key={index}>
-                                    <Table.Td style={{ color: '#000000 !important' }}>{row.battery}</Table.Td>
+                                    <Table.Td style={{ color: 'var(--mantine-color-text)' }}>{row.battery}</Table.Td>
                                     <Table.Td>
                                         <TextInput
                                             placeholder="Input Test Code"
@@ -766,8 +766,8 @@ export function RenaultPDIForm() {
 
                 {/* Vehicle Inspection Notes */}
                 <Card shadow="sm" p="xl" withBorder mb="lg">
-                    <Title order={3} mb="md" style={{ color: '#000000 !important' }}> Vehicle Inspection </Title>
-                    <Text size="sm" mb="md" style={{ color: '#000000 !important' }}> Note any damage </Text>
+                    <Title order={3} mb="md" style={{ color: 'var(--mantine-color-text)' }}> Vehicle Inspection </Title>
+                    <Text size="sm" mb="md" style={{ color: 'var(--mantine-color-text)' }}> Note any damage </Text>
                     <Textarea
                         placeholder="Add any vehicle damage notes here..."
                         minRows={4}

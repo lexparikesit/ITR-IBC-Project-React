@@ -16,14 +16,19 @@ _storage_client = None
 _bucket = None
 
 def get_storage_client():
+    """Return a cached GCS storage client."""
+    
     global _storage_client
+    
     if _storage_client is None:
         _storage_client = storage.Client()
     return _storage_client
 
 def get_bucket():
     """Return a cached GCS bucket instance."""
+    
     global _bucket
+    
     if _bucket is None:
         client = get_storage_client()
         _bucket = client.bucket(GCS_BUCKET_NAME)

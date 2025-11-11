@@ -1,6 +1,6 @@
 import os
 import uuid
-from flask import json, jsonify, request, g
+from flask import json, jsonify, request, current_app, g
 from app import db
 from app.models.manitou_commissioning_form import CommissioningFormModel_MA
 from app.models.manitou_commissioning_items import CommissioningChecklistItemModel_MA
@@ -8,17 +8,10 @@ from app.models.renault_commissioning_form import CommissioningFormModel_RT, Maj
 from app.models.renault_commissioning_items import CommissioningChecklistItemModel_RT
 from app.models.sdlg_commissioning_form import CommissioningFormModel_SDLG
 from app.models.sdlg_commissioning_items import CommissioningChecklistItemModel_SDLG
-from datetime import datetime
 from app.controllers.auth_controller import jwt_required
 from app.controllers.province_controller import get_province_name_by_code
-# from google.cloud import Storage
-
-# configuartion of GCS Environment
-# GCS_Bucket_Name = os.environ.get('GCS_BUCKET_NAME')
-# CDN_BASE_URL = os.environ.get('CDN_BASE_URL', 'https://cdn.example.com')
-
-# initiate GCS Client
-# storage_client = storage.Client()
+from app.utils.gcs_utils import upload_commissioning_file
+from datetime import datetime
 
 # mapping for each brand Models
 BRAND_MODELS = {
@@ -109,25 +102,84 @@ def submit_commissioning_form(brand):
             db.session.add(commissioning_entry)
             db.session.flush()
 
+            missing_photos = []
+
             for section_key, items in checklist_item_payloads.items():
                 if isinstance(items, dict):
                     for item_key, item_details in items.items():
                         if isinstance(item_details, dict):
-                            image_url = None # will None as long as GCS/ CDN is commenting
+                            status = item_details.get('status')
+                            file_key = f"image-{section_key}-{item_key}"
+
+                            if status in ['Bad', 'Missing']:
+                                if file_key not in uploaded_files or not uploaded_files[file_key].filename:
+                                    missing_photos.append(f"{section_key} - {item_key}")
+                                    
+                            image_url = None
+                            caption = item_details.get('caption')
+
+                            if file_key in uploaded_files and uploaded_files[file_key].filename:
+                                file = uploaded_files[file_key]
+                                file.seek(0, 2)
+                                file_size = file.tell()
+                                file.seek(0)
+
+                                if file_size > 2 * 1024 * 1024:
+                                    db.session.rollback()
+                                    return jsonify({
+                                        'message': f'File {section_key} - {item_key} exceeds 2MB limit'
+                                    }), 400
+                                
+                                allowed_types = {'image/jpeg', 'image/png', 'image/jpg'}
+
+                                if file.content_type not in allowed_types:
+                                    db.session.rollback()
+                                    return jsonify({
+                                        'message': f'Invalid file type for {section_key} - {item_key}. Only JPG/PNG allowed.'
+                                    }), 400
+                                
+                                try:
+                                    image_url = upload_commissioning_file(
+                                        file=file,
+                                        brand=brand.lower(),
+                                        user_id=str(g.user_id)
+                                    )
+
+                                    if not image_url:
+                                        db.session.rollback()
+                                        current_app.logger.error(f"Blob name is None for {section_key} - {item_key}")
+                                        return jsonify({
+                                            'message': f'Failed to upload photo for {section_key} - {item_key}'
+                                        }), 500
+                                    
+                                    current_app.logger.debug(f"Public URL generated: {image_url}")
+
+                                except Exception as e:
+                                    db.session.rollback()
+                                    current_app.logger.error(f"Upload error for {section_key} - {item_key}: {str(e)}")
+                                    return jsonify({
+                                        'message': f'Upload failed for {section_key} - {item_key}'
+                                    }), 500
 
                             new_item = CommissioningChecklistItemModel_MA(
                                 commID = commissioning_entry.commID,
                                 section = section_key,
                                 itemName = item_key,
                                 status = converted_manitou_status_to_int(item_details.get('status')),
-                                image_url = image_url,
-                                caption = item_details.get('notes')
+                                image_blob_name = image_url,
+                                caption = caption
                             )
                             db.session.add(new_item)
             
+            if missing_photos:
+                db.session.rollback()
+                return jsonify({
+                    'message': 'Photos are required for items with "Bad" or "Missing" status',
+                    'missing_items': missing_photos
+                }), 400
+
             # Commit all changes to the database at once
             db.session.commit()
-
             return jsonify({
                 'message': 'Manitou Commissioning Form submitted successfully!',
                 'id': str(commissioning_entry.commID)
