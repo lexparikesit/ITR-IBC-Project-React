@@ -1,5 +1,7 @@
+import DashboardOverview from '@/components/dashboard/DashboardOverview';
+
 export default function DashboardPage() {
-    console.log("Dashboard Rendered!")
+    console.log("Dashboard Rendered!");
     return (
         <div
             className="p-6"
@@ -9,6 +11,7 @@ export default function DashboardPage() {
                 flexGrow: 1,
             }}
         >
+            <DashboardOverview />
         </div>
     );
 }

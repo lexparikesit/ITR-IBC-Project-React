@@ -1,12 +1,13 @@
-from flask import Blueprint
+from flask import Blueprint, request
 from app.controllers import pdi_check_log_controller as pdilc
 
 pdi_check_log_bp = Blueprint('pre_delivery_log_bp', __name__)
 
-@pdi_check_log_bp.route('/pre-delivery/log/all', methods=['GET'])
+@pdi_check_log_bp.route('/pre-delivery/log/all', methods=['GET', 'OPTIONS'])
 def get_all_logs():
     """Routes to get all Pre Delivery Check List (list view)"""
-    
+    if request.method == 'OPTIONS':
+        return '', 200
     return pdilc.get_all_pdi_checklists()
 
 @pdi_check_log_bp.route('/pre-delivery/log/details/<string:pdi_id>', methods=['GET', 'OPTIONS'])

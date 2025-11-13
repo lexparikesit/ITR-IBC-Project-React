@@ -1,12 +1,13 @@
-from flask import Blueprint
+from flask import Blueprint, request
 from app.controllers import commissioning_log_controller as clc
 
 commissioning_log_bp = Blueprint('commissioning_log_bp', __name__)
 
-@commissioning_log_bp.route('/commissioning/log/all', methods=['GET'])
+@commissioning_log_bp.route('/commissioning/log/all', methods=['GET', 'OPTIONS'])
 def get_all_logs():
     """Routes to get all Commissioning List (list view)"""
-
+    if request.method == 'OPTIONS':
+        return '', 200
     return clc.get_all_commissioning_logs()
 
 @commissioning_log_bp.route('/commissioning/log/details/<string:comm_id>', methods=['GET', 'OPTIONS'])

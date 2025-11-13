@@ -511,27 +511,18 @@ const IBCLogData = ({ title, apiUrl }) => {
         XLSX.writeFile(wb, `ibc_log_${new Date().toISOString().split('T')[0]}.xlsx`);
     };
 
+    if (loading) {
+        return (
+            <Box maw="100%" mx="auto" px="md" ta="center">
+                <Title order={1} mt="md" mb="lg">Loading Form Data...</Title>
+                <Loader size="lg" />
+            </Box>
+        );
+    }
+
     return (
         <Container size="xl" my="xl">
             <Title order={1} mb="xl" ta="center">{title}</Title>
-            {!loading && !error && (
-                <Text ta="center" c="dimmed" mt="-md" mb="xs">
-                    Total IBC: {filteredLogs.length}
-                </Text>
-            )}
-
-            {loading && (
-                <Box ta="center">
-                    <Loader size="lg" />
-                    <Text mt="md">Loading Data...</Text>
-                </Box>
-            )}
-
-            {error && (
-                <Text c="red" ta="center">Error: {error}</Text>
-            )}
-
-            {!loading && !error && (
                 <>
                     <Paper shadow="sm" radius="md" p="md" mb="md">
                         <Group justify="space-between" align="flex-end" mb="md">
@@ -608,7 +599,6 @@ const IBCLogData = ({ title, apiUrl }) => {
                         </Box>
                     )}
                 </>
-            )}
 
             <Modal
                 opened={modalOpened}
