@@ -15,7 +15,12 @@ class IBC_Accessories(db.Model):
 
     # Fields for accessories data
     IBC_Accessories = db.Column(db.String(50), nullable=False)
+    
+    # remarks field
     Remarks = db.Column(db.Text())
+
+    # quantity of accessories
+    qty_acc = db.Column(db.Integer, nullable=False)
 
     def __repr__(self):
         

@@ -48,7 +48,7 @@ const initialDetailValues = {
 
 const initialAccessoriesValues = {
     packages: [{ PackagesType: "", PackageDesc: "" }],
-    accessories: [{ IBC_Accesories: "", Remarks: "" }],
+    accessories: [{ IBC_Accesories: "", Remarks: "", qty_acc: 1 }],
 };
 
 export function MultiStepIbcForm() {
@@ -103,12 +103,14 @@ export function MultiStepIbcForm() {
                     packageRes,
                     accessoryRes,
                     salesmanRes,
+                    technicalHeadRes,
                 ] = await Promise.all([
                     apiClient.get("/customers"),
                     apiClient.get("/unit-types/brands"),
                     apiClient.get("/mstPackages"),
                     apiClient.get("/mstAccesories"),
-                    apiClient.get("/users/by-role/Salesman")
+                    apiClient.get("/users/by-role/Salesman"),
+                    apiClient.get("/users/by-role/Product Head")
                 ])
 
                 const uniqueCustomerID = new Set();
@@ -139,8 +141,10 @@ export function MultiStepIbcForm() {
                     label: item.AccesoriesName,
                 }));
                 setAccessoryTypes(formattedAccessories);
-                // Populate requestor options from Salesman role
-                setRequestors(salesmanRes.data);
+                setRequestors([
+                    ...salesmanRes.data, 
+                    ...technicalHeadRes.data
+                ]);
 
             } catch (error) {
                 console.error("Failed to fetch initial data:", error);
@@ -151,7 +155,6 @@ export function MultiStepIbcForm() {
                 });
             
             } finally {
-                // Initial fetch finished -> stop loading spinner
                 setLoading(false);
             }
         };
@@ -276,7 +279,7 @@ export function MultiStepIbcForm() {
 
         try {
             const areAccessoriesValid = accessoriesForm.values.accessories.every(
-                acc => acc.IBC_Accesories?.trim()
+                acc => acc.IBC_Accesories?.trim() && Number(acc.qty_acc) > 0
             );
 
             const arePackagesValid = accessoriesForm.values.packages.every(
@@ -294,6 +297,7 @@ export function MultiStepIbcForm() {
                     accessories: accessoriesForm.values.accessories.map(acc => ({
                         AccessoriesName: acc.IBC_Accesories,
                         Remarks: acc.Remarks,
+                        qty_acc: Number(acc.qty_acc),
                     }))
                 },
                 packagesForm: {
@@ -374,7 +378,7 @@ export function MultiStepIbcForm() {
             <Table.Tr key={index}>
                 <Table.Td>
                     <Select
-                        placeholder="Accessories Name"
+                        placeholder="Select Accessory Name"
                         data={availableAccessoryOptions}
                         searchable
                         clearable
@@ -385,8 +389,17 @@ export function MultiStepIbcForm() {
                 </Table.Td>
                 <Table.Td>
                     <TextInput
-                        placeholder="Accessories Description"
+                        placeholder="Accessory Description"
                         {...accessoriesForm.getInputProps(`accessories.${index}.Remarks`)}
+                    />
+                </Table.Td>
+                <Table.Td>
+                    <NumberInput
+                        placeholder="Qty"
+                        min={1}
+                        max={999}
+                        hideControls
+                        {...accessoriesForm.getInputProps(`accessories.${index}.qty_acc`)}
                     />
                 </Table.Td>
                 <Table.Td>
@@ -417,9 +430,10 @@ export function MultiStepIbcForm() {
 
     if (loading) {
         return (
-            <Center h="60vh">
-                <Loader size="xl" />
-            </Center>
+            <Box maw="100%" mx="auto" px="md" ta="center">
+                <Title order={1} mt="md" mb="lg" c="var(--mantine-color-text)">Loading Form Data...</Title>
+                <Loader size="lg" />
+            </Box>
         );
     }
 
@@ -640,8 +654,9 @@ export function MultiStepIbcForm() {
                     <Table striped highlightOnHover withTableBorder>
                         <Table.Thead>
                             <Table.Tr>
-                                <Table.Th style={{ width: "50%", color: "var(--mantine-color-text)" }}>Accessories</Table.Th>
-                                <Table.Th style={{ width: "50%", color: "var(--mantine-color-text)" }}>Accessories Description</Table.Th>
+                                <Table.Th style={{ width: "45%", color: "var(--mantine-color-text)" }}>Accessories</Table.Th>
+                                <Table.Th style={{ width: "45%", color: "var(--mantine-color-text)" }}>Accessories Description</Table.Th>
+                                <Table.Th style={{ width: "15%", color: "var(--mantine-color-text)" }}>Quantity</Table.Th>
                                 <Table.Th></Table.Th>
                             </Table.Tr>
                         </Table.Thead>
@@ -656,6 +671,7 @@ export function MultiStepIbcForm() {
                                     accessoriesForm.insertListItem("accessories", {
                                         IBC_Accesories: "",
                                         Remarks: "",
+                                        qty_acc: 1,
                                     });
                                 } else {
                                     notifications.show({

@@ -4,7 +4,7 @@ from app.models.IBC_Table import IBC_Table
 from app.models.IBC_Trans import IBC_Trans
 from app.models.IBC_Accessories import IBC_Accessories
 from app.models.IBC_Package import IBC_Packages
-from app.controllers.auth_controller import jwt_required
+from app.controllers.auth_controller import jwt_required, require_permission
 from datetime import datetime
 import uuid
 
@@ -41,6 +41,7 @@ def generate_ibc_number():
     ).order_by(db.desc(IBC_Table.IBC_No)).first()
 
     last_sequence_number = 0
+    
     if last_ibc and last_ibc.IBC_No:
         try:
             last_number_str = last_ibc.IBC_No.split('/')[0]
@@ -90,9 +91,10 @@ def create_ibc_form():
             UnitType = header_form_data.get('UnitType'),
             QTY = header_form_data.get('QTY'),
             SiteOperation = header_form_data.get('SiteOperation'),
-            
             createdby = g.user_name,
-            createdon = datetime.utcnow()
+            createdon = datetime.utcnow(),
+            modifiedby = g.user_name,
+            modifiedon = datetime.utcnow()
         )
         db.session.add(new_ibc_table)
 
@@ -133,11 +135,22 @@ def create_ibc_form():
             if not acc_entry.get('AccessoriesName'):
                 return jsonify({'error': 'Accessories name is required'}), 400
 
+            qty_value = acc_entry.get('qty_acc')
+            
+            try:
+                qty_value = int(qty_value)
+            except (TypeError, ValueError):
+                return jsonify({'error': 'Accessory quantity must be a valid number'}), 400
+
+            if qty_value <= 0:
+                return jsonify({'error': 'Accessory quantity must be greater than zero'}), 400
+
             new_ibc_acc = IBC_Accessories(
                 IBC_AccessoriesID = str(uuid.uuid4()),
                 IBC_No = ibc_number,
                 IBC_Accessories = acc_entry.get('AccessoriesName'),
-                Remarks = acc_entry.get('Remarks')
+                Remarks = acc_entry.get('Remarks'),
+                qty_acc = qty_value
             )
             db.session.add(new_ibc_acc)
         
@@ -161,4 +174,133 @@ def create_ibc_form():
     except Exception as e:
         db.session.rollback()
         print(f"Error creating IBC form: {str(e)}")
+        return jsonify({'error': f'Internal server error: {str(e)}'}), 500
+
+@jwt_required
+@require_permission('edit_ibc')
+def update_ibc_form(ibc_id):
+    """Controller function to handle updates to an existing IBC form."""
+
+    try:
+        data = request.json
+        
+        if not data:
+            return jsonify({"error": "Invalid JSON data"}), 400
+
+        header_form_data = data.get('headerForm', {})
+        detail_form_data = data.get('detailForm', {})
+        accessories_data = data.get('accessoriesForm', {}).get('accessories', [])
+        packages_data = data.get('packagesForm', {}).get('packages', [])
+
+        if not header_form_data or not detail_form_data:
+            return jsonify({"error": "Header and Detail form data are required"}), 400
+
+        ibc_record = IBC_Table.query.filter_by(IBC_ID=ibc_id).first()
+        
+        if not ibc_record:
+            return jsonify({"error": "IBC record not found"}), 404
+
+        ibc_number = ibc_record.IBC_No
+        ibc_date_str = header_form_data.get('IBC_date')
+        
+        if not ibc_date_str:
+            return jsonify({"error": "IBC date is required"}), 400
+
+        ibc_date_val = datetime.strptime(ibc_date_str, '%Y-%m-%d')
+
+        ibc_record.Requestor = header_form_data.get('Requestor')
+        ibc_record.IBC_date = ibc_date_val
+        ibc_record.PO_PJB = header_form_data.get('PO_PJB')
+        ibc_record.Cust_ID = header_form_data.get('Cust_ID')
+        ibc_record.Brand_ID = header_form_data.get('Brand_ID')
+        ibc_record.UnitType = header_form_data.get('UnitType')
+        ibc_record.QTY = header_form_data.get('QTY')
+        ibc_record.SiteOperation = header_form_data.get('SiteOperation')
+        ibc_record.modifiedby = g.user_name
+        ibc_record.modifiedon = datetime.utcnow()
+
+        attachment_type_val = detail_form_data.get('AttachmentType')
+        attachment_supplier_val = detail_form_data.get('AttachmentSupplier')
+        delivery_address_val = detail_form_data.get('DeliveryAddress')
+        delivery_cust_pic_val = detail_form_data.get('DeliveryCustPIC')
+        remarks_val = detail_form_data.get('Remarks')
+
+        delivery_plan_str = detail_form_data.get('DeliveryPlan')
+        delivery_plan_val = datetime.strptime(delivery_plan_str, '%Y-%m-%d') if delivery_plan_str else None
+        
+        vins_data = detail_form_data.get('vins', [])
+
+        if not vins_data:
+            return jsonify({'error': 'VIN data is required in detail form'}), 400
+
+        IBC_Trans.query.filter_by(IBC_No=ibc_number).delete(synchronize_session=False)
+
+        for vin_entry in vins_data:
+            if not vin_entry.get('VIN'):
+                db.session.rollback()
+                return jsonify({'error': 'VIN field is required in detail form'}), 400
+            
+            new_ibc_trans = IBC_Trans(
+                IBC_TransID = str(uuid.uuid4()),
+                IBC_No = ibc_number,
+                VIN = vin_entry.get('VIN'),
+                AttachmentType = attachment_type_val,
+                AttachmentSupplier = attachment_supplier_val,
+                DeliveryAddress = delivery_address_val,
+                DeliveryCustPIC = delivery_cust_pic_val,
+                DeliveryPlan = delivery_plan_val,
+                Remarks = remarks_val
+            )
+            db.session.add(new_ibc_trans)
+
+        IBC_Accessories.query.filter_by(IBC_No=ibc_number).delete(synchronize_session=False)
+
+        for acc_entry in accessories_data:
+            if not acc_entry.get('AccessoriesName'):
+                db.session.rollback()
+                return jsonify({'error': 'Accessories name is required'}), 400
+
+            qty_value = acc_entry.get('qty_acc')
+            
+            try:
+                qty_value = int(qty_value)
+            except (TypeError, ValueError):
+                db.session.rollback()
+                return jsonify({'error': 'Accessory quantity must be a valid number'}), 400
+
+            if qty_value <= 0:
+                db.session.rollback()
+                return jsonify({'error': 'Accessory quantity must be greater than zero'}), 400
+
+            new_ibc_acc = IBC_Accessories(
+                IBC_AccessoriesID = str(uuid.uuid4()),
+                IBC_No = ibc_number,
+                IBC_Accessories = acc_entry.get('AccessoriesName'),
+                Remarks = acc_entry.get('Remarks'),
+                qty_acc = qty_value
+            )
+            db.session.add(new_ibc_acc)
+        
+        IBC_Packages.query.filter_by(IBC_No=ibc_number).delete(synchronize_session=False)
+
+        for pkg_entry in packages_data:
+            if not pkg_entry.get('PackagesType'):
+                db.session.rollback()
+                return jsonify({'error': 'Package type is required'}), 400
+            
+            new_ibc_pkg = IBC_Packages(
+                IBC_PackagesID = str(uuid.uuid4()),
+                IBC_No = ibc_number,
+                PackagesType = pkg_entry.get('PackagesType'),
+                PackageDesc = pkg_entry.get('PackageDesc')
+            )
+            db.session.add(new_ibc_pkg)
+        
+        db.session.commit()
+
+        return jsonify({'message': 'IBC form updated successfully.', 'IBC_No': ibc_number}), 200
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error updating IBC form: {str(e)}")
         return jsonify({'error': f'Internal server error: {str(e)}'}), 500

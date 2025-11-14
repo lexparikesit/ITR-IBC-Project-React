@@ -23,6 +23,8 @@ class IBC_Table(db.Model):
 
     createdon = db.Column(db.DateTime, default=datetime.utcnow)
     createdby = db.Column(db.String(100), nullable=False)
+    modifiedon = db.Column(db.DateTime, nullable=True, default=None)
+    modifiedby = db.Column(db.String(100), nullable=True, default=None)
 
     # relationship
     ibc_trans = db.relationship('IBC_Trans', backref='ibc_table', lazy=True)

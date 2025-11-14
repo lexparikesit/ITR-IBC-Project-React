@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
     Table,
     Button,
@@ -19,12 +19,14 @@ import {
     ScrollArea,
     Stack,
     SimpleGrid,
+    ActionIcon,
 } from '@mantine/core';
 import * as XLSX from 'xlsx';
-import { IconSearch, IconEye, IconAlertCircle, IconDownload } from '@tabler/icons-react';
+import { IconSearch, IconEye, IconAlertCircle, IconDownload, IconSettings, IconTrash } from '@tabler/icons-react';
 import { useDisclosure } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
 import { useUser } from '@/context/UserContext';
+import { DateInput } from '@mantine/dates';
 
 const BRAND_NAME_MAP = {
     'MA': 'Manitou',
@@ -33,8 +35,109 @@ const BRAND_NAME_MAP = {
     'SDLG': 'SDLG',
     'MTN': 'Mantsinen',
 };
+const BRAND_OPTIONS = Object.entries(BRAND_NAME_MAP).map(([value, label]) => ({
+    value,
+    label,
+}));
 
-const EXCLUDED_KEYS = ['ibc_trans', 'ibc_packages', 'ibc_accessories', 'id', 'details'];
+const formatDateForInput = (value) => {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toISOString().split('T')[0];
+};
+
+const createEmptyEditPayload = () => ({
+    headerForm: {
+        Requestor: '',
+        IBC_date: '',
+        PO_PJB: '',
+        Cust_ID: '',
+        Brand_ID: '',
+        UnitType: '',
+        QTY: 1,
+        SiteOperation: '',
+    },
+    detailForm: {
+        AttachmentType: '',
+        AttachmentSupplier: '',
+        DeliveryAddress: '',
+        DeliveryCustPIC: '',
+        DeliveryPlan: '',
+        Remarks: '',
+        vins: [{ VIN: '' }],
+    },
+    accessoriesForm: {
+        accessories: [{ AccessoriesName: '', Remarks: '', qty_acc: 1 }],
+    },
+    packagesForm: {
+        packages: [{ PackagesType: '', PackageDesc: '' }],
+    },
+});
+
+const mapDetailsToEditPayload = (details) => {
+    const payload = createEmptyEditPayload();
+    if (!details) return payload;
+
+    payload.headerForm = {
+        Requestor: details.Requestor || '',
+        IBC_date: formatDateForInput(details.IBC_date),
+        PO_PJB: details.PO_PJB || '',
+        Cust_ID: details.Cust_ID || '',
+        Brand_ID: details.Brand_ID || '',
+        UnitType: details.UnitType || '',
+        QTY: details.QTY || 1,
+        SiteOperation: details.SiteOperation || '',
+    };
+
+    const firstTrans = details.ibc_trans?.[0] || {};
+    payload.detailForm = {
+        AttachmentType: firstTrans.AttachmentType || '',
+        AttachmentSupplier: firstTrans.AttachmentSupplier || '',
+        DeliveryAddress: firstTrans.DeliveryAddress || '',
+        DeliveryCustPIC: firstTrans.DeliveryCustPIC || '',
+        DeliveryPlan: formatDateForInput(firstTrans.DeliveryPlan),
+        Remarks: firstTrans.Remarks || '',
+        vins: details.ibc_trans && details.ibc_trans.length > 0
+            ? details.ibc_trans.map((trans) => ({ VIN: trans.VIN || '' }))
+            : [{ VIN: '' }],
+    };
+    payload.headerForm.QTY = payload.detailForm.vins.length;
+
+    payload.accessoriesForm = {
+        accessories: details.ibc_accessories && details.ibc_accessories.length > 0
+            ? details.ibc_accessories.map((acc) => ({
+                AccessoriesName: acc.IBC_Accessories || '',
+                Remarks: acc.Remarks || '',
+                qty_acc: acc.qty_acc || 1,
+            }))
+            : [{ AccessoriesName: '', Remarks: '', qty_acc: 1 }],
+    };
+
+    payload.packagesForm = {
+        packages: details.ibc_packages && details.ibc_packages.length > 0
+            ? details.ibc_packages.map((pkg) => ({
+                PackagesType: pkg.PackagesType || '',
+                PackageDesc: pkg.PackageDesc || '',
+            }))
+            : [{ PackagesType: '', PackageDesc: '' }],
+    };
+
+    return payload;
+};
+
+const MAX_UNIT_COUNT = 20;
+const MAX_ACCESSORIES_COUNT = 26;
+const MAX_PACKAGES_COUNT = 5;
+const EXCLUDED_KEYS = [
+    'ibc_trans',
+    'ibc_packages',
+    'ibc_accessories',
+    'id',
+    'details',
+    'modifiedby',
+    'modifiedon',
+];
 const formatKeyToLabel = (key) => {
     const labelMap = {
         IBC_No: 'IBC No',
@@ -324,61 +427,73 @@ const IBCLogData = ({ title, apiUrl }) => {
         accessories: {},
         requestors: {},
     });
+    const [isEditing, setIsEditing] = useState(false);
+    const [editPayload, setEditPayload] = useState(() => createEmptyEditPayload());
+    const [initialEditPayload, setInitialEditPayload] = useState(() => createEmptyEditPayload());
+    const [editLoading, setEditLoading] = useState(false);
     const { user } = useUser()
+    const isDirty = useMemo(
+        () =>
+            isEditing &&
+            JSON.stringify(editPayload) !== JSON.stringify(initialEditPayload),
+        [editPayload, initialEditPayload, isEditing]
+    );
+
+    const fetchAllData = useCallback(async () => {
+        if (!token || !apiUrl) {
+            setLoading(false);
+            return;
+        }
+
+        try {
+            setLoading(true);
+            
+            const res = await fetch(apiUrl, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (!res.ok) throw new Error('Failed to fetch IBC logs');
+
+            const data = await res.json();
+            setLogs(data);
+
+            const customerLookup = await fetchCustomerData(token);
+            const packageLookup = await fetchPackageData(token);
+            const accessoryLookup = await fetchAccessoryData(token);
+            const requestorLookup = await fetchRequestorData(token);
+
+            const uniqueBrands = [...new Set(data.map(log => log.Brand_ID).filter(Boolean))];
+            let allModelLookup = {};
+            
+            for (const brand of uniqueBrands) {
+                const modelLookup = await fetchLookupData(brand, token);
+                allModelLookup = { ...allModelLookup, ...modelLookup };
+            }
+
+            setLookupTables({
+                models: allModelLookup,
+                customers: customerLookup,
+                packages: packageLookup,
+                accessories: accessoryLookup,
+                requestors: requestorLookup,
+            });
+
+        } catch (err) {
+            setError(err.message);
+            notifications.show({
+                title: "Error",
+                message: err.message,
+                color: "red"
+            });
+            
+        } finally {
+            setLoading(false);
+        }
+    }, [apiUrl, token]);
 
     useEffect(() => {
-        const fetchAllData = async () => {
-            if (!token || !apiUrl) {
-                setLoading(false);
-                return;
-            }
-
-            try {
-                setLoading(true);
-                
-                const res = await fetch(apiUrl, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-
-                if (!res.ok) throw new Error('Failed to fetch IBC logs');
-
-                const data = await res.json();
-                setLogs(data);
-
-                const customerLookup = await fetchCustomerData(token);
-                const packageLookup = await fetchPackageData(token);
-                const accessoryLookup = await fetchAccessoryData(token);
-                const requestorLookup = await fetchRequestorData(token);
-
-                const uniqueBrands = [...new Set(data.map(log => log.Brand_ID).filter(Boolean))];
-                let allModelLookup = {};
-                
-                for (const brand of uniqueBrands) {
-                    const modelLookup = await fetchLookupData(brand, token);
-                    allModelLookup = { ...allModelLookup, ...modelLookup };
-                }
-
-                setLookupTables({
-                    models: allModelLookup,
-                    customers: customerLookup,
-                    packages: packageLookup,
-                    accessories: accessoryLookup,
-                    requestors: requestorLookup,
-                });
-
-            } catch (err) {
-                setError(err.message);
-                notifications.show({
-                    title: "Error",
-                    message: err.message,
-                    color: "red"
-                });
-            } finally {
-                setLoading(false);
-            }
-        };
         fetchAllData();
-    }, [apiUrl, token]);
+    }, [fetchAllData]);
 
     const filteredLogs = useMemo(() => {
         const query = searchQuery.toLowerCase();
@@ -397,11 +512,35 @@ const IBCLogData = ({ title, apiUrl }) => {
     }, [logs, searchQuery, lookupTables]);
 
     const totalPages = Math.ceil(filteredLogs.length / parseInt(rowsPerPage, 10));
+
+    const requestorOptions = useMemo(
+        () => Object.entries(lookupTables.requestors || {}).map(([value, label]) => ({ value, label })),
+        [lookupTables.requestors]
+    );
+    const customerOptions = useMemo(
+        () => Object.entries(lookupTables.customers || {}).map(([value, label]) => ({
+            value,
+            label: toTitleCase(label),
+        })),
+        [lookupTables.customers]
+    );
+    const modelOptions = useMemo(
+        () => Object.entries(lookupTables.models || {}).map(([value, label]) => ({ value, label })),
+        [lookupTables.models]
+    );
+    const packageOptions = useMemo(
+        () => Object.entries(lookupTables.packages || {}).map(([value, label]) => ({ value, label })),
+        [lookupTables.packages]
+    );
+    const accessoryOptions = useMemo(
+        () => Object.entries(lookupTables.accessories || {}).map(([value, label]) => ({ value, label })),
+        [lookupTables.accessories]
+    );
     const start = (activePage - 1) * parseInt(rowsPerPage, 10);
     const end = start + parseInt(rowsPerPage, 10);
     const paginatedLogs = filteredLogs.slice(start, end);
 
-    const handleOpenModal = async (ibcId) => {
+    const handleOpenModal = async (ibcId, mode = 'view') => {
         if (!token) {
             notifications.show({ 
                 title: "Error", 
@@ -411,6 +550,12 @@ const IBCLogData = ({ title, apiUrl }) => {
         }
 
         setSelectedLogDetails(null);
+        if (mode === 'edit') {
+            setIsEditing(true);
+        } else {
+            setIsEditing(false);
+            setEditPayload(createEmptyEditPayload());
+        }
         openModal();
 
         try {
@@ -422,10 +567,323 @@ const IBCLogData = ({ title, apiUrl }) => {
 
             const details = await res.json();
             setSelectedLogDetails(details);
+            if (mode === 'edit') {
+                const mapped = mapDetailsToEditPayload(details);
+                setEditPayload(mapped);
+                setInitialEditPayload(mapped);
+            }
 
         } catch (err) {
             notifications.show({ title: "Error", message: err.message, color: "red" });
             setSelectedLogDetails({ error: err.message });
+        }
+    };
+
+    const handleCancelEdit = () => {
+        setIsEditing(false);
+        setEditPayload(createEmptyEditPayload());
+        setInitialEditPayload(createEmptyEditPayload());
+    };
+
+    const handleCloseModal = () => {
+        handleCancelEdit();
+        setSelectedLogDetails(null);
+        closeModal();
+    };
+
+    const handleStartEditing = () => {
+        if (!selectedLogDetails) return;
+            const mapped = mapDetailsToEditPayload(selectedLogDetails);
+                setEditPayload(mapped);
+                setInitialEditPayload(mapped);
+            setIsEditing(true);
+        };
+
+    const handleHeaderChange = (field, value) => {
+        setEditPayload((prev) => ({
+            ...prev,
+            headerForm: {
+                ...prev.headerForm,
+                [field]: value ?? '',
+            },
+        }));
+    };
+
+    const handleDetailChange = (field, value) => {
+        setEditPayload((prev) => ({
+            ...prev,
+            detailForm: {
+                ...prev.detailForm,
+                [field]: value ?? '',
+            },
+        }));
+    };
+
+    const updateVins = (updater) => {
+        setEditPayload((prev) => {
+            const nextVins = updater(prev.detailForm.vins);
+            return {
+                ...prev,
+                detailForm: { ...prev.detailForm, vins: nextVins },
+                headerForm: { ...prev.headerForm, QTY: nextVins.length },
+            };
+        });
+    };
+
+    const handleVinChange = (index, value) => {
+        updateVins((vins) =>
+            vins.map((vin, idx) => (idx === index ? { ...vin, VIN: value } : vin))
+        );
+    };
+
+    const addVinRow = () => {
+        if (editPayload.detailForm.vins.length >= MAX_UNIT_COUNT) {
+            notifications.show({
+                title: "Limit Reached",
+                message: `Maximum unit quantity is ${MAX_UNIT_COUNT}. Remove a VIN before adding another.`,
+                color: "yellow",
+            });
+            return;
+        }
+        updateVins((vins) => [...vins, { VIN: '' }]);
+    };
+
+    const removeVinRow = (index) => {
+        updateVins((vins) => {
+            if (vins.length === 1) return vins;
+            return vins.filter((_, idx) => idx !== index);
+        });
+    };
+
+    const handleAccessoryChange = (index, field, value) => {
+        setEditPayload((prev) => {
+            const accessories = prev.accessoriesForm.accessories.map((acc, idx) =>
+                idx === index ? { ...acc, [field]: value ?? '' } : acc
+            );
+            return {
+                ...prev,
+                accessoriesForm: { ...prev.accessoriesForm, accessories },
+            };
+        });
+    };
+
+    const addAccessoryRow = () => {
+        if (editPayload.accessoriesForm.accessories.length >= MAX_ACCESSORIES_COUNT) {
+            notifications.show({
+                title: "Limit Reached",
+                message: `You can only add up to ${MAX_ACCESSORIES_COUNT} accessories.`,
+                color: "yellow",
+            });
+            return;
+        }
+
+        setEditPayload((prev) => ({
+            ...prev,
+            accessoriesForm: {
+                ...prev.accessoriesForm,
+                accessories: [
+                    ...prev.accessoriesForm.accessories,
+                    { AccessoriesName: '', Remarks: '', qty_acc: 1 },
+                ],
+            },
+        }));
+    };
+
+    const removeAccessoryRow = (index) => {
+        setEditPayload((prev) => {
+            if (prev.accessoriesForm.accessories.length === 1) return prev;
+            const next = prev.accessoriesForm.accessories.filter((_, idx) => idx !== index);
+            return {
+                ...prev,
+                accessoriesForm: { ...prev.accessoriesForm, accessories: next },
+            };
+        });
+    };
+
+    const handlePackageChange = (index, field, value) => {
+        setEditPayload((prev) => {
+            const packages = prev.packagesForm.packages.map((pkg, idx) =>
+                idx === index ? { ...pkg, [field]: value ?? '' } : pkg
+            );
+            return {
+                ...prev,
+                packagesForm: { ...prev.packagesForm, packages },
+            };
+        });
+    };
+
+    const addPackageRow = () => {
+        if (editPayload.packagesForm.packages.length >= MAX_PACKAGES_COUNT) {
+            notifications.show({
+                title: "Limit Reached",
+                message: `You can only add up to ${MAX_PACKAGES_COUNT} packages.`,
+                color: "yellow",
+            });
+            return;
+        }
+
+        setEditPayload((prev) => ({
+            ...prev,
+            packagesForm: {
+                ...prev.packagesForm,
+                packages: [
+                    ...prev.packagesForm.packages,
+                    { PackagesType: '', PackageDesc: '' },
+                ],
+            },
+        }));
+    };
+
+    const removePackageRow = (index) => {
+        setEditPayload((prev) => {
+            if (prev.packagesForm.packages.length === 1) return prev;
+            const next = prev.packagesForm.packages.filter((_, idx) => idx !== index);
+            return {
+                ...prev,
+                packagesForm: { ...prev.packagesForm, packages: next },
+            };
+        });
+    };
+
+    const validateEditPayload = () => {
+        const { headerForm, detailForm, accessoriesForm, packagesForm } = editPayload;
+
+        if (!headerForm.Requestor || !headerForm.IBC_date || !headerForm.PO_PJB || !headerForm.Cust_ID ||
+            !headerForm.Brand_ID || !headerForm.UnitType || !headerForm.SiteOperation) {
+            return "Please complete all header fields.";
+        }
+
+        if (!headerForm.QTY || Number(headerForm.QTY) < 1) {
+            return "Quantity must be at least 1.";
+        }
+
+        if (!detailForm.AttachmentType || !detailForm.AttachmentSupplier || !detailForm.DeliveryAddress ||
+            !detailForm.DeliveryCustPIC || !detailForm.DeliveryPlan) {
+            return "Please complete all detail fields.";
+        }
+
+        if (!detailForm.vins.length || detailForm.vins.some((vin) => !vin.VIN?.trim())) {
+            return "Every VIN entry must be filled.";
+        }
+
+        const accessoriesValid = accessoriesForm.accessories.every(
+            (acc) => acc.AccessoriesName && Number(acc.qty_acc) > 0
+        );
+        if (!accessoriesValid) {
+            return "Accessories require a name and quantity greater than zero.";
+        }
+
+        if (accessoriesForm.accessories.length > MAX_ACCESSORIES_COUNT) {
+            return `You can only submit up to ${MAX_ACCESSORIES_COUNT} accessories.`;
+        }
+
+        if (detailForm.vins.length > MAX_UNIT_COUNT) {
+            return `Maximum unit quantity is ${MAX_UNIT_COUNT}.`;
+        }
+
+        const packagesValid = packagesForm.packages.every(
+            (pkg) => pkg.PackagesType
+        );
+        if (!packagesValid) {
+            return "Each package entry must include a package type.";
+        }
+
+        if (packagesForm.packages.length > MAX_PACKAGES_COUNT) {
+            return `You can only submit up to ${MAX_PACKAGES_COUNT} packages.`;
+        }
+
+        return null;
+    };
+
+    const handleEditSubmit = async (event) => {
+        event.preventDefault();
+        const validationError = validateEditPayload();
+        if (validationError) {
+            notifications.show({
+                title: "Validation Error",
+                message: validationError,
+                color: "red",
+            });
+            return;
+        }
+
+        if (!selectedLogDetails?.IBC_ID) {
+            notifications.show({
+                title: "Update Failed",
+                message: "Missing IBC identifier.",
+                color: "red",
+            });
+            return;
+        }
+
+        if (!token) {
+            notifications.show({
+                title: "Update Failed",
+                message: "Token Missing!",
+                color: "red",
+            });
+            return;
+        }
+
+        setEditLoading(true);
+
+        const payload = {
+            headerForm: {
+                ...editPayload.headerForm,
+                QTY: Number(editPayload.headerForm.QTY),
+            },
+            detailForm: {
+                ...editPayload.detailForm,
+                vins: editPayload.detailForm.vins.map((vin) => ({ VIN: vin.VIN.trim() })),
+            },
+            accessoriesForm: {
+                accessories: editPayload.accessoriesForm.accessories.map((acc) => ({
+                    AccessoriesName: acc.AccessoriesName,
+                    Remarks: acc.Remarks,
+                    qty_acc: Number(acc.qty_acc),
+                })),
+            },
+            packagesForm: {
+                packages: editPayload.packagesForm.packages.map((pkg) => ({
+                    PackagesType: pkg.PackagesType,
+                    PackageDesc: pkg.PackageDesc,
+                })),
+            },
+        };
+
+        try {
+            const response = await fetch(`http://127.0.0.1:5000/api/ibc/${selectedLogDetails.IBC_ID}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`,
+                },
+                body: JSON.stringify(payload),
+            });
+
+            const result = await response.json().catch(() => ({}));
+
+            if (!response.ok) {
+                throw new Error(result?.error || 'Failed to update IBC form');
+            }
+
+            notifications.show({
+                title: "Success",
+                message: result?.message || "IBC form updated successfully.",
+                color: "green",
+            });
+
+            await fetchAllData();
+            handleCloseModal();
+
+        } catch (err) {
+            notifications.show({
+                title: "Update Failed",
+                message: err.message,
+                color: "red",
+            });
+        } finally {
+            setEditLoading(false);
         }
     };
 
@@ -449,14 +907,28 @@ const IBCLogData = ({ title, apiUrl }) => {
                 <Table.Td>{log.createdby || 'N/A'}</Table.Td>
                 <Table.Td>{formatLocalTime(log.createdon)}</Table.Td>
                 <Table.Td>
-                    <Button
+                    <ActionIcon
                         variant="subtle"
                         color="gray"
                         onClick={() => handleOpenModal(log.IBC_ID)}
                         aria-label="View Detail"
                     >
                         <IconEye size={16} />
-                    </Button>
+                    </ActionIcon>
+                </Table.Td>
+                <Table.Td>
+                    {user?.permissions?.includes('edit_ibc') ? (
+                        <ActionIcon
+                            variant="light"
+                            color="blue"
+                            onClick={() => handleOpenModal(log.IBC_ID, 'edit')}
+                            aria-label="Edit IBC"
+                        >
+                            <IconSettings size={16} />
+                        </ActionIcon>
+                    ) : (
+                        <Text c="dimmed">-</Text>
+                    )}
                 </Table.Td>
             </Table.Tr>
         );
@@ -502,7 +974,9 @@ const IBCLogData = ({ title, apiUrl }) => {
                     ? new Date(log.IBC_date).toLocaleDateString('id-ID')
                     : 'N/A',
                 'Created By': log.createdby || 'N/A',
-                'Created On': formatLocalTime(log.createdon)
+                'Created On': formatLocalTime(log.createdon),
+                'Modified By': log.modifiedby || 'N/A',
+                'Modified On': log.modifiedon ? formatLocalTime(log.modifiedon) : 'N/A',
             }));
 
         const ws = XLSX.utils.json_to_sheet(excelData);
@@ -525,7 +999,7 @@ const IBCLogData = ({ title, apiUrl }) => {
             <Title order={1} mb="xl" ta="center">{title}</Title>
                 <>
                     <Paper shadow="sm" radius="md" p="md" mb="md">
-                        <Group justify="space-between" align="flex-end" mb="md">
+                        <Group justify="space-between" align="flex-end" mb="md" gap="md">
                             <TextInput
                                 label="Search Unit"
                                 placeholder="by IBC No, Brand, Customer, Brand/ Product, or Unit Type"
@@ -534,9 +1008,9 @@ const IBCLogData = ({ title, apiUrl }) => {
                                     setSearchQuery(e.currentTarget.value);
                                     setActivePage(1);
                                 }}
-                                w={400}
+                                w={420}
                             />
-                            <Group gap="xs">
+                            <Group gap="xs" align="flex-end">
                                 {user?.permissions?.includes('download_ibc_log') && (
                                     <Button 
                                         onClick={downloadExcel}
@@ -544,14 +1018,15 @@ const IBCLogData = ({ title, apiUrl }) => {
                                         color="#A91D3A"
                                         size="lg"
                                         p={0}
-                                        w={32}
-                                        h={32}
+                                        w={36}
+                                        h={36}
                                         style={{
                                             height: '100%',
                                             width: '40px',
                                             paddingTop: '2px',
                                             paddingBottom: '2px',
-                                            marginTop: '23px'
+                                            marginTop: '23px',
+                                            paddingBottom: '2px'
                                         }}
                                     >
                                         <IconDownload size={16} />
@@ -565,7 +1040,7 @@ const IBCLogData = ({ title, apiUrl }) => {
                                         setRowsPerPage(parseInt(val, 10));
                                         setActivePage(1);
                                     }}
-                                    w={80}
+                                    w={100}
                                 />
                             </Group>
                         </Group>
@@ -586,7 +1061,8 @@ const IBCLogData = ({ title, apiUrl }) => {
                                     <Table.Th>Date</Table.Th>
                                     <Table.Th>Created By</Table.Th>
                                     <Table.Th>Created On</Table.Th>
-                                    <Table.Th>Action</Table.Th>
+                                    <Table.Th>View</Table.Th>
+                                    <Table.Th>Edit</Table.Th>
                                 </Table.Tr>
                             </Table.Thead>
                             <Table.Tbody>{rows}</Table.Tbody>
@@ -602,8 +1078,8 @@ const IBCLogData = ({ title, apiUrl }) => {
 
             <Modal
                 opened={modalOpened}
-                onClose={closeModal}
-                title="Detail IBC Log"
+                onClose={handleCloseModal}
+                title={isEditing ? "Edit IBC Log" : "Detail IBC Log"}
                 size="1350px"
                 styles={{ 
                     title: { flexGrow: 1, textAlign: 'center' }
@@ -619,6 +1095,292 @@ const IBCLogData = ({ title, apiUrl }) => {
                     <Alert icon={<IconAlertCircle size={16} />} title="Error" color="red">
                         {selectedLogDetails.error}
                     </Alert>
+                ) : isEditing ? (
+                    <form onSubmit={handleEditSubmit}>
+                        <Stack gap="xl">
+                            <Box>
+                                <Group justify="space-between" align="center" mb="sm">
+                                    <Title order={4}>IBC Header</Title>
+                                    <Group gap="xs">
+                                        <Button
+                                            variant="default"
+                                            type="button"
+                                            onClick={handleCancelEdit}
+                                            disabled={editLoading}
+                                        >
+                                            Cancel
+                                        </Button>
+                                        <Button type="submit" loading={editLoading} disabled={!isDirty || editLoading}>
+                                            Save Changes
+                                        </Button>
+                                    </Group>
+                                </Group>
+                                <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="md">
+                                    <Select
+                                        label="Requestor"
+                                        placeholder="Select requestor"
+                                        data={requestorOptions}
+                                        value={editPayload.headerForm.Requestor || null}
+                                        onChange={(value) => handleHeaderChange('Requestor', value || '')}
+                                        searchable
+                                        required
+                                        disabled
+                                    />
+                                    <TextInput
+                                        label="IBC Date"
+                                        type="date"
+                                        value={editPayload.headerForm.IBC_date || ''}
+                                        onChange={(e) => handleHeaderChange('IBC_date', e.currentTarget.value)}
+                                        required
+                                        disabled
+                                    />
+                                    <TextInput
+                                        label="PO / PJB"
+                                        value={editPayload.headerForm.PO_PJB || ''}
+                                        onChange={(e) => handleHeaderChange('PO_PJB', e.currentTarget.value)}
+                                        required
+                                    />
+                                    <Select
+                                        label="Customer"
+                                        placeholder="Select customer"
+                                        data={customerOptions}
+                                        value={editPayload.headerForm.Cust_ID || null}
+                                        onChange={(value) => handleHeaderChange('Cust_ID', value || '')}
+                                        searchable
+                                        required
+                                    />
+                                    <Select
+                                        label="Brand"
+                                        data={BRAND_OPTIONS}
+                                        value={editPayload.headerForm.Brand_ID || null}
+                                        onChange={(value) => handleHeaderChange('Brand_ID', value || '')}
+                                        required
+                                        disabled
+                                    />
+                                    <Select
+                                        label="Unit Type"
+                                        placeholder="Select unit type"
+                                        data={modelOptions}
+                                        value={editPayload.headerForm.UnitType || null}
+                                        onChange={(value) => handleHeaderChange('UnitType', value || '')}
+                                        searchable
+                                        required
+                                    />
+                                    <Stack gap={4}>
+                                        <TextInput
+                                            label="Quantity"
+                                            type="number"
+                                            min={1}
+                                            value={editPayload.headerForm.QTY}
+                                            onChange={(e) => handleHeaderChange('QTY', Number(e.currentTarget.value) || 0)}
+                                            required
+                                            readOnly
+                                        />
+                                        <Text c="dimmed" size="xs">
+                                            Auto-calculated from VIN count
+                                        </Text>
+                        </Stack>
+                                    <TextInput
+                                        label="Site Operation"
+                                        value={editPayload.headerForm.SiteOperation || ''}
+                                        onChange={(e) => handleHeaderChange('SiteOperation', e.currentTarget.value)}
+                                        required
+                                    />
+                                </SimpleGrid>
+                            </Box>
+
+                            <Box>
+                                <Title order={4} mb="sm">Detail Information</Title>
+                                <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="md">
+                                    <TextInput
+                                        label="Attachment Type"
+                                        value={editPayload.detailForm.AttachmentType || ''}
+                                        onChange={(e) => handleDetailChange('AttachmentType', e.currentTarget.value)}
+                                        required
+                                    />
+                                    <TextInput
+                                        label="Attachment Supplier"
+                                        value={editPayload.detailForm.AttachmentSupplier || ''}
+                                        onChange={(e) => handleDetailChange('AttachmentSupplier', e.currentTarget.value)}
+                                        required
+                                    />
+                                    <TextInput
+                                        label="Delivery Address"
+                                        value={editPayload.detailForm.DeliveryAddress || ''}
+                                        onChange={(e) => handleDetailChange('DeliveryAddress', e.currentTarget.value)}
+                                        required
+                                    />
+                                    <TextInput
+                                        label="Customer PIC"
+                                        value={editPayload.detailForm.DeliveryCustPIC || ''}
+                                        onChange={(e) => handleDetailChange('DeliveryCustPIC', e.currentTarget.value)}
+                                        required
+                                    />
+                                    <DateInput
+                                        label="Delivery Plan"
+                                        value={editPayload.detailForm.DeliveryPlan || ''}
+                                        onChange={(e) => handleDetailChange('DeliveryPlan', e.currentTarget.value)}
+                                        required
+                                    />
+                                    <TextInput
+                                        label="Remarks"
+                                        value={editPayload.detailForm.Remarks || ''}
+                                        onChange={(e) => handleDetailChange('Remarks', e.currentTarget.value)}
+                                    />
+                                </SimpleGrid>
+
+                                <Stack gap="sm" mt="md">
+                                    {editPayload.detailForm.vins.map((vin, index) => (
+                                        <Group key={`vin-${index}`} align="flex-end">
+                                            <TextInput
+                                                label={`VIN ${index + 1}`}
+                                                value={vin.VIN}
+                                                onChange={(e) => handleVinChange(index, e.currentTarget.value)}
+                                                required
+                                                style={{ flex: 1 }}
+                                            />
+                                            {editPayload.detailForm.vins.length > 1 && (
+                                                <Button
+                                                    variant="subtle"
+                                                    color="red"
+                                                    type="button"
+                                                    onClick={() => removeVinRow(index)}
+                                                >
+                                                    Remove
+                                                </Button>
+                                            )}
+                                        </Group>
+                                    ))}
+                                    <Button variant="outline" type="button" onClick={addVinRow}>
+                                        Add VIN
+                                    </Button>
+                                </Stack>
+                            </Box>
+
+                            <Box>
+                                <Title order={4} mb="sm">Accessories</Title>
+                                {editPayload.accessoriesForm.accessories.length >= MAX_ACCESSORIES_COUNT && (
+                                    <Text c="dimmed" size="sm" ta="center">
+                                        Maximum of {MAX_ACCESSORIES_COUNT} accessories reached. Edit or remove existing entries to change selections.
+                                    </Text>
+                                )}
+                                <Stack gap="sm">
+                                    {editPayload.accessoriesForm.accessories.map((acc, index) => {
+                                        const selectedAccessoryValues = editPayload.accessoriesForm.accessories
+                                            .map((item, idx) => (idx === index ? null : item.AccessoriesName))
+                                            .filter(Boolean);
+                                        const availableAccessoryOptions = accessoryOptions.filter(
+                                            (option) =>
+                                                option.value === acc.AccessoriesName ||
+                                                !selectedAccessoryValues.includes(option.value)
+                                        );
+
+                                        return (
+                                        <Stack key={`acc-${index}`} gap="xs">
+                                            <Text fw={600}>Accessory {index + 1}</Text>
+                                        <Group align="flex-end">
+                                            <Select
+                                                label="Accessory"
+                                                data={availableAccessoryOptions}
+                                                value={acc.AccessoriesName || null}
+                                                onChange={(value) => handleAccessoryChange(index, 'AccessoriesName', value || '')}
+                                                searchable
+                                                required
+                                                style={{ flex: 1 }}
+                                            />
+                                            <TextInput
+                                                label="Remarks"
+                                                value={acc.Remarks || ''}
+                                                onChange={(e) => handleAccessoryChange(index, 'Remarks', e.currentTarget.value)}
+                                                style={{ flex: 1 }}
+                                            />
+                                            <TextInput
+                                                label="Qty"
+                                                type="number"
+                                                min={1}
+                                                value={acc.qty_acc}
+                                                onChange={(e) => handleAccessoryChange(index, 'qty_acc', Number(e.currentTarget.value) || 0)}
+                                                required
+                                                style={{ width: 120 }}
+                                            />
+                                            {editPayload.accessoriesForm.accessories.length > 1 && (
+                                                <ActionIcon
+                                                    color="red"
+                                                    variant="subtle"
+                                                    type="button"
+                                                    onClick={() => removeAccessoryRow(index)}
+                                                    aria-label={`Remove accessory ${index + 1}`}
+                                                >
+                                                    <IconTrash size={16} />
+                                                </ActionIcon>
+                                            )}
+                                        </Group>
+                                        </Stack>
+                                    )})}
+                                    <Button variant="outline" type="button" onClick={addAccessoryRow}>
+                                        Add Accessory
+                                    </Button>
+                                </Stack>
+                            </Box>
+
+                            <Box>
+                                <Title order={4} mb="sm">Packages</Title>
+                                {editPayload.packagesForm.packages.length >= MAX_PACKAGES_COUNT && (
+                                    <Text c="dimmed" size="sm" ta="center">
+                                        Maximum of {MAX_PACKAGES_COUNT} packages reached. Edit or remove existing entries to change selections.
+                                    </Text>
+                                )}
+                                <Stack gap="sm">
+                                    {editPayload.packagesForm.packages.map((pkg, index) => {
+                                        const selectedPackageValues = editPayload.packagesForm.packages
+                                            .map((item, idx) => (idx === index ? null : item.PackagesType))
+                                            .filter(Boolean);
+                                        const availablePackageOptions = packageOptions.filter(
+                                            (option) =>
+                                                option.value === pkg.PackagesType ||
+                                                !selectedPackageValues.includes(option.value)
+                                        );
+
+                                        return (
+                                        <Stack key={`pkg-${index}`} gap="xs">
+                                            <Text fw={600}>Package {index + 1}</Text>
+                                        <Group align="flex-end">
+                                            <Select
+                                                label="Package Type"
+                                                data={availablePackageOptions}
+                                                value={pkg.PackagesType || null}
+                                                onChange={(value) => handlePackageChange(index, 'PackagesType', value || '')}
+                                                searchable
+                                                required
+                                                style={{ flex: 1 }}
+                                            />
+                                            <TextInput
+                                                label="Description"
+                                                value={pkg.PackageDesc || ''}
+                                                onChange={(e) => handlePackageChange(index, 'PackageDesc', e.currentTarget.value)}
+                                                style={{ flex: 1 }}
+                                            />
+                                            {editPayload.packagesForm.packages.length > 1 && (
+                                                <ActionIcon
+                                                    color="red"
+                                                    variant="subtle"
+                                                    type="button"
+                                                    onClick={() => removePackageRow(index)}
+                                                    aria-label={`Remove package ${index + 1}`}
+                                                >
+                                                    <IconTrash size={16} />
+                                                </ActionIcon>
+                                            )}
+                                        </Group>
+                                        </Stack>
+                                    )})}
+                                    <Button variant="outline" type="button" onClick={addPackageRow}>
+                                        Add Package
+                                    </Button>
+                                </Stack>
+                            </Box>
+                        </Stack>
+                    </form>
                 ) : (
                     <Stack gap="xl">
                         <Box>
@@ -635,6 +1397,18 @@ const IBCLogData = ({ title, apiUrl }) => {
                                         </Group>
                                     );
                                 })}
+                                {(selectedLogDetails.modifiedby || selectedLogDetails.modifiedon) && (
+                                    <>
+                                        <Group gap="sm">
+                                            <Text fw={700} w={150}>Modified By:</Text>
+                                            <Text>{selectedLogDetails.modifiedby || '-'}</Text>
+                                        </Group>
+                                        <Group gap="sm">
+                                            <Text fw={700} w={150}>Modified On:</Text>
+                                            <Text>{selectedLogDetails.modifiedon ? formatLocalTime(selectedLogDetails.modifiedon) : '-'}</Text>
+                                        </Group>
+                                    </>
+                                )}
                             </SimpleGrid>
                         </Box>
 
@@ -738,6 +1512,13 @@ const IBCLogData = ({ title, apiUrl }) => {
                                 <Text c="dimmed">No accessories information available.</Text>
                             )}
                         </Box>
+                        {user?.permissions?.includes('edit_ibc') && (
+                            <Group justify="flex-end">
+                                <Button color="blue" onClick={handleStartEditing}>
+                                    Edit IBC
+                                </Button>
+                            </Group>
+                        )}
                     </Stack>
                 )}
             </Modal>

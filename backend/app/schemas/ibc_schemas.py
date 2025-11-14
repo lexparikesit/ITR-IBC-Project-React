@@ -40,7 +40,9 @@ class IBCHeaderSchema(Schema):
     QTY = fields.Int()
     SiteOperation = fields.Str()
     createdby = fields.Str()
-    createdon = fields.Str()
+    createdon = fields.DateTime()
+    modifiedby = fields.Str()
+    modifiedon = fields.DateTime()
 
 class IBCDetailSchema(Schema):
 
@@ -57,6 +59,8 @@ class IBCDetailSchema(Schema):
     SiteOperation = fields.Str()
     createdby = fields.Str()
     createdon = fields.DateTime()
+    modifiedby = fields.Str()
+    modifiedon = fields.DateTime()
 
     # Nested relationships
     ibc_trans = fields.List(fields.Nested(IBCTransSchema), dump_only=True)
