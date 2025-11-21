@@ -10,6 +10,15 @@ from app.models.sdlg_arrival_form import ArrivalFormModel_SDLG
 from app.models.sdlg_arrival_items import ArrivalChecklistItemModel_SDLG
 from app.controllers.auth_controller import jwt_required
 from app.utils.gcs_utils import upload_arrival_check_file
+from app.service.notifications_utils import (
+    build_payload,
+    dispatch_notification as dispatch_arrival_notifications,
+    emit_notifications,
+    format_brand_label,
+    resolve_model_label,
+    resolve_user_display_name,
+    DEFAULT_SUPERVISION_ROLES,
+)
 from datetime import datetime, time
 from dateutil.parser import isoparse 
 
@@ -95,6 +104,8 @@ def submit_arrival_checklist():
     
     ModelClass = BRAND_MODELS[brand.lower()]
     arrival_entry = ModelClass()
+
+    current_app.logger.debug(f"submit_arrival_checklist called for brand={brand}")
 
     try:
         arrival_entry.createdBy = g.user_name
@@ -199,14 +210,33 @@ def submit_arrival_checklist():
             
             current_app.logger.debug("All files processed successfully, attempting database commit...")
             
+            payload = build_payload(arrival_entry, ["brand", "woNumber", "model", "VIN"])
+            payload["brandLabel"] = format_brand_label(arrival_entry.brand)
+            payload["brand"] = payload["brandLabel"]
+            payload["model"] = resolve_model_label(arrival_entry.model)
+            payload["modelLabel"] = payload["model"]
+            payload["technicianName"] = resolve_user_display_name(arrival_entry.technician)
+            payload["approverName"] = resolve_user_display_name(arrival_entry.approvalBy)
+            current_app.logger.info("Dispatching notifications (Manitou)")
+            notifications_created = dispatch_arrival_notifications(
+                entity_type="arrival",
+                entity_id=arrival_entry.arrivalID,
+                approval_raw=arrival_entry.approvalBy,
+                technician=g.user_name,
+                payload=payload,
+                notify_roles=DEFAULT_SUPERVISION_ROLES,
+                technician_raw=arrival_entry.technician,
+            )
             try:
                 db.session.commit()
                 current_app.logger.info("Database commit successful!")
-            
             except Exception as e:
                 db.session.rollback()
                 current_app.logger.error(f"Database commit failed: {str(e)}")
                 return jsonify({'message': f'Database error: {str(e)}'}), 500
+
+            emit_notifications(notifications_created)
+            current_app.logger.info("Dispatch complete (Manitou)")
 
             return jsonify({
                 'message': 'Manitou Arrival Checklist submitted successfully!',
@@ -247,8 +277,36 @@ def submit_arrival_checklist():
                         )
                         db.session.add(new_item)
             
-            # Commit all changes to the database at once
-            db.session.commit()
+            payload = build_payload(arrival_entry, ["brand", "woNumber", "model", "VIN"])
+            payload["brandLabel"] = format_brand_label(arrival_entry.brand)
+            payload["brand"] = payload["brandLabel"]
+            payload["model"] = resolve_model_label(arrival_entry.model)
+            payload["modelLabel"] = payload["model"]
+            payload["technicianName"] = resolve_user_display_name(arrival_entry.technician)
+            payload["approverName"] = resolve_user_display_name(arrival_entry.approvalBy)
+            current_app.logger.info(
+                "Dispatching notifications (Renault) entry=%s approval=%s",
+                arrival_entry.arrivalID,
+                arrival_entry.approvalBy,
+            )
+            notifications_created = dispatch_arrival_notifications(
+                entity_type="arrival",
+                entity_id=arrival_entry.arrivalID,
+                approval_raw=arrival_entry.approvalBy,
+                technician=g.user_name,
+                payload=payload,
+                notify_roles=DEFAULT_SUPERVISION_ROLES,
+                technician_raw=arrival_entry.technician,
+            )
+            try:
+                db.session.commit()
+            except Exception as e:
+                db.session.rollback()
+                current_app.logger.error(f"Database commit failed: {str(e)}")
+                return jsonify({'message': f'Database error: {str(e)}'}), 500
+
+            emit_notifications(notifications_created)
+            current_app.logger.info("Dispatch complete (Renault)")
 
             return jsonify({
                 'message': 'Renault Arrival Checklist submitted successfully!',
@@ -290,8 +348,36 @@ def submit_arrival_checklist():
                 )
                 db.session.add(new_item)
 
-            # Commit all changes to the database at once
-            db.session.commit()
+            payload = build_payload(arrival_entry, ["brand", "woNumber", "model", "VIN"])
+            payload["brandLabel"] = format_brand_label(arrival_entry.brand)
+            payload["brand"] = payload["brandLabel"]
+            payload["model"] = resolve_model_label(arrival_entry.model)
+            payload["modelLabel"] = payload["model"]
+            payload["technicianName"] = resolve_user_display_name(arrival_entry.technician)
+            payload["approverName"] = resolve_user_display_name(arrival_entry.approvalBy)
+            current_app.logger.info(
+                "Dispatching notifications (SDLG) entry=%s approval=%s",
+                arrival_entry.arrivalID,
+                arrival_entry.approvalBy,
+            )
+            notifications_created = dispatch_arrival_notifications(
+                entity_type="arrival",
+                entity_id=arrival_entry.arrivalID,
+                approval_raw=arrival_entry.approvalBy,
+                technician=g.user_name,
+                payload=payload,
+                notify_roles=DEFAULT_SUPERVISION_ROLES,
+                technician_raw=arrival_entry.technician,
+            )
+            try:
+                db.session.commit()
+            except Exception as e:
+                db.session.rollback()
+                current_app.logger.error(f"Database commit failed: {str(e)}")
+                return jsonify({'message': f'Database error: {str(e)}'}), 500
+
+            emit_notifications(notifications_created)
+            current_app.logger.info("Dispatch complete (SDLG)")
 
             return jsonify({
                 'message': 'SDLG Arrival Checklist submitted successfully!',
@@ -300,6 +386,7 @@ def submit_arrival_checklist():
 
     except Exception as e:
         db.session.rollback()
+        current_app.logger.exception("Error submitting arrival checklist")
 
         if "Violation of UNIQUE KEY constraint" in str(e) or "duplicate key" in str(e).lower():
             return jsonify({'message': f'Duplicate VIN or Engine Number found for {brand.capitalize()}. Please check your input.'}), 409

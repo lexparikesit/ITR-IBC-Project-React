@@ -1,4 +1,4 @@
-from app import create_app, db
+from app import create_app, db, socketio
 from app.models.models import User, UserOtp
 import logging
 
@@ -11,4 +11,4 @@ with app.app_context():
     print("Tables created successfully!")
 
 if __name__ == "__main__":
-    app.run(debug=True, host="localhost", port=5000)
+    socketio.run(app, debug=True, use_reloader=False)

@@ -11,6 +11,15 @@ from app.models.sdlg_pdi_items import PDIChecklistItemModel_SDLG
 from app.controllers.auth_controller import jwt_required
 from app.controllers.province_controller import get_province_name_by_code
 from app.utils.gcs_utils import upload_pdi_file, get_bucket, get_folder_prefix, upload_blob_with_bucket
+from app.service.notifications_utils import (
+    build_payload,
+    dispatch_notification as dispatch_pdi_notifications,
+    emit_notifications,
+    format_brand_label,
+    resolve_model_label,
+    resolve_user_display_name,
+    DEFAULT_SUPERVISION_ROLES,
+)
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 
@@ -116,7 +125,10 @@ def submit_pdi_form(brand):
             pdi_entry.checkingDate = parse_date(unit_info.get('checkingDate'))
             pdi_entry.HourMeter = unit_info.get('HourMeter')
             pdi_entry.customer = unit_info.get('customer')
-            pdi_entry.approver  = unit_info.get('approvalBy')
+            approver_value = unit_info.get('approvalBy')
+            pdi_entry.approver = approver_value
+            # expose approvalBy attribute for downstream helpers that expect a unified name
+            pdi_entry.approvalBy = approver_value
             pdi_entry.inspectorSignature = unit_info.get('inspectorSignature')
             pdi_entry.generalRemarks = general_remarks
             pdi_entry.remarksTransport = remarks_transport
@@ -241,7 +253,40 @@ def submit_pdi_form(brand):
                 ) for rec in item_records
             ])
                             
-            db.session.commit()
+            payload = build_payload(pdi_entry, ["brand", "woNumber", "machineType", "VIN"])
+            brand_label = format_brand_label(pdi_entry.brand)
+            payload["brandLabel"] = brand_label
+            payload["brand"] = brand_label
+
+            model_value = pdi_entry.machineType
+            payload["model"] = resolve_model_label(model_value)
+            payload["modelLabel"] = payload["model"]
+
+            technician_ref = (
+                unit_info.get("technician")
+                or unit_info.get("preInspectionPersonnel")
+                or unit_info.get("inspectorSignature")
+            )
+            payload["technicianName"] = resolve_user_display_name(technician_ref)
+            payload["approverName"] = resolve_user_display_name(unit_info.get("approvalBy") or pdi_entry.approver)
+            notifications_created = dispatch_pdi_notifications(
+                entity_type="pre_delivery_inspection",
+                entity_id=pdi_entry.pdiID,
+                approval_raw=pdi_entry.approver,
+                technician=g.user_name,
+                payload=payload,
+                notify_roles=DEFAULT_SUPERVISION_ROLES,
+                technician_raw=technician_ref,
+            )
+            try:
+                db.session.commit()
+            except Exception as e:
+                db.session.rollback()
+                current_app.logger.error(f"Database commit failed: {str(e)}")
+                return jsonify({'message': f'Database error: {str(e)}'}), 500
+
+            emit_notifications(notifications_created)
+
             return jsonify({
                 'message': 'Manitou Pre Delivery Inspection Form submitted successfully!',
                 'id': str(pdi_entry.pdiID)
@@ -404,8 +449,24 @@ def submit_pdi_form(brand):
                     ) for key, data_value in battery_status_data.items()
                 ])
             
-            # Commit all changes to the database at once
-            db.session.commit()
+            payload = build_payload(pdi_entry, ["brand", "woNumber", "model", "VIN"])
+            notifications_created = dispatch_pdi_notifications(
+                entity_type="pre_delivery_inspection",
+                entity_id=pdi_entry.pdiID,
+                approval_raw=pdi_entry.approvalBy,
+                technician=g.user_name,
+                payload=payload,
+                notify_roles=DEFAULT_SUPERVISION_ROLES,
+                technician_raw=unit_info.get("technician"),
+            )
+            try:
+                db.session.commit()
+            except Exception as e:
+                db.session.rollback()
+                current_app.logger.error(f"Database commit failed: {str(e)}")
+                return jsonify({'message': f'Database error: {str(e)}'}), 500
+
+            emit_notifications(notifications_created)
 
             return jsonify({
                 'message': 'Renault Pre Delivery Inspection Form submitted successfully!',
@@ -471,8 +532,24 @@ def submit_pdi_form(brand):
                     )
                     db.session.add(new_defect)
             
-            # Commit all changes to the database at once
-            db.session.commit()
+            payload = build_payload(pdi_entry, ["brand", "woNumber", "model", "VIN"])
+            notifications_created = dispatch_pdi_notifications(
+                entity_type="pre_delivery_inspection",
+                entity_id=pdi_entry.pdiID,
+                approval_raw=pdi_entry.approvalBy,
+                technician=g.user_name,
+                payload=payload,
+                notify_roles=DEFAULT_SUPERVISION_ROLES,
+                technician_raw=unit_info.get("preInspectionPersonnel"),
+            )
+            try:
+                db.session.commit()
+            except Exception as e:
+                db.session.rollback()
+                current_app.logger.error(f"Database commit failed: {str(e)}")
+                return jsonify({'message': f'Database error: {str(e)}'}), 500
+
+            emit_notifications(notifications_created)
 
             return jsonify({
                 'message': 'SDLG Pre Delivery Inspection form submitted successfully!',

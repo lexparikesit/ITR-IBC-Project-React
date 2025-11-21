@@ -6,6 +6,15 @@ from app.models.KHO_models import KHODocumentFormModel
 from app.utils.gcs_utils import upload_kho_file, generate_signed_url
 from app.controllers.auth_controller import jwt_required
 from app.controllers.province_controller import get_province_name_by_code
+from app.service.notifications_utils import (
+    build_payload,
+    dispatch_notification,
+    emit_notifications,
+    format_brand_label,
+    resolve_model_label,
+    resolve_user_display_name,
+    DEFAULT_SUPERVISION_ROLES,
+)
 from uuid import UUID
 
 BRAND_FOLDER_MAP = {
@@ -94,7 +103,41 @@ def submit_kho_document():
         )
 
         db.session.add(new_doc)
-        db.session.commit()
+        
+        try:
+            db.session.flush()
+        
+        except Exception as flush_error:
+            db.session.rollback()
+            current_app.logger.error(f"Failed to initialize KHO document ID: {flush_error}")
+            return jsonify({"message": "Failed to save document."}), 500
+
+        payload = build_payload(new_doc, ["brand", "woNumber", "typeModel", "VIN", "customer"])
+        brand_label = format_brand_label(new_doc.brand)
+        payload["brandLabel"] = brand_label
+        payload["brand"] = brand_label
+        payload["model"] = resolve_model_label(new_doc.typeModel)
+        payload["modelLabel"] = payload["model"]
+        payload.pop("technicianName", None)
+        notifications_created = dispatch_notification(
+            entity_type="kho_document",
+            entity_id=new_doc.khoID,
+            approval_raw=[],
+            technician=g.user_name,
+            payload=payload,
+            notify_roles=DEFAULT_SUPERVISION_ROLES,
+            technician_raw=None,
+        )
+
+        try:
+            db.session.commit()
+        
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Failed to save KHO document: {e}")
+            return jsonify({"message": "Failed to save document."}), 500
+
+        emit_notifications(notifications_created)
 
         return jsonify({
             "message": "KHO document submitted successfully!",

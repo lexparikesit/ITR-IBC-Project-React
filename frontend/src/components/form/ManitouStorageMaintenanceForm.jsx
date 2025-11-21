@@ -389,7 +389,6 @@ export function ManitouStorageMaintenanceForm() {
                 headers: {
                     'Content-Type': 'multipart/form-data'
                 },
-                timeout: 50000
             });
         
             notifications.show({

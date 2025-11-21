@@ -388,25 +388,40 @@ const fetchAccessoryData = async (token) => {
 
 const fetchRequestorData = async (token) => {
     if (!token) return {};
-    
-    try {
-        const response = await fetch(`http://127.0.0.1:5000/api/users/by-role/Salesman`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        
-        if (!response.ok) throw new Error('Failed to fetch requestor data.');
-        
-        const requestors = await response.json();
-        const requestorMap = {};
-        
-        requestors.forEach(user => {
-            requestorMap[user.value] = user.label;
-        });
-        return requestorMap;
 
+    const roles = ["Salesman", "Product Head", "Technical Head"];
+    const requestorMap = {};
+
+    try {
+        const responses = await Promise.all(
+            roles.map((role) =>
+                fetch(`http://127.0.0.1:5000/api/users/by-role/${encodeURIComponent(role)}`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                })
+            )
+        );
+
+        for (const response of responses) {
+            if (!response.ok) continue;
+            const requestors = await response.json();
+            requestors.forEach((user) => {
+                const key = user.userid || user.value || user.id;
+                if (!key) return;
+                const label =
+                    [user.firstName, user.lastName].filter(Boolean).join(" ") ||
+                    user.label ||
+                    user.username ||
+                    user.email ||
+                    user.name ||
+                    key;
+                requestorMap[key] = label;
+            });
+        }
+
+        return requestorMap;
     } catch (error) {
-        console.error('[ERROR] Error fetching requestor data:', error);
-        return {};
+        console.error("[ERROR] Error fetching requestor data:", error);
+        return requestorMap;
     }
 };
 
@@ -1493,6 +1508,7 @@ const IBCLogData = ({ title, apiUrl }) => {
                                             <Table.Th style={{ width: '60px' }}>No.</Table.Th>
                                             <Table.Th>Accessory</Table.Th>
                                             <Table.Th style={{ width: '700px' }}>Accessory Description</Table.Th>
+                                            <Table.Th style={{ width: '120px' }}>Qty</Table.Th>
                                         </Table.Tr>
                                     </Table.Thead>
                                     <Table.Tbody>
@@ -1503,6 +1519,7 @@ const IBCLogData = ({ title, apiUrl }) => {
                                                     <Table.Td style={{ width: '60px' }}>{idx + 1}</Table.Td>
                                                     <Table.Td>{accessoryLabel}</Table.Td>
                                                     <Table.Td style={{ width: '300px' }}>{acc.Remarks || '-'}</Table.Td>
+                                                    <Table.Td>{acc.qty_acc ?? '-'}</Table.Td>
                                                 </Table.Tr>
                                             );
                                         })}

@@ -8,6 +8,8 @@ Flask-Mail==0.10.0
 Flask-Session==0.8.0
 Flask-SQLAlchemy==3.1.1
 greenlet==3.2.3
+flask-socketio==5.4.1
+eventlet==0.36.1
 itsdangerous==2.2.0
 Jinja2==3.1.6
 MarkupSafe==3.0.2

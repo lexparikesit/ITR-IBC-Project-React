@@ -6,6 +6,7 @@ storage_maintenance_log_bp = Blueprint('storage_maintenance_log_bp', __name__)
 @storage_maintenance_log_bp.route('/storage-maintenance/log/all', methods=['GET', 'OPTIONS'])
 def get_all_logs():
     """Routes to get all Storage Maintenance List (list view)"""
+    
     if request.method == 'OPTIONS':
         return '', 200
     return smlc.get_all_maintenance_checklists()

@@ -29,6 +29,7 @@
     "react-dom": "^19.0.0",
     "react-hook-form": "^7.60.0",
     "recharts": "^3.4.1",
+    "socket.io-client": "^4.8.1",
     "tailwindcss": "^4.1.11",
     "xlsx": "^0.18.5"
   },

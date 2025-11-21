@@ -6,6 +6,7 @@ class IBCAccessoriesSchema(Schema):
     IBC_AccessoriesID = fields.UUID(dump_only=True)
     IBC_Accessories = fields.Str(required=True)
     Remarks = fields.Str(allow_none=True)
+    qty_acc = fields.Int(required=True)
 
 class IBCPackagesSchema(Schema):
 

@@ -347,7 +347,6 @@ export function RenaultCommissioningForm() {
             console.log("handleSubmit payload:", payload);
 
             await apiClient.post(`/commissioning/renault/submit`, payload, {
-                timeout: 50000
             });
 
             notifications.show({

@@ -5,8 +5,34 @@ from app.models.IBC_Trans import IBC_Trans
 from app.models.IBC_Accessories import IBC_Accessories
 from app.models.IBC_Package import IBC_Packages
 from app.controllers.auth_controller import jwt_required, require_permission
+from app.service.notifications_utils import (
+    build_payload,
+    dispatch_notification,
+    emit_notifications,
+    resolve_user_display_name,
+    normalize_recipient_ids,
+    format_brand_label,
+    resolve_model_label,
+)
+from app.service.notifications_service import create_notifications
 from datetime import datetime
 import uuid
+
+IBC_SUBMISSION_ROLES = [
+    "Salesman",
+    "Product Head",
+    "Technical Head",
+    "General Manager - Chief Officer",
+    "Super Admin",
+]
+
+IBC_UPDATE_ROLES = [
+    "Salesman",
+    "Product Head",
+    "Technical Head",
+    "General Manager - Chief Officer",
+    "Super Admin",
+]
 
 def to_roman(number):
     """ Helper function for converting month numbers to Roman numerals. Description """
@@ -165,9 +191,53 @@ def create_ibc_form():
                 PackagesType = pkg_entry.get('PackagesType'),
                 PackageDesc = pkg_entry.get('PackageDesc')
             )
-            db.session.add(new_ibc_pkg)
+
+        db.session.add(new_ibc_pkg)
+        db.session.flush()
+
+        payload = build_payload(new_ibc_table, ["IBC_No", "Brand_ID", "UnitType", "QTY", "SiteOperation", "Requestor"])
+        payload["brandLabel"] = format_brand_label(new_ibc_table.Brand_ID)
+        payload["brand"] = payload["brandLabel"]
+        payload["requestorName"] = resolve_user_display_name(new_ibc_table.Requestor)
+
+        notifications_created = dispatch_notification(
+            entity_type="ibc",
+            entity_id=new_ibc_table.IBC_ID,
+            approval_raw=[],
+            technician=g.user_name,
+            payload=payload,
+            notify_roles=IBC_SUBMISSION_ROLES,
+            technician_raw=None,
+            exclude_submitter_roles=True,
+        )
+
+        requestor_notifications = []
+        requestor_ids = normalize_recipient_ids(new_ibc_table.Requestor)
+        submitter_uuid = None
+        
+        if getattr(g, "user_id", None):
+            try:
+                submitter_uuid = uuid.UUID(str(g.user_id))
+            except (ValueError, TypeError):
+                submitter_uuid = None
+        
+        if submitter_uuid:
+            requestor_ids = [rid for rid in requestor_ids if rid != submitter_uuid]
+        
+        if requestor_ids:
+            message = f"{g.user_name} listed you as Requestor of IBC No {ibc_number}"
+            requestor_notifications = create_notifications(
+                entity_type="ibc",
+                entity_id=new_ibc_table.IBC_ID,
+                message=message,
+                recipients=requestor_ids,
+                created_by=g.user_name,
+                payload=payload,
+            )
+            notifications_created.extend(requestor_notifications or [])
         
         db.session.commit()
+        emit_notifications(notifications_created)
 
         return jsonify({'message': 'Formulir IBC berhasil dibuat.', 'IBC_No': ibc_number}), 201
 
@@ -296,7 +366,26 @@ def update_ibc_form(ibc_id):
             )
             db.session.add(new_ibc_pkg)
         
+        payload = build_payload(ibc_record, ["IBC_No", "Brand_ID", "UnitType", "QTY", "SiteOperation", "Requestor"])
+        payload["brandLabel"] = format_brand_label(ibc_record.Brand_ID)
+        payload["brand"] = payload["brandLabel"]
+        payload["requestorName"] = resolve_user_display_name(ibc_record.Requestor)
+        payload["updatedBy"] = g.user_name
+        payload["updatedOn"] = datetime.utcnow().isoformat()
+
+        notifications_created = dispatch_notification(
+            entity_type="ibc_update",
+            entity_id=ibc_record.IBC_ID,
+            approval_raw=[],
+            technician=g.user_name,
+            payload=payload,
+            notify_roles=IBC_UPDATE_ROLES,
+            technician_raw=None,
+            exclude_submitter_roles=True,
+        )
+
         db.session.commit()
+        emit_notifications(notifications_created)
 
         return jsonify({'message': 'IBC form updated successfully.', 'IBC_No': ibc_number}), 200
 

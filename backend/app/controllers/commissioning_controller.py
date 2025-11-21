@@ -11,6 +11,15 @@ from app.models.sdlg_commissioning_items import CommissioningChecklistItemModel_
 from app.controllers.auth_controller import jwt_required
 from app.controllers.province_controller import get_province_name_by_code
 from app.utils.gcs_utils import upload_commissioning_file
+from app.service.notifications_utils import (
+    build_payload,
+    dispatch_notification as dispatch_commissioning_notifications,
+    emit_notifications,
+    format_brand_label,
+    resolve_model_label,
+    resolve_user_display_name,
+    DEFAULT_SUPERVISION_ROLES,
+)
 from datetime import datetime
 
 # mapping for each brand Models
@@ -178,8 +187,44 @@ def submit_commissioning_form(brand):
                     'missing_items': missing_photos
                 }), 400
 
-            # Commit all changes to the database at once
-            db.session.commit()
+            payload = build_payload(commissioning_entry, ["brand", "woNumber", "model", "VIN"])
+            brand_label = format_brand_label(commissioning_entry.brand)
+            payload["brandLabel"] = brand_label
+            payload["brand"] = brand_label
+            model_value = (
+                getattr(commissioning_entry, "typeModel", None)
+                or getattr(commissioning_entry, "UnitType", None)
+                or getattr(commissioning_entry, "model", None)
+            )
+            payload["model"] = resolve_model_label(model_value)
+            payload["modelLabel"] = payload["model"]
+            payload["technicianName"] = resolve_user_display_name(
+                getattr(commissioning_entry, "technician", None) or commissioning_entry.inspectorSignature
+            )
+            payload["approverName"] = resolve_user_display_name(commissioning_entry.approvalBy)
+            technician_raw = (
+                commissioning_entry.technician
+                if getattr(commissioning_entry, "technician", None)
+                else commissioning_entry.inspectorSignature
+            )
+            notifications_created = dispatch_commissioning_notifications(
+                entity_type="commissioning",
+                entity_id=commissioning_entry.commID,
+                approval_raw=commissioning_entry.approvalBy,
+                technician=g.user_name,
+                payload=payload,
+                notify_roles=DEFAULT_SUPERVISION_ROLES,
+                technician_raw=technician_raw,
+            )
+            try:
+                db.session.commit()
+            except Exception as e:
+                db.session.rollback()
+                current_app.logger.error(f"Database commit failed: {str(e)}")
+                return jsonify({'message': f'Database error: {str(e)}'}), 500
+
+            emit_notifications(notifications_created)
+
             return jsonify({
                 'message': 'Manitou Commissioning Form submitted successfully!',
                 'id': str(commissioning_entry.commID)
@@ -261,7 +306,24 @@ def submit_commissioning_form(brand):
 
             db.session.bulk_save_objects(checklist_item_list)
 
-            db.session.commit()
+            payload = build_payload(commissioning_entry, ["brand", "woNumber", "model", "VIN"])
+            notifications_created = dispatch_commissioning_notifications(
+                entity_type="commissioning",
+                entity_id=commissioning_entry.commID,
+                approval_raw=commissioning_entry.approvalBy,
+                technician=g.user_name,
+                payload=payload,
+                notify_roles=DEFAULT_SUPERVISION_ROLES,
+                technician_raw=report_info.get('technician'),
+            )
+            try:
+                db.session.commit()
+            except Exception as e:
+                db.session.rollback()
+                current_app.logger.error(f"Database commit failed: {str(e)}")
+                return jsonify({'message': f'Database error: {str(e)}'}), 500
+
+            emit_notifications(notifications_created)
 
             return jsonify({
                 'message': 'Renault Commissioning Form submitted successfully!',
@@ -301,7 +363,24 @@ def submit_commissioning_form(brand):
 
             # Add and commit to database
             db.session.bulk_save_objects(all_checklist_items)
-            db.session.commit()
+            payload = build_payload(commissioning_entry, ["brand", "woNumber", "model", "VIN"])
+            notifications_created = dispatch_commissioning_notifications(
+                entity_type="commissioning",
+                entity_id=commissioning_entry.commID,
+                approval_raw=commissioning_entry.approvalBy,
+                technician=g.user_name,
+                payload=payload,
+                notify_roles=DEFAULT_SUPERVISION_ROLES,
+                technician_raw=unit_info.get('technician'),
+            )
+            try:
+                db.session.commit()
+            except Exception as e:
+                db.session.rollback()
+                current_app.logger.error(f"Database commit failed: {str(e)}")
+                return jsonify({'message': f'Database error: {str(e)}'}), 500
+
+            emit_notifications(notifications_created)
 
             return jsonify({
                 'message': 'SDLG Commissioning Form submitted successfully!',

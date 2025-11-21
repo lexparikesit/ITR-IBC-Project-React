@@ -2,11 +2,13 @@ from flask import Flask, app
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from flask_mail import Mail
+from flask_socketio import SocketIO
 from dotenv import load_dotenv
 import os
 
 db = SQLAlchemy()
 mail = Mail()
+socketio = SocketIO(cors_allowed_origins="*")
 
 def create_app():
     
@@ -63,6 +65,7 @@ def create_app():
     # init extensions
     db.init_app(app)
     mail.init_app(app)
+    socketio.init_app(app, cors_allowed_origins=["http://localhost:3000"])
 
     from app.models.renault_arrival_form import ArrivalFormModel_RT
     from app.models.manitou_arrival_form import ArrivalFormModel_MA
@@ -128,5 +131,11 @@ def create_app():
 
     from app.routes.kho_log_routes import kho_log_bp
     app.register_blueprint(kho_log_bp)
+
+    from app.routes.notifications_routes import notifications_bp
+    app.register_blueprint(notifications_bp)
+
+    from app.sockets import register_socket_events
+    register_socket_events(socketio)
 
     return app

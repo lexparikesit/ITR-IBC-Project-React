@@ -11,6 +11,15 @@ from app.models.sdlg_maintenance_items import StorageMaintenanceChecklistItemMod
 from app.models.sdlg_maintenance_form import Maintenance_sdlg_defect_remarks
 from app.controllers.auth_controller import jwt_required
 from app.utils.gcs_utils import upload_storage_maintenance_file
+from app.service.notifications_utils import (
+    build_payload,
+    dispatch_notification as dispatch_maintenance_notifications,
+    emit_notifications,
+    format_brand_label,
+    resolve_model_label,
+    resolve_user_display_name,
+    DEFAULT_SUPERVISION_ROLES,
+)
 from datetime import datetime, time, date
 
 # mapping for brand Models
@@ -206,7 +215,31 @@ def submit_maintenance_checklist():
                     'missing_items': missing_photos
                 }), 400
 
-            db.session.commit()
+            payload = build_payload(storage_maintenance_entry, ["brand", "woNumber", "model", "VIN"])
+            payload["brandLabel"] = format_brand_label(storage_maintenance_entry.brand)
+            payload["brand"] = payload["brandLabel"]
+            payload["model"] = resolve_model_label(storage_maintenance_entry.model)
+            payload["modelLabel"] = payload["model"]
+            payload["technicianName"] = resolve_user_display_name(storage_maintenance_entry.technician)
+            payload["approverName"] = resolve_user_display_name(storage_maintenance_entry.approvalBy)
+            notifications_created = dispatch_maintenance_notifications(
+                entity_type="storage_maintenance",
+                entity_id=storage_maintenance_entry.smID,
+                approval_raw=storage_maintenance_entry.approvalBy,
+                technician=g.user_name,
+                payload=payload,
+                notify_roles=DEFAULT_SUPERVISION_ROLES,
+                technician_raw=storage_maintenance_entry.technician,
+            )
+            try:
+                db.session.commit()
+            except Exception as e:
+                db.session.rollback()
+                current_app.logger.error(f"Database commit failed: {str(e)}")
+                return jsonify({'message': f'Database error: {str(e)}'}), 500
+
+            emit_notifications(notifications_created)
+
             return jsonify({
                 'message': 'Manitou Storage Maintenance Checklist submitted successfully!',
                 'id': str(storage_maintenance_entry.smID)
@@ -386,7 +419,31 @@ def submit_maintenance_checklist():
                     'missing_items': missing_photos
                 }), 400
 
-            db.session.commit()
+            payload = build_payload(storage_maintenance_entry, ["brand", "woNumber", "model", "VIN"])
+            payload["brandLabel"] = format_brand_label(storage_maintenance_entry.brand)
+            payload["brand"] = payload["brandLabel"]
+            payload["model"] = resolve_model_label(storage_maintenance_entry.model)
+            payload["modelLabel"] = payload["model"]
+            payload["technicianName"] = resolve_user_display_name(storage_maintenance_entry.technician)
+            payload["approverName"] = resolve_user_display_name(storage_maintenance_entry.approvalBy)
+            notifications_created = dispatch_maintenance_notifications(
+                entity_type="storage_maintenance",
+                entity_id=storage_maintenance_entry.smID,
+                approval_raw=storage_maintenance_entry.approvalBy,
+                technician=g.user_name,
+                payload=payload,
+                notify_roles=DEFAULT_SUPERVISION_ROLES,
+                technician_raw=storage_maintenance_entry.technician,
+            )
+            try:
+                db.session.commit()
+            except Exception as e:
+                db.session.rollback()
+                current_app.logger.error(f"Database commit failed: {str(e)}")
+                return jsonify({'message': f'Database error: {str(e)}'}), 500
+
+            emit_notifications(notifications_created)
+
             return jsonify({
                 'message': 'Renault Storage Maintenance Checklist submitted successfully!',
                 'id': str(storage_maintenance_entry.smID)
@@ -452,7 +509,30 @@ def submit_maintenance_checklist():
                 )
                 db.session.add(new_defect)
 
-            db.session.commit()
+            payload = build_payload(storage_maintenance_entry, ["brand", "woNumber", "model", "VIN"])
+            payload["brandLabel"] = format_brand_label(storage_maintenance_entry.brand)
+            payload["brand"] = payload["brandLabel"]
+            payload["model"] = resolve_model_label(storage_maintenance_entry.model)
+            payload["modelLabel"] = payload["model"]
+            payload["technicianName"] = resolve_user_display_name(storage_maintenance_entry.technician)
+            payload["approverName"] = resolve_user_display_name(storage_maintenance_entry.approvalBy)
+            notifications_created = dispatch_maintenance_notifications(
+                entity_type="storage_maintenance",
+                entity_id=storage_maintenance_entry.smID,
+                approval_raw=storage_maintenance_entry.approvalBy,
+                technician=g.user_name,
+                payload=payload,
+                notify_roles=DEFAULT_SUPERVISION_ROLES,
+                technician_raw=storage_maintenance_entry.technician,
+            )
+            try:
+                db.session.commit()
+            except Exception as e:
+                db.session.rollback()
+                current_app.logger.error(f"Database commit failed: {str(e)}")
+                return jsonify({'message': f'Database error: {str(e)}'}), 500
+
+            emit_notifications(notifications_created)
 
             return jsonify({
                 'message': 'SDLG Storage Maintenance Checklist submitted successfully!',
