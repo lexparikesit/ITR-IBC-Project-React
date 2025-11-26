@@ -1233,8 +1233,14 @@ const IBCLogData = ({ title, apiUrl }) => {
                                     />
                                     <DateInput
                                         label="Delivery Plan"
-                                        value={editPayload.detailForm.DeliveryPlan || ''}
-                                        onChange={(e) => handleDetailChange('DeliveryPlan', e.currentTarget.value)}
+                                        value={
+                                            editPayload.detailForm.DeliveryPlan
+                                                ? new Date(editPayload.detailForm.DeliveryPlan)
+                                                : null
+                                        }
+                                        onChange={(value) =>
+                                            handleDetailChange('DeliveryPlan', value ? formatDateForInput(value) : '')
+                                        }
                                         required
                                     />
                                     <TextInput

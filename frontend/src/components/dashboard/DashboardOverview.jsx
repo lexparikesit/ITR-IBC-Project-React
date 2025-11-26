@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
     Container,
     Title,
@@ -107,6 +107,9 @@ export default function DashboardOverview() {
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedStage, setSelectedStage] = useState("all");
     const [ibcPopularity, setIbcPopularity] = useState({ accessories: [], packages: [] });
+    const [customerMap, setCustomerMap] = useState({});
+    const [unitTypeMap, setUnitTypeMap] = useState({});
+    const fetchedBrandIdsRef = useRef(new Set());
     const { user } = useUser();
 
     // Fetch all data
@@ -157,6 +160,26 @@ export default function DashboardOverview() {
         fetchAllData();
     }, []);
 
+    useEffect(() => {
+        const loadCustomers = async () => {
+            try {
+                const response = await apiClient.get("/customers");
+                const seen = new Set();
+                const map = {};
+                (response.data || []).forEach((cust) => {
+                    const id = cust?.CustomerID;
+                    if (!id || seen.has(id)) return;
+                    seen.add(id);
+                    map[id] = cust?.CustomerName?.trim() || id;
+                });
+                setCustomerMap(map);
+            } catch (err) {
+                console.warn("Failed to fetch customer lookup", err);
+            }
+        };
+        loadCustomers();
+    }, []);
+
     // Helper: extract a JS Date for a unit (used for throughput/aging)
     const getUnitDate = (unit) => {
         const stage = unit?.stage;
@@ -175,6 +198,39 @@ export default function DashboardOverview() {
         return null;
     };
 
+    const fetchUnitTypesForBrands = useCallback(async (brandIds = []) => {
+        const pendingIds = brandIds.filter(
+            (id) => id && !fetchedBrandIdsRef.current.has(id)
+        );
+        if (!pendingIds.length) return;
+
+        try {
+            const responses = await Promise.all(
+                pendingIds.map((brandId) =>
+                    apiClient
+                        .get(`/unit-types/${brandId}`)
+                        .then((res) => ({ brandId, data: res.data || [] }))
+                        .catch(() => ({ brandId, data: [] }))
+                )
+            );
+
+            const newMap = {};
+            responses.forEach(({ brandId, data }) => {
+                data.forEach((item) => {
+                    if (!item?.value) return;
+                    newMap[item.value] = item.label || item.value;
+                });
+                fetchedBrandIdsRef.current.add(brandId);
+            });
+
+            if (Object.keys(newMap).length) {
+                setUnitTypeMap((prev) => ({ ...prev, ...newMap }));
+            }
+        } catch (err) {
+            console.warn("Failed to fetch unit type lookup", err);
+        }
+    }, []);
+
     // Fetch IBC detail to get DeliveryPlan, then compute upcoming deliveries (next 7 days)
     useEffect(() => {
         const loadUpcomingIbc = async () => {
@@ -192,37 +248,56 @@ export default function DashboardOverview() {
                         .catch(() => null)
                 );
                 const details = (await Promise.all(detailPromises)).filter(Boolean);
+                const brandIds = Array.from(
+                    new Set(details.map((d) => d?.Brand_ID).filter(Boolean))
+                );
+                await fetchUnitTypesForBrands(brandIds);
                 const now = new Date();
                 const in7 = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-                const rows = [];
+                const rowsByIbc = new Map();
                 details.forEach((d) => {
                     const trans = Array.isArray(d?.ibc_trans) ? d.ibc_trans : [];
-                    trans.forEach((t) => {
-                        const dt = t?.DeliveryPlan ? new Date(t.DeliveryPlan) : null;
-                        if (dt && dt >= now && dt <= in7) {
-                            rows.push({
-                                ibcNo: d?.IBC_No,
-                                brand: normalizeBrand({ stage: 'ibc', Brand_ID: d?.Brand_ID }),
-                                customer: d?.Cust_ID,
-                                poPjb: d?.PO_PJB,
-                                unitType: d?.UnitType,
-                                siteOperation: d?.SiteOperation,
-                                qty: d?.QTY ?? 1,
-                                plan: dt,
-                                requestor: d?.Requestor,
-                            });
-                        }
+                    const upcomingTrans = trans
+                        .map((t) => {
+                            const dt = t?.DeliveryPlan ? new Date(t.DeliveryPlan) : null;
+                            if (!dt || dt < now || dt > in7) return null;
+                            return { ...t, plan: dt };
+                        })
+                        .filter(Boolean);
+
+                    if (!upcomingTrans.length) return;
+
+                    const ibcKey = d?.IBC_No || d?.IBC_ID;
+                    if (!ibcKey) return;
+                    const earliestPlan = upcomingTrans.reduce(
+                        (min, item) => (item.plan < min ? item.plan : min),
+                        upcomingTrans[0].plan
+                    );
+                    const qty = Number(d?.QTY) || upcomingTrans.length || 1;
+
+                    rowsByIbc.set(ibcKey, {
+                        ibcNo: d?.IBC_No || d?.IBC_ID || '-',
+                        brand: normalizeBrand({ stage: 'ibc', Brand_ID: d?.Brand_ID }),
+                        customer: d?.Cust_ID,
+                        poPjb: d?.PO_PJB,
+                        unitType: d?.UnitType,
+                        siteOperation: d?.SiteOperation,
+                        qty,
+                        plan: earliestPlan,
+                        requestor: d?.Requestor,
                     });
                 });
-                rows.sort((a, b) => a.plan - b.plan);
-                setUpcomingIbc(rows.slice(0, 10));
+                const groupedRows = Array.from(rowsByIbc.values()).sort(
+                    (a, b) => a.plan - b.plan
+                );
+                setUpcomingIbc(groupedRows.slice(0, 10));
             } catch (e) {
                 // fail silently to keep dashboard robust
                 setUpcomingIbc([]);
             }
         };
         loadUpcomingIbc();
-    }, [allUnits]);
+    }, [allUnits, fetchUnitTypesForBrands]);
 
     // Compute IBC Packages & Accessories popularity (top 10 from latest 50 IBC headers)
     useEffect(() => {
@@ -282,7 +357,9 @@ export default function DashboardOverview() {
                         if (!raw) return;
                         const key = String(raw).toLowerCase();
                         const resolved = accMap[key] || accMap[raw] || raw; // try resolve via master
-                        accCounts[resolved] = (accCounts[resolved] || 0) + 1;
+                        const qty = Number(a?.qty_acc);
+                        const amount = Number.isFinite(qty) && qty > 0 ? qty : 1;
+                        accCounts[resolved] = (accCounts[resolved] || 0) + amount;
                     });
                     pkgs.forEach((p) => {
                         // Prefer Package Type label; if it's a UUID, resolve via master map.
@@ -582,6 +659,7 @@ export default function DashboardOverview() {
                         <Table highlightOnHover>
                             <Table.Thead>
                                 <Table.Tr>
+                                    <Table.Th style={{ width: 60 }}>No.</Table.Th>
                                     <Table.Th>Plan Date</Table.Th>
                                     <Table.Th>IBC No</Table.Th>
                                     <Table.Th>Brand</Table.Th>
@@ -595,19 +673,20 @@ export default function DashboardOverview() {
                             <Table.Tbody>
                                 {upcomingIbc.length === 0 ? (
                                     <Table.Tr>
-                                        <Table.Td colSpan={8}>
+                                        <Table.Td colSpan={9}>
                                             <Text c="dimmed">No upcoming deliveries in the next 7 days.</Text>
                                         </Table.Td>
                                     </Table.Tr>
                                 ) : (
                                     upcomingIbc.map((r, i) => (
                                         <Table.Tr key={`${r.ibcNo}-${i}`}>
+                                            <Table.Td>{i + 1}</Table.Td>
                                             <Table.Td>{formatDateOnly(r.plan)}</Table.Td>
                                             <Table.Td>{r.ibcNo}</Table.Td>
                                             <Table.Td>{r.brand}</Table.Td>
-                                            <Table.Td>{r.customer}</Table.Td>
+                                            <Table.Td>{customerMap[r.customer] || r.customer || '-'}</Table.Td>
                                             <Table.Td>{r.poPjb || '-'}</Table.Td>
-                                            <Table.Td>{r.unitType || '-'}</Table.Td>
+                                            <Table.Td>{unitTypeMap[r.unitType] || r.unitType || '-'}</Table.Td>
                                             <Table.Td>{r.siteOperation || '-'}</Table.Td>
                                             <Table.Td>{r.qty}</Table.Td>
                                         </Table.Tr>
