@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
-import { PasswordInput, Button, Stack, Title, Text } from "@mantine/core";
+import { useState, useEffect } from "react";
+import { PasswordInput, Button, Stack } from "@mantine/core";
 import { IconLock } from "@tabler/icons-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { notifications } from "@mantine/notifications";
