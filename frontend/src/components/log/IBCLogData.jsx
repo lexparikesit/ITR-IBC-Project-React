@@ -127,8 +127,6 @@ const mapDetailsToEditPayload = (details) => {
 };
 
 const MAX_UNIT_COUNT = 20;
-const MAX_ACCESSORIES_COUNT = 26;
-const MAX_PACKAGES_COUNT = 5;
 const EXCLUDED_KEYS = [
     'ibc_trans',
     'ibc_packages',
@@ -551,6 +549,8 @@ const IBCLogData = ({ title, apiUrl }) => {
         () => Object.entries(lookupTables.accessories || {}).map(([value, label]) => ({ value, label })),
         [lookupTables.accessories]
     );
+    const packagesLimit = packageOptions.length;
+    const accessoriesLimit = accessoryOptions.length;
     const start = (activePage - 1) * parseInt(rowsPerPage, 10);
     const end = start + parseInt(rowsPerPage, 10);
     const paginatedLogs = filteredLogs.slice(start, end);
@@ -683,10 +683,10 @@ const IBCLogData = ({ title, apiUrl }) => {
     };
 
     const addAccessoryRow = () => {
-        if (editPayload.accessoriesForm.accessories.length >= MAX_ACCESSORIES_COUNT) {
+        if (editPayload.accessoriesForm.accessories.length >= accessoriesLimit) {
             notifications.show({
                 title: "Limit Reached",
-                message: `You can only add up to ${MAX_ACCESSORIES_COUNT} accessories.`,
+                message: `You can only add up to ${accessoriesLimit} accessories.`,
                 color: "yellow",
             });
             return;
@@ -728,10 +728,10 @@ const IBCLogData = ({ title, apiUrl }) => {
     };
 
     const addPackageRow = () => {
-        if (editPayload.packagesForm.packages.length >= MAX_PACKAGES_COUNT) {
+        if (editPayload.packagesForm.packages.length >= packagesLimit) {
             notifications.show({
                 title: "Limit Reached",
-                message: `You can only add up to ${MAX_PACKAGES_COUNT} packages.`,
+                message: `You can only add up to ${packagesLimit} packages.`,
                 color: "yellow",
             });
             return;
@@ -788,8 +788,8 @@ const IBCLogData = ({ title, apiUrl }) => {
             return "Accessories require a name and quantity greater than zero.";
         }
 
-        if (accessoriesForm.accessories.length > MAX_ACCESSORIES_COUNT) {
-            return `You can only submit up to ${MAX_ACCESSORIES_COUNT} accessories.`;
+        if (accessoriesForm.accessories.length > accessoriesLimit) {
+            return `You can only submit up to ${accessoriesLimit} accessories.`;
         }
 
         if (detailForm.vins.length > MAX_UNIT_COUNT) {
@@ -803,8 +803,8 @@ const IBCLogData = ({ title, apiUrl }) => {
             return "Each package entry must include a package type.";
         }
 
-        if (packagesForm.packages.length > MAX_PACKAGES_COUNT) {
-            return `You can only submit up to ${MAX_PACKAGES_COUNT} packages.`;
+        if (packagesForm.packages.length > packagesLimit) {
+            return `You can only submit up to ${packagesLimit} packages.`;
         }
 
         return null;
@@ -1280,9 +1280,9 @@ const IBCLogData = ({ title, apiUrl }) => {
 
                             <Box>
                                 <Title order={4} mb="sm">Accessories</Title>
-                                {editPayload.accessoriesForm.accessories.length >= MAX_ACCESSORIES_COUNT && (
+                                {accessoriesLimit > 0 && editPayload.accessoriesForm.accessories.length >= accessoriesLimit && (
                                     <Text c="dimmed" size="sm" ta="center">
-                                        Maximum of {MAX_ACCESSORIES_COUNT} accessories reached. Edit or remove existing entries to change selections.
+                                        Maximum of {accessoriesLimit} accessories reached. Edit or remove existing entries to change selections.
                                     </Text>
                                 )}
                                 <Stack gap="sm">
@@ -1346,9 +1346,9 @@ const IBCLogData = ({ title, apiUrl }) => {
 
                             <Box>
                                 <Title order={4} mb="sm">Packages</Title>
-                                {editPayload.packagesForm.packages.length >= MAX_PACKAGES_COUNT && (
+                                {packagesLimit > 0 && editPayload.packagesForm.packages.length >= packagesLimit && (
                                     <Text c="dimmed" size="sm" ta="center">
-                                        Maximum of {MAX_PACKAGES_COUNT} packages reached. Edit or remove existing entries to change selections.
+                                        Maximum of {packagesLimit} packages reached. Edit or remove existing entries to change selections.
                                     </Text>
                                 )}
                                 <Stack gap="sm">

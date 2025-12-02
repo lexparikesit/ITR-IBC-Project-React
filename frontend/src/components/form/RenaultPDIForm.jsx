@@ -175,7 +175,8 @@ export function RenaultPDIForm() {
             const initialRenaultPdiValues = {
                 date: "",
                 vinNo: "",
-                repairOrderNo: "",
+                // repairOrderNo: "",
+                repairOrderNo: null,
                 mileageHourMeter: "",
                 chassisId: "",
                 registrationNo: "",
@@ -580,19 +581,19 @@ export function RenaultPDIForm() {
                     <Title order={3} mb="md" c="var(--mantine-color-text)"> Unit Information </Title>
                     <Grid gutter="xl">
                         <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
-                            {/* <Select
+                            <Select
                                 label="WO Number"
                                 placeholder="Select WO Number"
                                 searchable
                                 clearable
                                 data={WoNumbers}
                                 {...form.getInputProps('repairOrderNo')}
-                            /> */}
-                            <TextInput
+                            />
+                            {/* <TextInput
                                 label="WO Number"
                                 placeholder="Input WO Number"
                                 {...form.getInputProps('repairOrderNo')}
-                            />
+                            /> */}
                         </Grid.Col>
                         <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
                             <TextInput

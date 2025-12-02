@@ -37,8 +37,8 @@ export default function SDLGStorageMaintenanceForm() {
             machineModel: null,
             vehicleNumber: "",
             workingHours: "",
-            // woNumber: null,
-            woNumber: "",
+            woNumber: null,
+            // woNumber: "",
             vehicleArrivalDate: null,
             inspectionDate: null,
             inspector: null,
@@ -263,19 +263,19 @@ export default function SDLGStorageMaintenanceForm() {
                     <Title order={3} mb="md"> Unit Information </Title>
                     <Grid gutter="xl">
                         <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
-                            {/* <Select
+                            <Select
                                 label="WO Number"
                                 placeholder="Select WO Number"
                                 data={woNumbers}
                                 searchable
                                 clearable
                                 {...form.getInputProps('woNumber')}
-                            /> */}
-                            <TextInput
+                            />
+                            {/* <TextInput
                                 label="WO Number"
                                 placeholder="Input WO Number"
                                 {...form.getInputProps('woNumber')}
-                            />
+                            /> */}
                         </Grid.Col>
                         <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
                             <Select

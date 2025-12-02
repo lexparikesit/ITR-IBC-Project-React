@@ -201,7 +201,8 @@ export function RenaultStorageMaintenanceForm() {
                 transmissionTypeNo: "",
                 hourMeter: "",
                 mileage: "",
-                repairOrderNo: "",
+                // repairOrderNo: "",
+                repairOrderNo: null,
                 dateOfCheck: null,
                 technician: null,
                 approvalBy: null,
@@ -505,19 +506,19 @@ export function RenaultStorageMaintenanceForm() {
                                     </Stack>
                                 </Group>
                             </Dropzone>
-                            {hasImage && (
-                                <Group justify="flex-end">
-                                    <Button
-                                        variant="subtle"
-                                        size="xs"
-                                        onClick={() => retryUpload(sectionKey, itemKey)}
-                                        loading={uploading}
-                                        leftSection={<IconRefresh size={14} />}
-                                    >
-                                        Retry Upload
-                                    </Button>
-                                </Group>
-                            )}
+                                {hasImage && (
+                                    <Group justify="flex-end">
+                                        <Button
+                                            variant="subtle"
+                                            size="xs"
+                                            onClick={() => retryUpload(sectionKey, itemKey)}
+                                            loading={uploading}
+                                            leftSection={<IconRefresh size={14} />}
+                                        >
+                                            Retry Upload
+                                        </Button>
+                                    </Group>
+                                )}
                             <TextInput
                                 placeholder="Add Image Caption"
                                 mt="xs"
@@ -573,19 +574,19 @@ export function RenaultStorageMaintenanceForm() {
                     <Title order={3} mb="md" c="var(--mantine-color-text)"> Unit Information </Title>
                     <Grid gutter="xl">
                         <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
-                            {/* <Select
+                            <Select
                                 label="WO Number"
                                 placeholder="Select WO Number"
                                 data={woNumbers}
                                 searchable
                                 clearable
                                 {...form.getInputProps('repairOrderNo')}
-                            /> */}
-                            <TextInput
+                            />
+                            {/* <TextInput
                                 label="WO Number"
                                 placeholder="Input WO Number"
                                 {...form.getInputProps("repairOrderNo")}
-                            />
+                            /> */}
                         </Grid.Col>
                         <Grid.Col span={{ base: 12, md: 6, lg: 3 }}>
                             <Select

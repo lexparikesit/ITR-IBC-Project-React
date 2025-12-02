@@ -114,8 +114,8 @@ export function UnitArrivalChecklistForm() {
 	const form = useForm({
 		initialValues: (() => {
 			const initial = {
-				// woNumber: null,
-				woNumber: "",
+				woNumber: null,
+				// woNumber: "",
 				typeModel: null,
 				vin: "",
 				noChassis: "",
@@ -331,18 +331,18 @@ export function UnitArrivalChecklistForm() {
 					<Title order={3} mb="md" c="var(--mantine-color-text)"> Unit Information </Title>
 					<Grid gutter="md">
 						<Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
-							{/* <Select
+							<Select
 								label="WO Number"
 								placeholder="Select WO Number"
 								data={woNumbers}
 								searchable
 								{...form.getInputProps("woNumber")}
-							/> */}
-							<TextInput
+							/>
+							{/* <TextInput
 								label="WO Number"
 								placeholder="Input WO Number"
 								{...form.getInputProps("woNumber")}
-							/>
+							/> */}
 						</Grid.Col>
 						<Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
 							<Select

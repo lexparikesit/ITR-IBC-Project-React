@@ -169,8 +169,8 @@ export function ManitouPDIForm() {
     const form = useForm({
         initialValues: (() => {
             const initialManitouValues = {
-                //woNumber: null
-                woNumber: "",
+                woNumber: null,
+                // woNumber: "",
                 dealerCode: null,
                 machineType: null,
                 serialNumber: "",
@@ -262,11 +262,13 @@ export function ManitouPDIForm() {
         if (!currentFile) return;
 
         setUploading(true);
+        
         try {
             const processedFile = await processImage(currentFile, sectionKey, itemKey);
             if (processedFile) {
                 form.setFieldValue(`checklistItems.${sectionKey}.${itemKey}.image`, processedFile);
             }
+
         } finally {
             setUploading(false);
         }
@@ -553,19 +555,19 @@ export function ManitouPDIForm() {
                             />
                         </Grid.Col>
                         <Grid.Col span={{ base: 12, md: 6, md: 3 }}>
-                            {/* <Select 
+                            <Select 
                                 label="WO Number"
                                 placeholder="Select WO Number"
                                 data={WoNumbers}
                                 searchable
                                 clearable
                                 {...form.getInputProps('woNumber')}
-                            /> */}
-                            <TextInput
+                            />
+                            {/* <TextInput
                                 label="WO Number"
                                 placeholder="Input WO Number"
                                 {...form.getInputProps('woNumber')}
-                            />
+                            /> */}
                         </Grid.Col>
                         <Grid.Col span={{ base: 12, md: 6, md: 3 }}>
                             <Select

@@ -43,8 +43,8 @@ export function SdlgPDIForm() {
 
     const form = useForm({
         initialValues: {
-            //woNumber: null,
-            woNumber: '',
+            woNumber: null,
+            // woNumber: '',
             machineModel: null,
             vehicleNumber: '',
             preInspectionPersonnel: null,
@@ -238,19 +238,19 @@ export function SdlgPDIForm() {
                     <Title order={3} mb="md" style={{ color: 'var(--mantine-color-text)' }}> Unit Information </Title>
                     <Grid gutter="xl">
                         <Grid.Col span={{ base: 12, md: 6, md: 3 }}>
-                            {/* <Select
+                            <Select
                                 label="WO Number"
                                 placeholder="Select WO Number"
                                 data={WoNumbers}
                                 searchable
                                 clearable
                                 {...form.getInputProps('woNumber')}
-                            /> */}
-                            <TextInput
+                            />
+                            {/* <TextInput
                                 label="WO Number"
                                 placeholder="Input WO Number"
                                 {...form.getInputProps('woNumber')}
-                            />
+                            /> */}
                         </Grid.Col>
                         <Grid.Col span={{ base: 12, md: 6, md: 3 }}>
                             <Select

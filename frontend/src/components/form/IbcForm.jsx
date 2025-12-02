@@ -338,6 +338,7 @@ export function MultiStepIbcForm() {
         }
     };
 
+    const packageLimit = packageTypes.length;
     const selectedPackageValues = accessoriesForm.values.packages.map(p => p.PackagesType);
     const packageFields = accessoriesForm.values.packages.map((_, index) => {
     const availablePackageOptions = packageTypes.filter(option => !selectedPackageValues.includes(option.value) || option.value === accessoriesForm.values.packages[index].PackagesType);
@@ -371,6 +372,7 @@ export function MultiStepIbcForm() {
         );
     });
 
+    const accessoriesLimit = accessoryTypes.length;
     const selectedAccessoryValues = accessoriesForm.values.accessories.map(a => a.IBC_Accesories);
     const accessoryFields = accessoriesForm.values.accessories.map((_, index) => {
     const availableAccessoryOptions = accessoryTypes.filter(option => !selectedAccessoryValues.includes(option.value) || option.value === accessoriesForm.values.accessories[index].IBC_Accesories);
@@ -632,7 +634,7 @@ export function MultiStepIbcForm() {
                         <Button
                             variant="outline"
                             onClick={() => {
-                                if (accessoriesForm.values.packages.length < 5) {
+                                if (accessoriesForm.values.packages.length +1 <= packageLimit) {
                                     accessoriesForm.insertListItem("packages", {
                                         PackagesType: "",
                                         PackageDesc: "",
@@ -640,7 +642,7 @@ export function MultiStepIbcForm() {
                                 } else {
                                     notifications.show({
                                         title: "Maximum Packages Reached",
-                                        message: "You can only add a maximum of 5 packages.",
+                                        message: `You can only add a maximum of ${packageLimit} packages.`,
                                         color: "red",
                                     });
                                 }
@@ -667,7 +669,7 @@ export function MultiStepIbcForm() {
                         <Button
                             variant="outline"
                             onClick={() => {
-                                if (accessoriesForm.values.accessories.length < 26) {
+                                if (accessoriesForm.values.accessories.length +1 <= accessoriesLimit) {
                                     accessoriesForm.insertListItem("accessories", {
                                         IBC_Accesories: "",
                                         Remarks: "",
@@ -676,7 +678,7 @@ export function MultiStepIbcForm() {
                                 } else {
                                     notifications.show({
                                         title: "Maximum Accessories Reached",
-                                        message: "You can only add a maximum of 26 accessories.",
+                                        message: `You can only add a maximum of ${accessoriesLimit} accessories.`,
                                         color: "red",
                                     });
                                 }

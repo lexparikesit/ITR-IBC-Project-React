@@ -207,8 +207,8 @@ export function UnitArrivalInspectionForm() {
         initialValues: (() => {
             const initialManitouValues = {
                 model: null,
-                // woNumber: null,
-                woNumber: "",
+                woNumber: null,
+                // woNumber: "",
                 serialNo: "",
                 hourMeter: "",
                 dateOfCheck: null,
@@ -605,19 +605,19 @@ export function UnitArrivalInspectionForm() {
                     <Title order={3} mb="md" c="var(--mantine-color-text)"> Unit Information </Title>
                     <Grid gutter="xl">
                         <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
-                            {/* <Select
+                            <Select
                                 label="WO Number"
                                 placeholder="Select WO Number"
                                 data={woNumbers}
                                 searchable
                                 clearable
                                 {...form.getInputProps('woNumber')}
-                            /> */}
-                            <TextInput
+                            />
+                            {/* <TextInput
 								label="WO Number"
 								placeholder="Input WO Number"
 								{...form.getInputProps("woNumber")}
-							/>
+							/> */}
                         </Grid.Col>
                         <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
                             <Select
