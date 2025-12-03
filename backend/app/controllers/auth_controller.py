@@ -328,7 +328,7 @@ class AuthController:
             Email: {user.email}
 
             To set your password, please visit:
-            http://localhost:3000/forgot-password
+            https://ibc.itr-compass.co.id/forgot-password
 
             Note: For security reasons, your initial password is not included in this email. You must set your own password using the link above.
 
@@ -385,7 +385,7 @@ class AuthController:
                                 <table role="presentation" align="center" cellpadding="0" cellspacing="0" style="margin:0 auto 22px; border-collapse:collapse;">
                                     <tr>
                                     <td align="center" style="background:#A91D3A; color:#ffffff; padding:12px 30px; border-radius:6px; font-weight:700; font-size:14px; font-family:Arial,sans-serif; mso-padding-alt:12px 30px;">
-                                        <a href="http://localhost:3000/forgot-password" style="color:#ffffff; text-decoration:none; display:inline-block;">Set Your Password</a>
+                                        <a href="https://ibc.itr-compass.co.id/forgot-password" style="color:#ffffff; text-decoration:none; display:inline-block;">Set Your Password</a>
                                     </td>
                                     </tr>
                                 </table>

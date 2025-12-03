@@ -27,6 +27,7 @@ import { useDisclosure } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
 import { useUser } from '@/context/UserContext';
 import { DateInput } from '@mantine/dates';
+import apiClient from '@/libs/api';
 
 const BRAND_NAME_MAP = {
     'MA': 'Manitou',
@@ -286,13 +287,7 @@ const fetchCustomerData = async (token) => {
     if (!token) return {};
     
     try {
-        const response = await fetch(`http://127.0.0.1:5000/api/customers`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        
-        if (!response.ok) throw new Error('Failed to fetch customer data.');
-        
-        const customers = await response.json();
+        const { data: customers = [] } = await apiClient.get('/customers');
         const customerMap = {};
         
         customers.forEach(cust => {
@@ -315,20 +310,12 @@ const fetchLookupData = async (brandId, token) => {
     
     if (!brandId || !token) return modelLookup;
     
-    const apiUrl = `http://127.0.0.1:5000/api/unit-types/${brandId}`;
-    
     try {
-        const modelResponse = await fetch(apiUrl, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-
-        if (modelResponse.ok) {
-            const models = await modelResponse.json();
-            modelLookup = models.reduce((acc, model) => {
-                acc[model.value] = model.label;
-                return acc;
-            }, {});
-        }
+        const { data: models = [] } = await apiClient.get(`/unit-types/${brandId}`);
+        modelLookup = models.reduce((acc, model) => {
+            acc[model.value] = model.label;
+            return acc;
+        }, {});
 
     } catch (e) {
         console.error(`[ERROR] Error fetching models for ${brandId}:`, e);
@@ -340,13 +327,7 @@ const fetchPackageData = async (token) => {
     if (!token) return {};
     
     try {
-        const response = await fetch(`http://127.0.0.1:5000/api/mstPackages`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        
-        if (!response.ok) throw new Error('Failed to fetch package data.');
-        
-        const packages = await response.json();
+        const { data: packages = [] } = await apiClient.get('/mstPackages');
         const packageMap = {};
         
         packages.forEach(pkg => {
@@ -364,13 +345,7 @@ const fetchAccessoryData = async (token) => {
     if (!token) return {};
     
     try {
-        const response = await fetch(`http://127.0.0.1:5000/api/mstAccesories`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-
-        if (!response.ok) throw new Error('Failed to fetch accessory data.');
-        
-        const accessories = await response.json();
+        const { data: accessories = [] } = await apiClient.get('/mstAccesories');
         const accessoryMap = {};
         
         accessories.forEach(acc => {
@@ -393,15 +368,12 @@ const fetchRequestorData = async (token) => {
     try {
         const responses = await Promise.all(
             roles.map((role) =>
-                fetch(`http://127.0.0.1:5000/api/users/by-role/${encodeURIComponent(role)}`, {
-                    headers: { Authorization: `Bearer ${token}` },
-                })
+                apiClient.get(`/users/by-role/${encodeURIComponent(role)}`)
             )
         );
 
         for (const response of responses) {
-            if (!response.ok) continue;
-            const requestors = await response.json();
+            const requestors = response?.data || [];
             requestors.forEach((user) => {
                 const key = user.userid || user.value || user.id;
                 if (!key) return;
@@ -461,13 +433,8 @@ const IBCLogData = ({ title, apiUrl }) => {
         try {
             setLoading(true);
             
-            const res = await fetch(apiUrl, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-
-            if (!res.ok) throw new Error('Failed to fetch IBC logs');
-
-            const data = await res.json();
+            const res = await apiClient.get(apiUrl);
+            const data = res.data;
             setLogs(data);
 
             const customerLookup = await fetchCustomerData(token);
@@ -574,13 +541,8 @@ const IBCLogData = ({ title, apiUrl }) => {
         openModal();
 
         try {
-            const res = await fetch(`http://127.0.0.1:5000/ibc/log/details/${ibcId}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-
-            if (!res.ok) throw new Error('Failed to fetch detail');
-
-            const details = await res.json();
+            const res = await apiClient.get(`/ibc/log/details/${ibcId}`);
+            const details = res.data;
             setSelectedLogDetails(details);
             if (mode === 'edit') {
                 const mapped = mapDetailsToEditPayload(details);
@@ -867,20 +829,8 @@ const IBCLogData = ({ title, apiUrl }) => {
         };
 
         try {
-            const response = await fetch(`http://127.0.0.1:5000/api/ibc/${selectedLogDetails.IBC_ID}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`,
-                },
-                body: JSON.stringify(payload),
-            });
-
-            const result = await response.json().catch(() => ({}));
-
-            if (!response.ok) {
-                throw new Error(result?.error || 'Failed to update IBC form');
-            }
+            const response = await apiClient.put(`/ibc/${selectedLogDetails.IBC_ID}`, payload);
+            const result = response?.data || {};
 
             notifications.show({
                 title: "Success",

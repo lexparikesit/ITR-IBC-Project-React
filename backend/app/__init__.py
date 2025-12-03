@@ -56,7 +56,7 @@ def create_app():
 
     CORS(
         app, 
-        origins=["http://localhost:3000"],
+        origins=["https://ibc.itr-compass.co.id"],
         supports_credentials=True,
         allow_headers=["Authorization", "Content-Type"],
         methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]
@@ -65,7 +65,7 @@ def create_app():
     # init extensions
     db.init_app(app)
     mail.init_app(app)
-    socketio.init_app(app, cors_allowed_origins=["http://localhost:3000"])
+    socketio.init_app(app, cors_allowed_origins=["https://ibc.itr-compass.co.id"])
 
     from app.models.renault_arrival_form import ArrivalFormModel_RT
     from app.models.manitou_arrival_form import ArrivalFormModel_MA

@@ -26,6 +26,7 @@ import { useDisclosure } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
 import { BRAND_CHECKLIST_MAP } from "@/config/PDIMap";
 import { useUser } from "@/context/UserContext";
+import apiClient from "@/libs/api";
 
 const EXCLUDED_KEYS = ["remarks", "notes", "checklist_items", "id", "pdiId", "details", "generalRemarks", "remarksTransport", "vehicle_inspection", "defect_remarks"];
 const formatKeyToLabel = (key) => {
@@ -351,19 +352,12 @@ const LogData = ({ title, apiUrl }) => {
         let modelLookup = {};
         if (!brandId || !token) return modelLookup;
 
-        const apiUrl = `http://127.0.0.1:5000/api/unit-types/${brandId}`;
         try {
-            const modelResponse = await fetch(apiUrl, {
-                headers: { Authorization: `Bearer ${token}` },
-            });
-
-            if (modelResponse.ok) {
-                const models = await modelResponse.json();
-                modelLookup = models.reduce((acc, item) => {
-                    acc[item.value] = item.label;
-                    return acc;
-                }, {});
-            }
+            const { data: models = [] } = await apiClient.get(`/unit-types/${brandId}`);
+            modelLookup = models.reduce((acc, item) => {
+                acc[item.value] = item.label;
+                return acc;
+            }, {});
 
         } catch (e) {
             console.error(`[ERROR] Error fetching models for ${brandId}:`, e);
@@ -375,12 +369,7 @@ const LogData = ({ title, apiUrl }) => {
         if (!token) return {};
 
         try {
-            const response = await fetch(`http://127.0.0.1:5000/api/customers`, {
-                headers: { Authorization: `Bearer ${token}` },
-            });
-
-            if (!response.ok) throw new Error("Failed to fetch customer data.");
-            const customers = await response.json();
+            const { data: customers = [] } = await apiClient.get("/customers");
 
             const customerMap = {};
             customers.forEach((cust) => {
@@ -425,22 +414,15 @@ const LogData = ({ title, apiUrl }) => {
         if (!token) return { technicians: {}, approvers: {} };
 
         try {
-            const baseUrl = "http://127.0.0.1:5000/api";
             const [techRes, supervisorRes, techHeadRes] = await Promise.all([
-                fetch(`${baseUrl}/users/by-role/Technician`, {
-                    headers: { Authorization: `Bearer ${token}` },
-                }),
-                fetch(`${baseUrl}/users/by-role/Supervisor`, {
-                    headers: { Authorization: `Bearer ${token}` },
-                }),
-                fetch(`${baseUrl}/users/by-role/Technical Head`, {
-                    headers: { Authorization: `Bearer ${token}` },
-                }),
+                apiClient.get('/users/by-role/Technician'),
+                apiClient.get('/users/by-role/Supervisor'),
+                apiClient.get('/users/by-role/Technical Head'),
             ]);
 
-            const techData = techRes.ok ? await techRes.json() : [];
-            const supervisorData = supervisorRes.ok ? await supervisorRes.json() : [];
-            const techHeadData = techHeadRes.ok ? await techHeadRes.json() : [];
+            const techData = techRes.data || [];
+            const supervisorData = supervisorRes.data || [];
+            const techHeadData = techHeadRes.data || [];
             const allApprovers = [...supervisorData, ...techHeadData];
             const techLookup = techData.reduce((acc, user) => {
                 acc[user.value] = user.label;
@@ -474,14 +456,8 @@ const LogData = ({ title, apiUrl }) => {
             try {
                 setLoading(true);
 
-                const logsResponse = await fetch(apiUrl, {
-                    headers: { Authorization: `Bearer ${token}` },
-                });
-
-                if (!logsResponse.ok) {
-                    throw new Error("Failed to fetch the Log Data.");
-                }
-                const logData = await logsResponse.json();
+                const logsResponse = await apiClient.get(apiUrl);
+                const logData = logsResponse.data;
 
                 setLogs(logData);
 
@@ -566,20 +542,11 @@ const LogData = ({ title, apiUrl }) => {
         setSelectedLogDetails(null);
         openModal();
 
-        const detailApiUrl = `http://localhost:5000/pre-delivery/log/details/${pdiID}`;
+        const detailApiUrl = `/pre-delivery/log/details/${pdiID}`;
 
         try {
-            const response = await fetch(detailApiUrl, {
-                headers: { Authorization: `Bearer ${token}` },
-            });
-
-            if (!response.ok) {
-                throw new Error(
-                    "Failed to fetch detail log data. Status: " + response.status
-                );
-            }
-
-            const details = await response.json();
+            const response = await apiClient.get(detailApiUrl);
+            const details = response.data;
             setSelectedLogDetails(details);
 
         } catch (err) {

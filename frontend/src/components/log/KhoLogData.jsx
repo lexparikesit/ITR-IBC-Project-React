@@ -15,7 +15,6 @@ import {
     TextInput,
     Pagination,
     Select,
-    Alert,
     ScrollArea,
 } from "@mantine/core";
 import * as XLSX from "xlsx";

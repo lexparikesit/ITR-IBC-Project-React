@@ -118,13 +118,12 @@ export default function DashboardOverview() {
             try {
                 setLoading(true);
 
-                // Use absolute URLs to hit non-/api log routes without changing global baseURL
                 const endpoints = [
-                    { url: 'http://localhost:5000/arrival-check/log/all', stage: 'arrival' },
-                    { url: 'http://localhost:5000/storage-maintenance/log/all', stage: 'maintenance' },
-                    { url: 'http://localhost:5000/pre-delivery/log/all', stage: 'pdi' },
-                    { url: 'http://localhost:5000/commissioning/log/all', stage: 'commissioning' },
-                    { url: 'http://localhost:5000/ibc/log/all', stage: 'ibc' },
+                    { url: '/arrival-check/log/all', stage: 'arrival' },
+                    { url: '/storage-maintenance/log/all', stage: 'maintenance' },
+                    { url: '/pre-delivery/log/all', stage: 'pdi' },
+                    { url: '/commissioning/log/all', stage: 'commissioning' },
+                    { url: '/ibc/log/all', stage: 'ibc' },
                 ];
 
                 const requests = endpoints.map(ep => 
@@ -243,7 +242,7 @@ export default function DashboardOverview() {
                 const limited = ibcHeaders.slice(0, 20); // avoid over-fetching
                 const detailPromises = limited.map((h) =>
                     apiClient
-                        .get(`http://localhost:5000/ibc/log/details/${h.IBC_ID}`)
+                        .get(`/ibc/log/details/${h.IBC_ID}`)
                         .then((res) => res.data)
                         .catch(() => null)
                 );
@@ -334,7 +333,7 @@ export default function DashboardOverview() {
                 const limited = sorted.slice(0, 50);
                 const detailPromises = limited.map((h) =>
                     apiClient
-                        .get(`http://localhost:5000/ibc/log/details/${h.IBC_ID}`)
+                        .get(`/ibc/log/details/${h.IBC_ID}`)
                         .then((res) => res.data)
                         .catch(() => null)
                 );

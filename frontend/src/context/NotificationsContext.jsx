@@ -49,7 +49,7 @@ export function NotificationsProvider({ children }) {
     useEffect(() => {
         if (!token) return;
 
-        const socket = io(process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000", {
+        const socket = io(process.env.NEXT_PUBLIC_API_URL || "https://api-ibc.itr-compass.co.id", {
             auth: { token },
             transports: ["websocket"],
         });

@@ -26,6 +26,7 @@ import { useDisclosure } from '@mantine/hooks';
 import { notifications } from "@mantine/notifications";
 import { BRAND_CHECKLIST_MAP } from '@/config/MaintenanceMap'; 
 import { useUser } from '@/context/UserContext';
+import apiClient from '@/libs/api';
 
 const EXCLUDED_KEYS = ['remarks', 'notes', 'checklist_items', 'id', 'smId', 'details', 'generalRemarks', 'defect_remarks'];
 const formatKeyToLabel = (key) => {
@@ -164,7 +165,6 @@ const getStatusLabels = (brand, statusValue) => {
 }
 
 // Helpers to fetch user option lists and build lookup maps
-const API_BASE = 'http://127.0.0.1:5000/api';
 const makeLookup = (arr) => (arr || []).reduce((acc, it) => { acc[it.value] = it.label; return acc; }, {});
 
 const formatLocalTime = (isoString) => {
@@ -345,19 +345,12 @@ const LogData = ({ title, apiUrl }) => {
         let modelLookup = {};
         if (!brandId || !token) return modelLookup;
         
-        const apiUrl = `${API_BASE}/unit-types/${brandId}`;
         try {
-            const modelResponse = await fetch(apiUrl, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-
-            if (modelResponse.ok) {
-                const models = await modelResponse.json();
-                modelLookup = models.reduce((acc, item) => {
-                    acc[item.value] = item.label; 
-                    return acc;
-                }, {});
-            }
+            const { data: models } = await apiClient.get(`/unit-types/${brandId}`);
+            modelLookup = (models || []).reduce((acc, item) => {
+                acc[item.value] = item.label; 
+                return acc;
+            }, {});
         } catch (e) {
             console.error(`[ERROR] Error fetching models for ${brandId}:`, e);
         }
@@ -366,11 +359,10 @@ const LogData = ({ title, apiUrl }) => {
 
     const fetchUsersByRole = async (role) => {
         if (!token) return [];
-        const url = `${API_BASE}/users/by-role/${encodeURIComponent(role)}`;
+        const url = `/users/by-role/${encodeURIComponent(role)}`;
         try {
-            const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
-            if (!res.ok) return [];
-            return await res.json(); // [{value,label}]
+            const res = await apiClient.get(url);
+            return res.data || [];
         } catch {
             return [];
         }
@@ -391,12 +383,8 @@ const LogData = ({ title, apiUrl }) => {
             try {
                 setLoading(true);
                 
-                const logsResponse = await fetch(apiUrl, { headers: { 'Authorization': `Bearer ${token}` }});
-
-                if (!logsResponse.ok) {
-                    throw new Error('Failed to fetch the Log Data.');
-                }
-                const logData = await logsResponse.json();
+                const logsResponse = await apiClient.get(apiUrl);
+                const logData = logsResponse.data;
                 
                 setLogs(logData);
                 
@@ -480,18 +468,11 @@ const LogData = ({ title, apiUrl }) => {
         setSelectedLogDetails(null);
         openModal();
 
-        const detailApiUrl = `http://localhost:5000/storage-maintenance/log/details/${smID}`;
+        const detailApiUrl = `/storage-maintenance/log/details/${smID}`;
         
         try {
-            const response = await fetch(detailApiUrl, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-
-            if (!response.ok) {
-                throw new Error('Failed to fetch detail log data. Status: ' + response.status);
-            }
-
-            const details = await response.json();
+            const response = await apiClient.get(detailApiUrl);
+            const details = response.data;
             setSelectedLogDetails(details);
         
         } catch (err) {
