@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { Paper, Title } from "@mantine/core";
 import ResetPasswordForm from "@/components/auth/ResetPasswordForm";
 
@@ -17,7 +18,9 @@ export default function ResetPasswordPage() {
                     Reset Password
                 </Title>
 
-                <ResetPasswordForm />
+                <Suspense fallback={<div className="text-center text-sm text-gray-500">Loading...</div>}>
+                    <ResetPasswordForm />
+                </Suspense>
             </Paper>
         </div>
     );

@@ -182,43 +182,69 @@ class AuthController:
         """
 
         body_html = f"""
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-                <div style="background: linear-gradient(135deg, #A91D3A 0%, #EE4266 100%); padding: 20px; text-align: center; border-radius: 8px; color: white;">
-                    <h1 style="margin: 0; font-size: 24px;">Indotraktor IBC Portal</h1>
-                    <p style="margin: 8px 0 0; font-size: 16px;">Secure Login Verification</p>
-                </div>
-                
-                <div style="padding: 20px; background: #f9f9f9; border-radius: 8px; margin-top: 20px;">
-                    <p style="font-size: 16px; color: #333; line-height: 1.6;">
-                        Hello,
-                    </p>
-                    
-                    <p style="font-size: 16px; color: #333; line-height: 1.6;">
-                        Your One-Time Password (OTP) for logging in is:
-                    </p>
-                    
-                    <div style="text-align: center; margin: 25px 0;">
-                        <div style="background: #e8f4fd; color: #A91D3A; font-size: 28px; font-weight: bold; padding: 15px; border-radius: 8px; letter-spacing: 4px; display: inline-block;">
-                            {otp}
-                        </div>
-                    </div>
-                    
-                    <p style="font-size: 14px; color: #666; text-align: center; margin-top: 10px;">
-                        ⏱️ This code is valid for <strong>5 minutes</strong>.
-                    </p>
-                    
-                    <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;">
-                    
-                    <p style="font-size: 14px; color: #888; line-height: 1.6;">
-                        If you did not request this login, please ignore this email or contact your administrator immediately.
-                    </p>
-                    
-                    <p style="font-size: 14px; color: #888; text-align: center; margin-top: 20px;">
-                        Thank you,<br>
-                        <strong>Indotraktor Command Data Center</strong>
-                    </p>
-                </div>
-            </div>
+        <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <title>OTP Email</title>
+            </head>
+            <body style="margin:0; padding:0; background:#f2f4f7;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse; background:#f2f4f7;">
+                    <tr>
+                    <td align="center" style="padding:24px 12px;">
+                        <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="border-collapse:collapse; background:#ffffff; border:1px solid #e5e7eb; border-radius:10px; overflow:hidden;">
+                        <tr>
+                            <td style="padding:0;">
+                            <!--[if mso]>
+                            <v:rect xmlns:v="urn:schemas-microsoft-com:vml" fill="true" stroke="false" style="width:600px;height:120px;">
+                                <v:fill type="gradient" color="#A91D3A" color2="#EE4266" angle="90" />
+                                <v:textbox inset="0,0,0,0">
+                            <![endif]-->
+                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse; background:linear-gradient(90deg,#A91D3A,#EE4266);">
+                                <tr>
+                                <td align="center" style="padding:28px 20px; color:#ffffff; font-family:Arial,sans-serif; text-align:center;">
+                                    <div style="font-size:22px; font-weight:700; line-height:1.3; margin:0;">Indotraktor IBC Portal</div>
+                                    <div style="font-size:14px; line-height:1.4; margin-top:6px; letter-spacing:0.2px;">Secure Login Verification</div>
+                                </td>
+                                </tr>
+                            </table>
+                            <!--[if mso]></v:textbox></v:rect><![endif]-->
+                            </td>
+                        </tr>
+
+                        <tr>
+                            <td style="padding:28px 28px 8px; background:#f9f9f9; font-family:Arial,sans-serif; color:#333; line-height:1.6;">
+                            <p style="margin:0 0 16px; font-size:16px; mso-line-height-rule:exactly;">Hello,</p>
+                            <p style="margin:0 0 18px; font-size:16px; mso-line-height-rule:exactly;">Your One-Time Password (OTP) for logging in is:</p>
+
+                            <table role="presentation" align="center" cellpadding="0" cellspacing="0" style="margin:0 auto 20px; border-collapse:collapse;">
+                                <tr>
+                                <td style="background:#e8f4fd; color:#A91D3A; font-size:28px; font-weight:700; letter-spacing:4px; padding:14px 22px; text-align:center; border-radius:8px; mso-padding-alt:14px 22px;">
+                                    {otp}
+                                </td>
+                                </tr>
+                            </table>
+
+                            <p style="margin:0 0 22px; font-size:14px; color:#555; text-align:center; mso-line-height-rule:exactly;">
+                                This code is valid for <strong>5 minutes</strong>.
+                            </p>
+
+                            <hr style="border:none; border-top:1px solid #e5e7eb; margin:16px 0 20px;">
+
+                            <p style="margin:0 0 12px; font-size:14px; color:#666; mso-line-height-rule:exactly;">
+                                If you did not request this login, please ignore this email or contact your administrator immediately.
+                            </p>
+                            <p style="margin:0; font-size:14px; color:#444; text-align:center; font-weight:700; mso-line-height-rule:exactly;">
+                                Indotraktor Command Data Center
+                            </p>
+                            </td>
+                        </tr>
+                        </table>
+                    </td>
+                    </tr>
+                </table>
+            </body>
+            </html>
         """
 
         try:
@@ -228,10 +254,10 @@ class AuthController:
                 body=body_text,
                 html_body=body_html
             )
-            current_app.logger.info(f"✅ OTP email sent to {email}")
+            current_app.logger.info(f"OTP email sent to {email}")
         
         except Exception as e:
-            current_app.logger.error(f"❌ Failed to send OTP email to {email}: {str(e)}")
+            current_app.logger.error(f"Failed to send OTP email to {email}: {str(e)}")
 
     def create_user(self, data):
         """Creates a new user. Returns the User object on success, None if email or username already exists."""
@@ -311,58 +337,78 @@ class AuthController:
         """
         
         body_html = f"""
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-                <div style="background: linear-gradient(135deg, #A91D3A 0%, #EE4266 100%); padding: 20px; text-align: center; border-radius: 8px; color: white;">
-                    <h1 style="margin: 0; font-size: 24px;">Welcome to Indotraktor IBC Portal</h1>
-                </div>
-                
-                <div style="padding: 20px; background: #f9f9f9; border-radius: 8px; margin-top: 20px;">
-                    <p style="font-size: 16px; color: #333; line-height: 1.6;">
-                        Hello <strong>{user.firstName} {user.lastName}</strong>,
-                    </p>
-                    
-                    <p style="font-size: 16px; color: #333; line-height: 1.6;">
-                        Your account has been successfully created by the Super Admin.
-                    </p>
-                    
-                    <div style="background: #e8f4fd; padding: 15px; border-radius: 6px; margin: 20px 0;">
-                        <p style="margin: 0; font-weight: bold; color: #A91D3A;">
-                            Account Details:
-                        </p>
-                        <p style="margin: 5px 0;">
-                            <strong>Username:</strong> {user.username}
-                        </p>
-                        <p style="margin: 5px 0;">
-                            <strong>Email:</strong> {user.email}
-                        </p>
-                    </div>
-                    
-                    <p style="font-size: 16px; color: #333; line-height: 1.6;">
-                        To set your password, please click the button below:
-                    </p>
-                    
-                    <div style="text-align: center; margin: 25px 0;">
-                        <a href="http://localhost:3000/forgot-password" 
-                            style="background: #A91D3A; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">
-                            Set Your Password
-                        </a>
-                    </div>
-                    
-                    <p style="font-size: 14px; color: #666; line-height: 1.6;">
-                        <strong>Note:</strong> For security reasons, your initial password is not included in this email. 
-                        You must set your own password using the link above.
-                    </p>
-                    
-                    <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;">
-                    
-                    <p style="font-size: 14px; color: #888; text-align: center;">
-                        This message was sent to you by the Super Admin using the ITR IBC Portal.<br>
-                        If you did not request this account, please contact your administrator immediately.
-                    </p>
-                </div>
-            </div>
-        """
-        
+        <!DOCTYPE html>
+            <html>
+                <head>
+                    <meta charset="UTF-8">
+                    <title>Welcome Email</title>
+                </head>
+                <body style="margin:0; padding:0; background:#f2f4f7;">
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse; background:#f2f4f7;">
+                        <tr>
+                        <td align="center" style="padding:24px 12px;">
+                            <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="border-collapse:collapse; background:#ffffff; border:1px solid #e5e7eb; border-radius:10px; overflow:hidden;">
+                            <tr>
+                                <td style="padding:0; text-align:center;">
+                                <!--[if mso]>
+                                <v:rect xmlns:v="urn:schemas-microsoft-com:vml" fill="true" stroke="false" style="width:600px;height:120px;">
+                                    <v:fill type="gradient" color="#A91D3A" color2="#EE4266" angle="90" />
+                                    <v:textbox inset="0,0,0,0">
+                                <![endif]-->
+                                <div style="background:linear-gradient(90deg,#A91D3A,#EE4266); padding:28px 20px; color:#ffffff; font-family:Arial,sans-serif;">
+                                    <div style="font-size:22px; font-weight:700; line-height:1.3; margin:0;">Welcome to Indotraktor IBC Portal</div>
+                                    <div style="font-size:14px; line-height:1.4; margin-top:6px; letter-spacing:0.2px;">Secure Account Creation</div>
+                                </div>
+                                <!--[if mso]></v:textbox></v:rect><![endif]-->
+                                </td>
+                            </tr>
+
+                            <tr>
+                                <td style="padding:28px 28px 8px; background:#f9f9f9; font-family:Arial,sans-serif; color:#333; line-height:1.6;">
+                                <p style="margin:0 0 16px; font-size:16px; mso-line-height-rule:exactly;">Hello <strong>{user.firstName} {user.lastName}</strong>,</p>
+                                <p style="margin:0 0 18px; font-size:16px; mso-line-height-rule:exactly;">Your account has been successfully created by the Super Admin.</p>
+
+                                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse; background:#e8f4fd; border-radius:6px; margin:20px 0; padding:0;">
+                                    <tr>
+                                    <td style="padding:15px 18px; font-size:14px; color:#A91D3A; font-weight:700;">Account Details:</td>
+                                    </tr>
+                                    <tr>
+                                    <td style="padding:0 18px 10px; font-size:14px; color:#333; mso-line-height-rule:exactly;"><strong>Username:</strong> {user.username}</td>
+                                    </tr>
+                                    <tr>
+                                    <td style="padding:0 18px 15px; font-size:14px; color:#333; mso-line-height-rule:exactly;"><strong>Email:</strong> {user.email}</td>
+                                    </tr>
+                                </table>
+
+                                <p style="margin:0 0 14px; font-size:16px; color:#333; mso-line-height-rule:exactly;">To set your password, please click the button below:</p>
+
+                                <table role="presentation" align="center" cellpadding="0" cellspacing="0" style="margin:0 auto 22px; border-collapse:collapse;">
+                                    <tr>
+                                    <td align="center" style="background:#A91D3A; color:#ffffff; padding:12px 30px; border-radius:6px; font-weight:700; font-size:14px; font-family:Arial,sans-serif; mso-padding-alt:12px 30px;">
+                                        <a href="http://localhost:3000/forgot-password" style="color:#ffffff; text-decoration:none; display:inline-block;">Set Your Password</a>
+                                    </td>
+                                    </tr>
+                                </table>
+
+                                <p style="margin:0 0 16px; font-size:14px; color:#666; mso-line-height-rule:exactly;">
+                                    <strong>Note:</strong> For security reasons, your initial password is not included in this email. You must set your own password using the link above.
+                                </p>
+
+                                <hr style="border:none; border-top:1px solid #e5e7eb; margin:18px 0 20px;">
+
+                                <p style="margin:0 0 10px; font-size:14px; color:#888; mso-line-height-rule:exactly;">
+                                    This message was sent to you by the Super Admin using the ITR IBC Portal.<br>
+                                    If you did not request this account, please contact your administrator immediately.
+                                </p>
+                                </td>
+                            </tr>
+                            </table>
+                        </td>
+                        </tr>
+                    </table>
+                </body>
+            </html>
+        """        
         try:
             self.email_service.send_email(
                 to=user.email,
