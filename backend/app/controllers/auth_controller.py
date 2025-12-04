@@ -192,7 +192,7 @@ class AuthController:
                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse; background:#f2f4f7;">
                     <tr>
                     <td align="center" style="padding:24px 12px;">
-                        <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="border-collapse:collapse; background:#ffffff; border:1px solid #e5e7eb; border-radius:10px; overflow:hidden;">
+                        <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="border-collapse:collapse; background:#ffffff; border:1px solid #e5e7eb; border-radius:10px; overflow:hidden; width:100%; max-width:600px;">
                         <tr>
                             <td style="padding:0;">
                             <!--[if mso]>
@@ -200,9 +200,9 @@ class AuthController:
                                 <v:fill type="gradient" color="#A91D3A" color2="#EE4266" angle="90" />
                                 <v:textbox inset="0,0,0,0">
                             <![endif]-->
-                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse; background:linear-gradient(90deg,#A91D3A,#EE4266);">
+                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse; width:100%;">
                                 <tr>
-                                <td align="center" style="padding:28px 20px; color:#ffffff; font-family:Arial,sans-serif; text-align:center;">
+                                <td align="center" style="padding:28px 20px; color:#ffffff; font-family:Arial,sans-serif; text-align:center; background:linear-gradient(90deg,#A91D3A,#EE4266); width:100%; display:block;">
                                     <div style="font-size:22px; font-weight:700; line-height:1.3; margin:0;">Indotraktor IBC Portal</div>
                                     <div style="font-size:14px; line-height:1.4; margin-top:6px; letter-spacing:0.2px;">Secure Login Verification</div>
                                 </td>

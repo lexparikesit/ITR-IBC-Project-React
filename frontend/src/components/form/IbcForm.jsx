@@ -558,6 +558,7 @@ export function MultiStepIbcForm() {
                         <Grid.Col span={{ base: 12, md: 6 }}>
                             <TextInput
                                 label="Attachment Type"
+                                placeholder="Attachment Type"
                                 {...detailForm.getInputProps("AttachmentType")}
                                 disabled={step > 2}
                             />
@@ -565,6 +566,7 @@ export function MultiStepIbcForm() {
                         <Grid.Col span={{ base: 12, md: 6 }}>
                             <TextInput
                                 label="Attachment Supplier"
+                                placeholder="Attachment Supplier Name"
                                 {...detailForm.getInputProps("AttachmentSupplier")}
                                 disabled={step > 2}
                             />
@@ -572,13 +574,15 @@ export function MultiStepIbcForm() {
                         <Grid.Col span={{ base: 12, md: 6 }}>
                             <TextInput
                                 label="Delivery Address"
+                                placeholder="Input Delivery Address"
                                 {...detailForm.getInputProps("DeliveryAddress")}
                                 disabled={step > 2}
                             />
                         </Grid.Col>
                         <Grid.Col span={{ base: 12, md: 6 }}>
                             <TextInput
-                                label="Delivery Cust PIC"
+                                label="Delivery Customer PIC"
+                                placeholder="Input Delivery Customer PIC (Name - Phone Number)"
                                 {...detailForm.getInputProps("DeliveryCustPIC")}
                                 disabled={step > 2}
                             />
