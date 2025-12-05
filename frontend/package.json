@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:all": "concurrently \"npm run dev\" \"cd ../backend && python run.py\"",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
@@ -35,6 +36,7 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
+    "concurrently": "^9.2.1",
     "eslint": "^9",
     "eslint-config-next": "15.3.4"
   }
