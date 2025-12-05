@@ -282,18 +282,28 @@ export default function UserSettingsPage() {
                             </Group>
                         </form>
                     ) : (
-                        <Group justify="space-between" align="center">
-                            <Text c="dimmed">{userData?.email || 'Loading...'}</Text>
-                            <Button variant="subtle" onClick={() => setIsEditingEmail(true)}>Change</Button>
-                        </Group>
-                    )}
-                </Stack>
+                <Group justify="space-between" align="center">
+                    <Text c="dimmed">{userData?.email || 'Loading...'}</Text>
+                    <Button variant="subtle" onClick={() => setIsEditingEmail(true)}>Change</Button>
+                </Group>
+            )}
+        </Stack>
 
-                <Divider my="sm" />
+        <Divider my="sm" />
 
-                {/* Password Section */}
-                <Stack gap="sm" mb="md">
-                    <Text size="sm" style={{ fontWeight: 500 }}>Password</Text>
+        {/* Roles Section (read-only) */}
+        <Stack gap="sm" mb="md">
+            <Text size="sm" style={{ fontWeight: 500 }}>Roles</Text>
+            <Text c="dimmed">
+                {userData?.roles?.length ? userData.roles.join(', ') : '—'}
+            </Text>
+        </Stack>
+
+        <Divider my="sm" />
+
+        {/* Password Section */}
+        <Stack gap="sm" mb="md">
+            <Text size="sm" style={{ fontWeight: 500 }}>Password</Text>
                     {isEditingPassword ? (
                         <form onSubmit={handlePasswordChange}>
                             <PasswordInput

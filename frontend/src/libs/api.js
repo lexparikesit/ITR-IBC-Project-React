@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const apiClient = axios.create({
-    baseURL: 'https://api-ibc.itr-compass.co.id/api',
+    baseURL: process.env.NEXT_PUBLIC_API_URL || "https://api-ibc.itr-compass.co.id/api",
     timeout: 60000,
 })
 

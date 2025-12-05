@@ -1,7 +1,7 @@
 from flask import Blueprint, request
 from app.controllers import maintenance_check_log_controller as smlc
 
-storage_maintenance_log_bp = Blueprint('storage_maintenance_log_bp', __name__)
+storage_maintenance_log_bp = Blueprint('storage_maintenance_log_bp', __name__, url_prefix='/api')
 
 @storage_maintenance_log_bp.route('/storage-maintenance/log/all', methods=['GET', 'OPTIONS'])
 def get_all_logs():

@@ -13,7 +13,9 @@ socketio = SocketIO(cors_allowed_origins="*")
 def create_app():
     
     app = Flask(__name__)
-    load_dotenv() # Load environment variables from .env file
+    # Load environment variables from backend/.env regardless of current working dir
+    env_path = os.path.join(os.path.dirname(__file__), "..", ".env")
+    load_dotenv(env_path)
 
     # config dari environment variables
     app.config['SECRET_KEY'] = os.getenv("SECRET_KEY")
@@ -54,9 +56,16 @@ def create_app():
     # CORS(app, supports_credentials=True, origins=["http://localhost:3000"])
     # CORS(app, supports_credentials=True, origins=["http://localhost:3000"], allow_headers=["Authorization", "Content-Type"])
 
+    allowed_origins = [
+        origin.strip() for origin in os.getenv(
+            "ALLOWED_ORIGINS",
+            "http://localhost:3000,https://ibc.itr-compass.co.id"
+        ).split(",") if origin.strip()
+    ]
+
     CORS(
         app, 
-        origins=["https://ibc.itr-compass.co.id"],
+        origins=allowed_origins,
         supports_credentials=True,
         allow_headers=["Authorization", "Content-Type"],
         methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]
@@ -65,7 +74,7 @@ def create_app():
     # init extensions
     db.init_app(app)
     mail.init_app(app)
-    socketio.init_app(app, cors_allowed_origins=["https://ibc.itr-compass.co.id"])
+    socketio.init_app(app, cors_allowed_origins=allowed_origins)
 
     from app.models.renault_arrival_form import ArrivalFormModel_RT
     from app.models.manitou_arrival_form import ArrivalFormModel_MA

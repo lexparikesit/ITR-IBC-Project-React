@@ -49,7 +49,11 @@ export function NotificationsProvider({ children }) {
     useEffect(() => {
         if (!token) return;
 
-        const socket = io(process.env.NEXT_PUBLIC_API_URL || "https://api-ibc.itr-compass.co.id", {
+        const socketBase =
+            process.env.NEXT_PUBLIC_SOCKET_URL ||
+            process.env.NEXT_PUBLIC_API_URL?.replace(/\/api$/, "") || "https://api-ibc.itr-compass.co.id";
+
+        const socket = io(socketBase, {
             auth: { token },
             transports: ["websocket"],
         });

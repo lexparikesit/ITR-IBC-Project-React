@@ -60,6 +60,16 @@ def get_user_permissions(user_id):
     
     return [perm.permission_name for perm in permissions]
 
+def get_user_roles(user_id):
+    """Retrieve the list of role names (list[str]) for a user based on their user ID (UUID string)."""
+    
+    roles = db.session.query(IBCRoles.role_name)\
+        .join(IBCUserRoles, IBCRoles.role_id == IBCUserRoles.role_id)\
+        .filter(IBCUserRoles.userid == user_id)\
+        .all()
+
+    return [role.role_name for role in roles]
+
 def jwt_required(f):
     """ Decorator to protect the API route, requires a valid JWT token to be present in the HttpOnly 'session_token' cookie.
     Authenticated user information will be stored in `g` (global request context)."""

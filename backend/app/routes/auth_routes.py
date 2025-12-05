@@ -5,7 +5,18 @@ from datetime import datetime, timedelta
 from app import db
 from app.models.models import User
 from uuid import UUID
-from app.controllers.auth_controller import AuthController, generate_jwt_token, jwt_required, verify_otp_and_login, request_otp_for_login, register_user, auth_controller_instance, get_user_permissions, require_permission
+from app.controllers.auth_controller import (
+    AuthController,
+    generate_jwt_token,
+    jwt_required,
+    verify_otp_and_login,
+    request_otp_for_login,
+    register_user,
+    auth_controller_instance,
+    get_user_permissions,
+    get_user_roles,
+    require_permission,
+)
 import threading
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/api')
@@ -192,6 +203,7 @@ def get_current_user():
         return jsonify({"message": "User not found"}), 404
     
     permissions = get_user_permissions(g.user_id)
+    roles = get_user_roles(g.user_id)
 
     return jsonify({
         "id": str(user.userid),
@@ -199,7 +211,8 @@ def get_current_user():
         "firstName": user.firstName,
         "lastName": user.lastName,
         "email": user.email,
-        "permissions": permissions
+        "permissions": permissions,
+        "roles": roles
     }), 200
 
 # PATCH /api/user/me

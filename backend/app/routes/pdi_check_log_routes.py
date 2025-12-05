@@ -1,7 +1,7 @@
 from flask import Blueprint, request
 from app.controllers import pdi_check_log_controller as pdilc
 
-pdi_check_log_bp = Blueprint('pre_delivery_log_bp', __name__)
+pdi_check_log_bp = Blueprint('pre_delivery_log_bp', __name__, url_prefix='/api')
 
 @pdi_check_log_bp.route('/pre-delivery/log/all', methods=['GET', 'OPTIONS'])
 def get_all_logs():
