@@ -23,7 +23,7 @@
     "axios": "^1.10.0",
     "browser-image-compression": "^2.0.2",
     "dayjs": "^1.11.13",
-    "next": "15.3.4",
+    "next": "^15.5.7",
     "pdf-lib": "^1.17.1",
     "postcss": "^8.5.6",
     "react": "^19.0.0",
@@ -38,6 +38,6 @@
     "@eslint/eslintrc": "^3",
     "concurrently": "^9.2.1",
     "eslint": "^9",
-    "eslint-config-next": "15.3.4"
+    "eslint-config-next": "^15.5.7"
   }
 }
