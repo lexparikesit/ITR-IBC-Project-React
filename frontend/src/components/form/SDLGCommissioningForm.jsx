@@ -144,23 +144,6 @@ export default function SDLGCommissioningForm() {
         setUploading(true);
 
         try {
-            const token = localStorage.getItem('access_token');
-            if (!token) {
-                notifications.show({
-                    title: "Authentication Required",
-                    message: "Please log in again. Authentication token is missing.",
-                    color: "red",
-                });
-                return;
-            } if (!token) {
-                notifications.show({
-                    title: "Authentication Error",
-                    message: "No access token found. Please log in.",
-                    color: "red",
-                });
-                return;
-            }
-
             console.log("Form submitted with values:", values);
 
             const payload = {

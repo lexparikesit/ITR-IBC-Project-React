@@ -216,16 +216,6 @@ export function UnitArrivalChecklistForm() {
 		console.log("Form Submitted (Frontend Data)", values);
 		setUploading(true);
 
-		const token = localStorage.getItem('access_token');
-		if (!token) {
-			notifications.show({
-				title: "Authentication Required",
-				message: "Please log in to submit the form.",
-				color: "red",
-			});
-			return;
-		}
-
 		const vinExists = await checkVinExists(values.vin);
 		if (vinExists) {
 			notifications.show({

@@ -220,7 +220,6 @@ const formatDateOnly = (toDateTimeString) => {
 };
 
 const LogData = ({ title, apiUrl }) => {
-    const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
     const [logs, setLogs] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -350,7 +349,7 @@ const LogData = ({ title, apiUrl }) => {
 
     const fetchLookupData = async (brandId) => {
         let modelLookup = {};
-        if (!brandId || !token) return modelLookup;
+        if (!brandId) return modelLookup;
 
         try {
             const { data: models = [] } = await apiClient.get(`/unit-types/${brandId}`);
@@ -366,8 +365,6 @@ const LogData = ({ title, apiUrl }) => {
     };
 
     const fetchCustomerData = async () => {
-        if (!token) return {};
-
         try {
             const { data: customers = [] } = await apiClient.get("/customers");
 
@@ -410,8 +407,7 @@ const LogData = ({ title, apiUrl }) => {
         return formattedWords.join(" ");
     };
 
-    const fetchUserLookup = async (token) => {
-        if (!token) return { technicians: {}, approvers: {} };
+    const fetchUserLookup = async () => {
 
         try {
             const [techRes, supervisorRes, techHeadRes] = await Promise.all([
@@ -443,16 +439,6 @@ const LogData = ({ title, apiUrl }) => {
 
     useEffect(() => {
         const fetchAllData = async () => {
-            if (!token) {
-                notifications.show({
-                    title: "Authentication Error",
-                    message: "Please log in again. Authentication token is missing.",
-                    color: "red",
-                });
-                setLoading(false);
-                return;
-            }
-
             try {
                 setLoading(true);
 
@@ -474,7 +460,7 @@ const LogData = ({ title, apiUrl }) => {
                 }
 
                 const customerLookup = await fetchCustomerData();
-                const { technicians, approvers } = await fetchUserLookup(token);
+                const { technicians, approvers } = await fetchUserLookup();
 
                 setLookupTables({
                     models: allModelLookup,
@@ -499,7 +485,7 @@ const LogData = ({ title, apiUrl }) => {
         if (apiUrl) {
             fetchAllData();
         }
-    }, [apiUrl, token]);
+    }, [apiUrl]);
 
     const filteredLogs = useMemo(() => {
         const query = searchQuery.toLowerCase();
@@ -530,15 +516,6 @@ const LogData = ({ title, apiUrl }) => {
     const paginatedLogs = filteredLogs.slice(start, end);
 
     const handleOpenModal = async (pdiID) => {
-        if (!token) {
-            notifications.show({
-                title: "Error",
-                message: "Token missing.",
-                color: "red",
-            });
-            return;
-        }
-
         setSelectedLogDetails(null);
         openModal();
 
@@ -618,106 +595,113 @@ const LogData = ({ title, apiUrl }) => {
     const checklist_items = selectedLogDetails?.checklist_items;
     const defect_remarks = selectedLogDetails?.defect_remarks || [];
 
-    if (loading) {
-        return (
-            <Box maw="100%" mx="auto" px="md" ta="center">
-                <Title order={1} mt="md" mb="lg">Loading Form Data...</Title>
-                <Loader size="lg" />
-            </Box>
-        );
-    }
-
-    if (error) {
-        return (
-            <Text c="red" ta="center" mt="xl">Error: {error}</Text>
-        );
-    }
-
     return (
         <Container size="xl" my="xl">
             <Title order={1} mb="xl" ta="center"> {" "} {title}{" "} </Title>
-                <>
-                    <Paper shadow="sm" radius="md" p="md" mb="md">
-                        <Group justify="space-between" align="flex-end" mb="md">
-                            <TextInput
-                                label="Search Unit"
-                                icon={<IconSearch size={14} />}
-                                placeholder="by WO Number, VIN Number, Brand/ Product, or Unit Type"
-                                value={searchQuery}
-                                onChange={(event) => {
-                                    setSearchQuery(event.currentTarget.value);
-                                    setActivePage(1);
-                                }}
-                                w={400}
-                                style={{ alignSelf: "center" }}
-                            />
-                            <Group gap="xs">
-                                {user?.permissions?.includes("download_pdi_log") && (
-                                    <Button
-                                        onClick={downloadExcel}
-                                        variant="outline"
-                                        color="#A91D3A"
-                                        size="lg"
-                                        p={0}
-                                        w={32}
-                                        h={32}
-                                        style={{
-                                            height: "100%",
-                                            width: "40px",
-                                            paddingTop: "2px",
-                                            paddingBottom: "2px",
-                                            marginTop: "23px",
-                                        }}
-                                    >
-                                        <IconDownload size={16} />
-                                    </Button>
-                                )}
-                                <Select
-                                    label="Show Rows"
-                                    placeholder="10"
-                                    data={["10", "20", "30", "40", "50"]}
-                                    value={rowsPerPage}
-                                    onChange={(value) => {
-                                        setRowsPerPage(value);
+                
+                {!loading && !error && (
+                    <Text ta="center" c="dimmed" mt="-md" mb="xs">
+                        Total Units: {filteredLogs.length}
+                    </Text>
+                )}
+
+                {loading && (
+                    <Box ta="center">
+                        <Loader size="lg" />
+                        <Text mt="md">Load Data...</Text>
+                    </Box>
+                )}
+
+                {error && (
+                    <Text c="red" ta="center">
+                        Error Occured: {error}
+                    </Text>
+                )}
+
+                {!loading && !error && (
+                    <>
+                        <Paper shadow="sm" radius="md" p="md" mb="md">
+                            <Group justify="space-between" align="flex-end" mb="md">
+                                <TextInput
+                                    label="Search Unit"
+                                    icon={<IconSearch size={14} />}
+                                    placeholder="by WO Number, VIN Number, Brand/ Product, or Unit Type"
+                                    value={searchQuery}
+                                    onChange={(event) => {
+                                        setSearchQuery(event.currentTarget.value);
                                         setActivePage(1);
                                     }}
-                                    w={80}
+                                    w={400}
+                                    style={{ alignSelf: "center" }}
                                 />
+                                <Group gap="xs">
+                                    {user?.permissions?.includes("download_pdi_log") && (
+                                        <Button
+                                            onClick={downloadExcel}
+                                            variant="outline"
+                                            color="#A91D3A"
+                                            size="lg"
+                                            p={0}
+                                            w={32}
+                                            h={32}
+                                            style={{
+                                                height: "100%",
+                                                width: "40px",
+                                                paddingTop: "2px",
+                                                paddingBottom: "2px",
+                                                marginTop: "23px",
+                                            }}
+                                        >
+                                            <IconDownload size={16} />
+                                        </Button>
+                                    )}
+                                    <Select
+                                        label="Show Rows"
+                                        placeholder="10"
+                                        data={["10", "20", "30", "40", "50"]}
+                                        value={rowsPerPage}
+                                        onChange={(value) => {
+                                            setRowsPerPage(value);
+                                            setActivePage(1);
+                                        }}
+                                        w={80}
+                                    />
+                                </Group>
                             </Group>
-                        </Group>
-                    </Paper>
+                        </Paper>
 
-                    <Paper shadow="sm" radius="md" p="md">
-                        <Table stickyHeader highlightOnHover>
-                            <Table.Thead>
-                                <Table.Tr>
-                                    <Table.Th>No.</Table.Th>
-                                    <Table.Th>WO Number</Table.Th>
-                                    <Table.Th>Type/Model</Table.Th>
-                                    <Table.Th>Brand</Table.Th>
-                                    <Table.Th>VIN</Table.Th>
-                                    <Table.Th>Date of Check</Table.Th>
-                                    <Table.Th>Technician</Table.Th>
-                                    <Table.Th>Approval By</Table.Th>
-                                    <Table.Th>Created By</Table.Th>
-                                    <Table.Th>Created On</Table.Th>
-                                    <Table.Th>Action</Table.Th>
-                                </Table.Tr>
-                            </Table.Thead>
-                            <Table.Tbody>{rows}</Table.Tbody>
-                        </Table>
-                    </Paper>
+                        <Paper shadow="sm" radius="md" p="md">
+                            <Table stickyHeader highlightOnHover>
+                                <Table.Thead>
+                                    <Table.Tr>
+                                        <Table.Th>No.</Table.Th>
+                                        <Table.Th>WO Number</Table.Th>
+                                        <Table.Th>Type/Model</Table.Th>
+                                        <Table.Th>Brand</Table.Th>
+                                        <Table.Th>VIN</Table.Th>
+                                        <Table.Th>Date of Check</Table.Th>
+                                        <Table.Th>Technician</Table.Th>
+                                        <Table.Th>Approval By</Table.Th>
+                                        <Table.Th>Created By</Table.Th>
+                                        <Table.Th>Created On</Table.Th>
+                                        <Table.Th>Action</Table.Th>
+                                    </Table.Tr>
+                                </Table.Thead>
+                                <Table.Tbody>{rows}</Table.Tbody>
+                            </Table>
+                        </Paper>
 
-                    {totalPages > 1 && (
-                        <Box mt="md" ta="center">
-                            <Pagination
-                                total={totalPages}
-                                value={activePage}
-                                onChange={setActivePage}
-                            />
-                        </Box>
-                    )}
-                </>
+                        {totalPages > 1 && (
+                            <Box mt="md" ta="center">
+                                <Pagination
+                                    total={totalPages}
+                                    value={activePage}
+                                    onChange={setActivePage}
+                                />
+                            </Box>
+                        )}
+                    </>
+                )}
 
             <Modal
                 opened={modalOpened}

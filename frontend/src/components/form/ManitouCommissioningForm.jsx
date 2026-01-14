@@ -311,16 +311,6 @@ export function ManitouCommissioningForm() {
         console.log("Form values before submission:", values);
         setUploading(true);
 
-        const token = localStorage.getItem('access_token');
-        if(!token) {
-            notifications.show({
-                title: "Authentication Error",
-                message: "Please log in again. Authentication token is missing.",
-                color: "red",
-            });
-            return;
-        }
-
         let checklistItemsPayload = {};
 
         const payload = {

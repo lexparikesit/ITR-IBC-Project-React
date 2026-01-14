@@ -147,45 +147,23 @@ export function ArrivingPackingQuality() {
     ];
 
     const checkVinExists = async (vin) => {
-		const token = localStorage.getItem('access_token');
-		
-		if (!token) {
-			console.warn("No authentication token found for VIN check.");
-			notifications.show({
-				title: "Authentication Required",
-				message: "Please log in to perform VIN check.",
-				color: "red",
-			});
-			return false; 
-		}
-
-		try {
-			const response = await apiClient.get(`/arrival-check/check-vin/${vin}`);
+        try {
+            const response = await apiClient.get(`/arrival-check/check-vin/${vin}`);
             return response.data.exists;
 
-		} catch (error) {
-			console.error("VIN check failed:", error);
+        } catch (error) {
+            console.error("VIN check failed:", error);
             notifications.show({
                 title: "VIN Check Failed",
                 message: "Unable to verify VIN. Please try again.",
                 color: "red",
             });
             return true;
-		}
-	};
+        }
+    };
 
     const handleSubmit = async (values) => {
-        const token = localStorage.getItem('access_token');
         setUploading(true);
-        
-        if (!token) {
-            notifications.show({
-                title: "Authentication Required",
-                message: "Please log in again. Authentication token is missing.",
-                color: "red",
-            });
-            return;
-        }
 
         if (values.vin) {
             const vinExists = await checkVinExists(values.vin);
@@ -195,6 +173,7 @@ export function ArrivingPackingQuality() {
                     message: "VIN already exists! Please enter a unique VIN.",
                     color: "red",
                 });
+                setUploading(false);
                 return;
             }
         }

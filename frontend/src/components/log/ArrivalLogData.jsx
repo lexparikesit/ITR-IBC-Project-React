@@ -217,7 +217,6 @@ const formatDateSDLG = (input) => {
 };
 
 const LogData = ({ title, apiUrl }) => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null; 
     const [logs, setLogs] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -323,7 +322,7 @@ const LogData = ({ title, apiUrl }) => {
     const fetchLookupData = async (brandId) => {
         let modelLookup = {};
         
-        if (!brandId || !token) return modelLookup;
+        if (!brandId) return modelLookup;
         
         try {
             const { data: models } = await apiClient.get(`/unit-types/${brandId}`);
@@ -338,9 +337,7 @@ const LogData = ({ title, apiUrl }) => {
         return modelLookup;
     };
 
-    const fetchUserLookup = async (token) => {
-        if (!token) return { technicians: {}, approvers: {} };
-        
+    const fetchUserLookup = async () => {
         try {
             const [techRes, supervisorRes, techHeadRes] = await Promise.all([
                 apiClient.get('/users/by-role/Technician'),
@@ -371,16 +368,6 @@ const LogData = ({ title, apiUrl }) => {
 
     useEffect(() => {
         const fetchAllData = async () => {
-            if (!token) {
-                notifications.show({ 
-                    title: "Authentication Error", 
-                    message: "Please log in again. Authentication token is missing.", 
-                    color: "red" 
-                });
-                setLoading(false);
-                return;
-            }
-
             try {
                 setLoading(true);
                 
@@ -399,7 +386,7 @@ const LogData = ({ title, apiUrl }) => {
                     allModelLookup = { ...allModelLookup, ...modelLookupForBrand }; 
                 }
 
-                const { technicians, approvers } = await fetchUserLookup(token);
+                const { technicians, approvers } = await fetchUserLookup();
 
                 setLookupTables({
                     models: allModelLookup,
@@ -423,7 +410,7 @@ const LogData = ({ title, apiUrl }) => {
         if (apiUrl) {
             fetchAllData();
         }
-    }, [apiUrl, token]);
+    }, [apiUrl]);
 
     const filteredLogs = useMemo(() => {
         const query = searchQuery.toLowerCase();
@@ -452,15 +439,6 @@ const LogData = ({ title, apiUrl }) => {
     const paginatedLogs = filteredLogs.slice(start, end);
 
     const handleOpenModal = async (arrivalId) => {
-        if (!token) {
-            notifications.show({ 
-                title: "Error", 
-                message: "Token missing.", 
-                color: "red" 
-            });
-            return;
-        }
-
         setSelectedLogDetails(null);
         openModal();
 

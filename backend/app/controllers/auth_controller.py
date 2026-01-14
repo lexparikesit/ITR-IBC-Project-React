@@ -1,7 +1,16 @@
 from werkzeug.security import generate_password_hash, check_password_hash
-from app.models.models import db, User, UserOtp, PasswordResetToken, IBCPermissionRoles, IBCRolesPermission, IBCRoles, IBCUserRoles
+from app.models.models import (
+    db,
+    User,
+    UserOtp,
+    PasswordResetToken,
+    IBCPermissionRoles,
+    IBCRolesPermission,
+    IBCRoles,
+    IBCUserRoles,
+    RefreshToken,
+)
 from app.service.email_service import EmailService
-from datetime import timedelta
 from functools import wraps
 from flask import request, jsonify, current_app, g
 import random
@@ -10,7 +19,8 @@ import datetime
 import jwt
 import os
 import uuid
-import string
+import secrets
+import hashlib
 
 # configure the JWT
 JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY")
@@ -20,17 +30,20 @@ if not JWT_SECRET_KEY:
                     "Please set a strong secret key for JWT in your .env file or server environment")
 
 JWT_ALGORITHM = "HS256"
-JWT_EXPIRATION_DAYS = 7
+ACCESS_TOKEN_EXP_MINUTES = int(os.environ.get("ACCESS_TOKEN_EXP_MINUTES", "120"))
+REFRESH_TOKEN_EXP_DAYS = int(os.environ.get("REFRESH_TOKEN_EXP_DAYS", "7"))
+REFRESH_TOKEN_BYTE_LENGTH = int(os.environ.get("REFRESH_TOKEN_BYTE_LENGTH", "48"))
 
-def generate_jwt_token(user_id, email, name):
-    """The token payload contains user_id, email, name, expiry time (exp), and issue time (iat)."""
-    
+def generate_jwt_token(user_id, email, name, expires_minutes=ACCESS_TOKEN_EXP_MINUTES):
+    """Build access token payload with default expiration in minutes."""
+
+    now = datetime.datetime.utcnow()
     payload = {
         'user_id': str(user_id),
         'email': email,
         'name': name,
-        'exp': datetime.datetime.utcnow() + timedelta(days=JWT_EXPIRATION_DAYS),
-        'iat': datetime.datetime.utcnow()
+        'exp': now + datetime.timedelta(minutes=expires_minutes),
+        'iat': now
     }
     token = jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
     return token
@@ -47,6 +60,51 @@ def verify_jwt_token(token):
     except jwt.InvalidTokenError:
         current_app.logger.warning("JWT Token is Invalid")
         return None
+
+def _hash_token(token: str) -> str:
+    """Hash a token string using SHA-256 for safe storage/lookup."""
+    
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+def set_auth_cookies(response, access_token: str, refresh_token: str, refresh_expires_at: datetime.datetime | None = None):
+    """Attach httpOnly cookies for access and refresh tokens."""
+
+    secure_cookie = current_app.config.get('FLASK_ENV') == 'production'
+    response.set_cookie(
+        'auth_token',
+        access_token,
+        httponly=True,
+        secure=secure_cookie,
+        samesite='Lax',
+        max_age=ACCESS_TOKEN_EXP_MINUTES * 60,
+        path='/'
+    )
+
+    refresh_max_age = REFRESH_TOKEN_EXP_DAYS * 24 * 60 * 60
+    
+    if refresh_expires_at:
+        remaining = int((refresh_expires_at - datetime.datetime.utcnow()).total_seconds())
+        refresh_max_age = max(0, remaining)
+
+    response.set_cookie(
+        'refresh_token',
+        refresh_token,
+        httponly=True,
+        secure=secure_cookie,
+        samesite='Lax',
+        max_age=refresh_max_age,
+        path='/'
+    )
+    return response
+
+def clear_auth_cookies(response):
+    """Remove auth/refresh cookies."""
+    
+    secure_cookie = current_app.config.get('FLASK_ENV') == 'production'
+    response.set_cookie('auth_token', '', expires=0, httponly=True, secure=secure_cookie, samesite='Lax', path='/')
+    response.set_cookie('refresh_token', '', expires=0, httponly=True, secure=secure_cookie, samesite='Lax', path='/')
+    
+    return response
 
 def get_user_permissions(user_id):
     """Retrieve the list of permissions (list[str]) for a user based on their user ID (UUID string)."""
@@ -71,22 +129,27 @@ def get_user_roles(user_id):
     return [role.role_name for role in roles]
 
 def jwt_required(f):
-    """ Decorator to protect the API route, requires a valid JWT token to be present in the HttpOnly 'session_token' cookie.
-    Authenticated user information will be stored in `g` (global request context)."""
+    """Decorator to protect the API route using Bearer header or HttpOnly auth_token cookie."""
     
     @wraps(f)
     def decorated_function(*args, **kwargs):
+        """Extract and verify JWT token from Authorization header or auth_token cookie."""
+
+        token = None
 
         auth_header = request.headers.get('Authorization')
+        if auth_header and auth_header.lower().startswith('bearer '):
+            parts = auth_header.split(" ")
+            if len(parts) == 2:
+                token = parts[1]
 
-        if not auth_header:
+        if not token:
+            # accept both new (auth_token) and legacy (session_token) cookie names
+            token = request.cookies.get('auth_token') or request.cookies.get('session_token')
+
+        if not token:
             return jsonify({"message": "Authentication token is missing!"}), 401
         
-        try:
-            token = auth_header.split(" ")[1]
-        except IndexError:
-            return jsonify({"message": "Token format invalid (Expected 'Bearer <token>')!"}), 401
-
         # verify token:
         payload = verify_jwt_token(token)
 
@@ -107,6 +170,7 @@ def require_permission(permission_name):
     def decorator(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):
+            """Check if the user has the required permission."""
             
             if not hasattr(g, 'user_id'):
                 return jsonify({"message": "Authentication required"}), 401
@@ -128,10 +192,99 @@ class AuthController:
 
         self.email_service = EmailService()
 
+    def _user_display_name(self, user: User) -> str:
+        """Return best-effort display name for token payloads."""
+        
+        full_name = f"{user.firstName} {user.lastName}".strip()
+        return full_name if full_name else user.username
+
+    def _create_refresh_token_record(self, user_id: str):
+        """Create a new refresh token entry and revoke existing active tokens."""
+
+        RefreshToken.query.filter(
+            RefreshToken.user_id == user_id,
+            RefreshToken.revoked_at.is_(None)
+        ).update({RefreshToken.revoked_at: datetime.datetime.utcnow()})
+
+        raw_token = secrets.token_urlsafe(REFRESH_TOKEN_BYTE_LENGTH)
+        token_hash = _hash_token(raw_token)
+        expires_at = datetime.datetime.utcnow() + datetime.timedelta(days=REFRESH_TOKEN_EXP_DAYS)
+
+        refresh_entry = RefreshToken(
+            user_id=user_id,
+            token_hash=token_hash,
+            expires_at=expires_at,
+            created_at=datetime.datetime.utcnow(),
+        )
+        db.session.add(refresh_entry)
+        return raw_token, expires_at
+
+    def issue_tokens(self, user: User):
+        """Generate access + refresh tokens and persist refresh token hash."""
+
+        access_token = generate_jwt_token(
+            user.userid,
+            user.email,
+            self._user_display_name(user),
+            expires_minutes=ACCESS_TOKEN_EXP_MINUTES
+        )
+        refresh_token, refresh_expires_at = self._create_refresh_token_record(user.userid)
+        db.session.commit()
+        return access_token, refresh_token, refresh_expires_at
+
+    def verify_and_rotate_refresh_token(self, raw_refresh_token: str):
+        """Validate refresh token, rotate it, and return fresh tokens."""
+
+        token_hash = _hash_token(raw_refresh_token)
+        token_entry = RefreshToken.query.filter_by(token_hash=token_hash).first()
+
+        if not token_entry or token_entry.revoked_at is not None:
+            return None
+
+        if token_entry.expires_at < datetime.datetime.utcnow():
+            token_entry.revoked_at = token_entry.revoked_at or datetime.datetime.utcnow()
+            db.session.commit()
+            return None
+
+        user = User.query.filter_by(userid=token_entry.user_id).first()
+        
+        if not user or not user.is_active:
+            token_entry.revoked_at = token_entry.revoked_at or datetime.datetime.utcnow()
+            db.session.commit()
+            return None
+
+        token_entry.revoked_at = datetime.datetime.utcnow()
+        new_refresh_token, new_refresh_expiry = self._create_refresh_token_record(user.userid)
+        access_token = generate_jwt_token(
+            user.userid,
+            user.email,
+            self._user_display_name(user),
+            expires_minutes=ACCESS_TOKEN_EXP_MINUTES
+        )
+        db.session.commit()
+
+        return {
+            "user": user,
+            "access_token": access_token,
+            "refresh_token": new_refresh_token,
+            "refresh_expires_at": new_refresh_expiry,
+        }
+
+    def revoke_refresh_token(self, raw_refresh_token: str):
+        """Revoke a specific refresh token (if it exists)."""
+        
+        token_hash = _hash_token(raw_refresh_token)
+        token_entry = RefreshToken.query.filter_by(token_hash=token_hash).first()
+        
+        if token_entry and token_entry.revoked_at is None:
+            token_entry.revoked_at = datetime.datetime.utcnow()
+            db.session.commit()
+
     def verify_credentials(self, username, password):
         """Verifies user credentials. Returns the User object if valid, None otherwise."""
 
         user = User.query.filter_by(username=username).first()
+        
         if user and user.is_active and check_password_hash(user.password, password):
             return user
         return None

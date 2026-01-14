@@ -28,17 +28,10 @@ export const UserProvider = ({ children }) => {
     const router = useRouter();
 
     const fetchUser = async () => {
-        const token = localStorage.getItem("access_token");
-        if (!token) {
-            setLoading(false);
-            return;
-        }
-
         try {
             const response = await apiClient.get("/user/me");
             const userData = response.data;
 
-            // save to localStorage
             localStorage.setItem("user_data", JSON.stringify(userData));
             setUser(userData);
 
@@ -53,8 +46,6 @@ export const UserProvider = ({ children }) => {
                     localStorage.removeItem("user_data");
                 }
             }
-
-            localStorage.removeItem("access_token");
             
         } finally {
             setLoading(false);
@@ -72,8 +63,8 @@ export const UserProvider = ({ children }) => {
 
     const logout = () => {
         setUser(null);
-        localStorage.removeItem("access_token");
         localStorage.removeItem("user_data");
+        apiClient.post("/logout").catch(() => {});
         router.push("/login");
     };
 

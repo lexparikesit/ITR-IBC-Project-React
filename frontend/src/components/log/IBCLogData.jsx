@@ -283,9 +283,7 @@ const getUnitInformationData = (details, lookupTables) => {
     });
 };
 
-const fetchCustomerData = async (token) => {
-    if (!token) return {};
-    
+const fetchCustomerData = async () => {
     try {
         const { data: customers = [] } = await apiClient.get('/customers');
         const customerMap = {};
@@ -305,10 +303,10 @@ const fetchCustomerData = async (token) => {
     }
 };
 
-const fetchLookupData = async (brandId, token) => {
+const fetchLookupData = async (brandId) => {
     let modelLookup = {};
     
-    if (!brandId || !token) return modelLookup;
+    if (!brandId) return modelLookup;
     
     try {
         const { data: models = [] } = await apiClient.get(`/unit-types/${brandId}`);
@@ -323,9 +321,7 @@ const fetchLookupData = async (brandId, token) => {
     return modelLookup;
 };
 
-const fetchPackageData = async (token) => {
-    if (!token) return {};
-    
+const fetchPackageData = async () => {
     try {
         const { data: packages = [] } = await apiClient.get('/mstPackages');
         const packageMap = {};
@@ -341,9 +337,7 @@ const fetchPackageData = async (token) => {
     }
 };
 
-const fetchAccessoryData = async (token) => {
-    if (!token) return {};
-    
+const fetchAccessoryData = async () => {
     try {
         const { data: accessories = [] } = await apiClient.get('/mstAccesories');
         const accessoryMap = {};
@@ -359,9 +353,7 @@ const fetchAccessoryData = async (token) => {
     }
 };
 
-const fetchRequestorData = async (token) => {
-    if (!token) return {};
-
+const fetchRequestorData = async () => {
     const roles = ["Salesman", "Product Head", "Technical Head"];
     const requestorMap = {};
 
@@ -396,7 +388,6 @@ const fetchRequestorData = async (token) => {
 };
 
 const IBCLogData = ({ title, apiUrl }) => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
     const [logs, setLogs] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -425,7 +416,7 @@ const IBCLogData = ({ title, apiUrl }) => {
     );
 
     const fetchAllData = useCallback(async () => {
-        if (!token || !apiUrl) {
+        if (!apiUrl) {
             setLoading(false);
             return;
         }
@@ -437,16 +428,16 @@ const IBCLogData = ({ title, apiUrl }) => {
             const data = res.data;
             setLogs(data);
 
-            const customerLookup = await fetchCustomerData(token);
-            const packageLookup = await fetchPackageData(token);
-            const accessoryLookup = await fetchAccessoryData(token);
-            const requestorLookup = await fetchRequestorData(token);
+            const customerLookup = await fetchCustomerData();
+            const packageLookup = await fetchPackageData();
+            const accessoryLookup = await fetchAccessoryData();
+            const requestorLookup = await fetchRequestorData();
 
             const uniqueBrands = [...new Set(data.map(log => log.Brand_ID).filter(Boolean))];
             let allModelLookup = {};
             
             for (const brand of uniqueBrands) {
-                const modelLookup = await fetchLookupData(brand, token);
+                const modelLookup = await fetchLookupData(brand);
                 allModelLookup = { ...allModelLookup, ...modelLookup };
             }
 
@@ -469,7 +460,7 @@ const IBCLogData = ({ title, apiUrl }) => {
         } finally {
             setLoading(false);
         }
-    }, [apiUrl, token]);
+    }, [apiUrl]);
 
     useEffect(() => {
         fetchAllData();
@@ -523,14 +514,6 @@ const IBCLogData = ({ title, apiUrl }) => {
     const paginatedLogs = filteredLogs.slice(start, end);
 
     const handleOpenModal = async (ibcId, mode = 'view') => {
-        if (!token) {
-            notifications.show({ 
-                title: "Error", 
-                message: "Token Missing!", 
-                color: "red" });
-            return;
-        }
-
         setSelectedLogDetails(null);
         if (mode === 'edit') {
             setIsEditing(true);
@@ -793,15 +776,6 @@ const IBCLogData = ({ title, apiUrl }) => {
             return;
         }
 
-        if (!token) {
-            notifications.show({
-                title: "Update Failed",
-                message: "Token Missing!",
-                color: "red",
-            });
-            return;
-        }
-
         setEditLoading(true);
 
         const payload = {
@@ -950,18 +924,30 @@ const IBCLogData = ({ title, apiUrl }) => {
         XLSX.writeFile(wb, `ibc_log_${new Date().toISOString().split('T')[0]}.xlsx`);
     };
 
-    if (loading) {
-        return (
-            <Box maw="100%" mx="auto" px="md" ta="center">
-                <Title order={1} mt="md" mb="lg">Loading Form Data...</Title>
-                <Loader size="lg" />
-            </Box>
-        );
-    }
-
     return (
         <Container size="xl" my="xl">
             <Title order={1} mb="xl" ta="center">{title}</Title>
+            
+            {!loading && !error && (
+                <Text ta="center" c="dimmed" mt="-md" mb="xs">
+                    Total Units: {filteredLogs.length}
+                </Text>
+            )}
+
+            {loading && (
+                <Box ta="center">
+                    <Loader size="lg" />
+                    <Text mt="md">Load Data...</Text>
+                </Box>
+            )}
+
+            {error && (
+                <Text c="red" ta="center">
+                    Error Occured: {error}
+                </Text>
+            )}
+
+            {!loading && !error && (
                 <>
                     <Paper shadow="sm" radius="md" p="md" mb="md">
                         <Group justify="space-between" align="flex-end" mb="md" gap="md">
@@ -1040,7 +1026,8 @@ const IBCLogData = ({ title, apiUrl }) => {
                         </Box>
                     )}
                 </>
-
+            )}
+            
             <Modal
                 opened={modalOpened}
                 onClose={handleCloseModal}

@@ -1,17 +1,17 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { 
-    Paper, 
-    Text, 
-    PasswordInput, 
-    Button, 
-    Divider, 
-    Stack, 
-    TextInput, 
-    Title, 
-    Box, 
-    Group, 
+import {
+    Paper,
+    Text,
+    PasswordInput,
+    Button,
+    Divider,
+    Stack,
+    TextInput,
+    Title,
+    Box,
+    Group,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import apiClient from '@/libs/api';
@@ -78,14 +78,20 @@ export default function UserSettingsPage() {
                 color: 'green',
             });
 
-            // Update local state
             if (field === 'password') {
                 setOldPassword('');
                 setNewPassword('');
                 setConfirmPassword('');
                 setIsEditingPassword(false);
             } else {
-                setUserData(prev => ({ ...prev, [field === 'first_name' ? 'firstName' : field === 'last_name' ? 'lastName' : field]: value }));
+                setUserData(prev => ({
+                    ...prev,
+                    [field === 'first_name'
+                        ? 'firstName'
+                        : field === 'last_name'
+                            ? 'lastName'
+                            : field]: value
+                }));
                 if (field === 'first_name') {
                     setNewFirstName('');
                     setFirstNamePassword('');
@@ -159,6 +165,16 @@ export default function UserSettingsPage() {
             <Text c="dimmed" mb="xl"> Edit your Name (First or Last Name), Username, Email and Password. </Text>
 
             <Paper shadow="sm" p="xl" withBorder>
+                {/* Roles Section (read-only) */}
+                <Stack gap="sm" mb="md">
+                    <Text size="sm" style={{ fontWeight: 500 }}>Roles</Text>
+                    <Text c="dimmed">
+                        {userData?.roles?.length ? userData.roles.join(', ') : 'Loading...'}
+                    </Text>
+                </Stack>
+
+                <Divider my="sm" />
+
                 {/* First Name Section */}
                 <Stack gap="sm" mb="md">
                     <Text size="sm" style={{ fontWeight: 500 }}>First Name</Text>
@@ -282,28 +298,18 @@ export default function UserSettingsPage() {
                             </Group>
                         </form>
                     ) : (
-                <Group justify="space-between" align="center">
-                    <Text c="dimmed">{userData?.email || 'Loading...'}</Text>
-                    <Button variant="subtle" onClick={() => setIsEditingEmail(true)}>Change</Button>
-                </Group>
-            )}
-        </Stack>
+                        <Group justify="space-between" align="center">
+                            <Text c="dimmed">{userData?.email || 'Loading...'}</Text>
+                            <Button variant="subtle" onClick={() => setIsEditingEmail(true)}>Change</Button>
+                        </Group>
+                    )}
+                </Stack>
 
-        <Divider my="sm" />
+                <Divider my="sm" />
 
-        {/* Roles Section (read-only) */}
-        <Stack gap="sm" mb="md">
-            <Text size="sm" style={{ fontWeight: 500 }}>Roles</Text>
-            <Text c="dimmed">
-                {userData?.roles?.length ? userData.roles.join(', ') : '—'}
-            </Text>
-        </Stack>
-
-        <Divider my="sm" />
-
-        {/* Password Section */}
-        <Stack gap="sm" mb="md">
-            <Text size="sm" style={{ fontWeight: 500 }}>Password</Text>
+                {/* Password Section */}
+                <Stack gap="sm" mb="md">
+                    <Text size="sm" style={{ fontWeight: 500 }}>Password</Text>
                     {isEditingPassword ? (
                         <form onSubmit={handlePasswordChange}>
                             <PasswordInput

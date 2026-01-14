@@ -12,17 +12,14 @@ export function NotificationsProvider({ children }) {
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(false);
     const [unreadCount, setUnreadCount] = useState(0);
-    const [token, setToken] = useState(null);
-
-    useEffect(() => {
-        if (typeof window !== "undefined") {
-            setToken(localStorage.getItem("access_token"));
-        }
-    }, [user]);
 
     const fetchNotifications = useCallback(
         async (options = { unread: false }) => {
-            if (!token) return;
+            if (!user) {
+                setItems([]);
+                setUnreadCount(0);
+                return;
+            }
             setLoading(true);
 
             try {
@@ -33,13 +30,19 @@ export function NotificationsProvider({ children }) {
                 setUnreadCount((data.data || []).filter((n) => !n.is_read).length);
             
             } catch (err) {
-                console.error("Failed to fetch notifications", err);
+                const status = err.response?.status;
+                if (status === 401) {
+                    setItems([]);
+                    setUnreadCount(0);
+                } else {
+                    console.error("Failed to fetch notifications", err);
+                }
 
             } finally {
                 setLoading(false);
             }
         },
-        [token]
+        [user]
     );
 
     useEffect(() => {
@@ -47,14 +50,14 @@ export function NotificationsProvider({ children }) {
     }, [fetchNotifications]);
 
     useEffect(() => {
-        if (!token) return;
+        if (!user) return;
 
         const socketBase =
             process.env.NEXT_PUBLIC_SOCKET_URL ||
             process.env.NEXT_PUBLIC_API_URL?.replace(/\/api$/, "") || "https://api-ibc.itr-compass.co.id";
 
         const socket = io(socketBase, {
-            auth: { token },
+            withCredentials: true,
             transports: ["websocket"],
         });
 
@@ -78,7 +81,7 @@ export function NotificationsProvider({ children }) {
         });
 
         return () => socket.disconnect();
-    }, [token]);
+    }, [user]);
 
     const markAsRead = useCallback(
         async (id) => {

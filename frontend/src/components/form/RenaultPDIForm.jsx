@@ -310,18 +310,6 @@ export function RenaultPDIForm() {
         setUploading(true);
 
         try {
-            const token = localStorage.getItem('access_token');
-            if (!token) {
-                notifications.show({
-                    title: "Authentication Error",
-                    message: "Please log in again. Authentication token is missing.",
-                    color: "red",
-                });
-                console.log("Authentication token is missing.");
-                setUploading(false);
-                return;
-            }
-
             // Ensure client-side validation passes before building payload
             const validation = form.validate();
             if (validation.hasErrors) {

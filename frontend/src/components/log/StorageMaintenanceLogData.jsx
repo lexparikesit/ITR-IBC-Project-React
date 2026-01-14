@@ -224,9 +224,6 @@ const formatVoltageValue = (val) => {
 };
 
 const LogData = ({ title, apiUrl }) => {
-    const token = typeof window !== 'undefined' ?
-        localStorage.getItem('access_token') : null; 
-    
     const [logs, setLogs] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -343,7 +340,7 @@ const LogData = ({ title, apiUrl }) => {
 
     const fetchLookupData = async (brandId) => {
         let modelLookup = {};
-        if (!brandId || !token) return modelLookup;
+        if (!brandId) return modelLookup;
         
         try {
             const { data: models } = await apiClient.get(`/unit-types/${brandId}`);
@@ -358,7 +355,6 @@ const LogData = ({ title, apiUrl }) => {
     };
 
     const fetchUsersByRole = async (role) => {
-        if (!token) return [];
         const url = `/users/by-role/${encodeURIComponent(role)}`;
         try {
             const res = await apiClient.get(url);
@@ -370,16 +366,6 @@ const LogData = ({ title, apiUrl }) => {
 
     useEffect(() => {
         const fetchAllData = async () => {
-            if (!token) {
-                notifications.show({ 
-                    title: "Authentication Error", 
-                    message: "Please log in again. Authentication token is missing.", 
-                    color: "red" 
-                });
-                setLoading(false);
-                return;
-            }
-
             try {
                 setLoading(true);
                 
@@ -427,7 +413,7 @@ const LogData = ({ title, apiUrl }) => {
         if (apiUrl) {
             fetchAllData();
         }
-    }, [apiUrl, token]);
+    }, [apiUrl]);
 
     const filteredLogs = useMemo(() => {
         const query = searchQuery.toLowerCase();
@@ -456,15 +442,6 @@ const LogData = ({ title, apiUrl }) => {
     const paginatedLogs = filteredLogs.slice(start, end);
 
     const handleOpenModal = async (smID) => {
-        if (!token) {
-            notifications.show({ 
-                title: "Error", 
-                message: "Token missing.", 
-                color: "red" 
-            });
-            return;
-        }
-
         setSelectedLogDetails(null);
         openModal();
 

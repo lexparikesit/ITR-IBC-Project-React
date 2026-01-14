@@ -1,13 +1,11 @@
 from flask import Blueprint, request, jsonify, make_response, session, current_app, g
 from flask_limiter import Limiter
 from werkzeug.security import generate_password_hash
-from datetime import datetime, timedelta
-from app import db
+from app import db, limiter
 from app.models.models import User
 from uuid import UUID
 from app.controllers.auth_controller import (
     AuthController,
-    generate_jwt_token,
     jwt_required,
     verify_otp_and_login,
     request_otp_for_login,
@@ -16,8 +14,22 @@ from app.controllers.auth_controller import (
     get_user_permissions,
     get_user_roles,
     require_permission,
+    set_auth_cookies,
+    clear_auth_cookies,
 )
+from app.security.csrf import generate_csrf_token
 import threading
+from flask_limiter.util import get_remote_address
+
+def _email_or_ip_key():
+    """Limiter key: prefer email from JSON, fallback to client IP."""
+    data = request.get_json(silent=True) or {}
+    return data.get('email') or get_remote_address()
+
+def _username_or_ip_key():
+    """Limiter key: prefer username from JSON, fallback to client IP."""
+    data = request.get_json(silent=True) or {}
+    return data.get('username') or get_remote_address()
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/api')
 
@@ -53,6 +65,7 @@ def register():
 
 # Post /api/login
 @auth_bp.route('/login', methods=['POST'])
+@limiter.limit("5 per 10 minutes", key_func=_username_or_ip_key)
 def login():
     """endpoint for starting login process w/ Username & Password and get_ OTP()"""
 
@@ -82,6 +95,7 @@ def login():
 
 # Post /api/login-otp (Verification of OTP and set JWT Cookie)
 @auth_bp.route('/login-otp', methods=['POST'])
+@limiter.limit("5 per 10 minutes", key_func=_email_or_ip_key)
 def login_with_otp():
     """Endpoint for login with OTP. If successfully, it creates JWT and set within cookie HttpOnly"""
 
@@ -97,12 +111,11 @@ def login_with_otp():
 
     if user:
         # if otp successfully verified, create JWT
-        user_full_name = f"{user.firstName} {user.lastName}" if user.firstName and user.lastName else user.username
-        token = generate_jwt_token(user.userid, user.email, user_full_name)
-        
+        access_token, refresh_token, refresh_expires_at = auth_controller_instance.issue_tokens(user)
+
         response = make_response(jsonify({
             "message": "Login successful!",
-            "access_token": token,
+            "access_token": access_token,  # included for backward compatibility; use cookie instead
             "user_id": str(user.userid),
             "email": user.email,
             "user": {
@@ -114,23 +127,50 @@ def login_with_otp():
             }
         }), 200)
 
-        # Set HttpOnly cookie
-        response.set_cookie(
-            'session_token', 
-            token, 
-            httponly=True, 
-            secure=current_app.config.get('FLASK_ENV') == 'production',
-            samesite='Lax', 
-            max_age=timedelta(days=7).total_seconds()
-        )
+        set_auth_cookies(response, access_token, refresh_token, refresh_expires_at)
         current_app.logger.info(f"User {user.email} logged in successfully via OTP.")
         return response
     else:
         current_app.logger.warning(f"Invalid OTP login attempt for email: {email}")
         return jsonify({"message": "Invalid OTP or email!"}), 401
 
+# POST /api/refresh (rotate refresh token + issue new access token)
+@auth_bp.route('/refresh', methods=['POST'])
+def refresh_session():
+    """Issue a new access token using the httpOnly refresh_token cookie and rotate refresh token."""
+
+    raw_refresh = request.cookies.get('refresh_token')
+    if not raw_refresh:
+        response = make_response(jsonify({"message": "Refresh token missing"}), 401)
+        return clear_auth_cookies(response)
+
+    rotation = auth_controller_instance.verify_and_rotate_refresh_token(raw_refresh)
+    if not rotation:
+        response = make_response(jsonify({"message": "Invalid or expired refresh token"}), 401)
+        return clear_auth_cookies(response)
+
+    user = rotation["user"]
+    access_token = rotation["access_token"]
+    refresh_token = rotation["refresh_token"]
+    refresh_expires_at = rotation["refresh_expires_at"]
+
+    response = make_response(jsonify({
+        "message": "Token refreshed",
+        "user": {
+            "id": str(user.userid),
+            "username": user.username,
+            "firstName": user.firstName,
+            "lastName": user.lastName,
+            "email": user.email,
+        }
+    }), 200)
+
+    set_auth_cookies(response, access_token, refresh_token, refresh_expires_at)
+    return response
+
 # POST /api/resend-otp
 @auth_bp.route('/resend-otp', methods=['POST'])
+@limiter.limit("3 per 10 minutes", key_func=_email_or_ip_key)
 def resend_otp():
     """Endpoint to resend OTP. Receive user_id (or email, email recommended for consistency)."""
     
@@ -149,6 +189,7 @@ def resend_otp():
 
 # POST /api/forgot-password/request-otp
 @auth_bp.route('/forgot-password/request-otp', methods=['POST'])
+@limiter.limit("3 per 10 minutes", key_func=_email_or_ip_key)
 def forgot_password_request_otp():
     """Endpoint for requesting OTP when the user forgets their password."""
     
@@ -163,6 +204,7 @@ def forgot_password_request_otp():
 
 # POST /api/forgot-password/verify-otp
 @auth_bp.route('/forgot-password/verify-otp', methods=['POST'])
+@limiter.limit("5 per 10 minutes", key_func=_email_or_ip_key)
 def forgot_password_verify_otp():
     """Endpoint for verifying OTP when the user forgets their password and receiving a reset token."""
     
@@ -178,6 +220,7 @@ def forgot_password_verify_otp():
 
 # POST /api/forgot-password/reset
 @auth_bp.route('/forgot-password/reset', methods=['POST'])
+@limiter.limit("5 per 30 minutes", key_func=_email_or_ip_key)
 def forgot_password_reset():
     """Endpoint for resetting password using reset token."""
     
@@ -310,15 +353,21 @@ def update_user():
 def logout():
     """Endpoint for user logout by deleting session cookies."""
     
+    refresh_cookie = request.cookies.get('refresh_token')
+    if refresh_cookie:
+        auth_controller_instance.revoke_refresh_token(refresh_cookie)
+
     response = make_response(jsonify({"message": "Logged out successfully"}), 200)
-    response.set_cookie(
-        'session_token', 
-        '', 
-        expires=0, 
-        httponly=True, 
-        secure=current_app.config.get('FLASK_ENV') == 'production', 
-        samesite='Lax'
-    )
+    clear_auth_cookies(response)
 
     current_app.logger.info(f"User {g.user_email} logged out.")
     return response
+
+# GET /api/csrf (issue a short-lived CSRF token for client-side header)
+@auth_bp.route('/csrf', methods=['GET'])
+def get_csrf_token():
+    secret = current_app.config.get("CSRF_SECRET")
+    if not secret:
+        return jsonify({"message": "CSRF not configured"}), 500
+    token = generate_csrf_token(secret)
+    return jsonify({"csrfToken": token})

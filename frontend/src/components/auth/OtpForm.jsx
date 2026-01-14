@@ -38,7 +38,8 @@ export default function OtpForm() {
 		}
 
 		const otpSent = localStorage.getItem("otp_sent") === "true";
-		if (otpSent) {
+		
+        if (otpSent) {
 			setCanResend(false);
 			setTimer(300); // Reset timer to 300 seconds
 			localStorage.removeItem("otp_sent"); // Clear the flag
@@ -84,9 +85,7 @@ export default function OtpForm() {
 			const data = response.data;
 			console.log("API Respond for Verification", data);
 
-			if (data.user_id && data.email && data.user && data.access_token) {
-                localStorage.setItem("access_token", data.access_token);
-
+			if (data.user_id && data.email && data.user) {
 				try {
 					const userRes = await apiClient.get("/user/me");
 					const userData = userRes.data;

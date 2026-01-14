@@ -1,14 +1,23 @@
-from flask import Flask, app
+from flask import Flask, app, request
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from flask_mail import Mail
 from flask_socketio import SocketIO
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from dotenv import load_dotenv
+from app.security.csrf import verify_csrf_token
 import os
+import jwt
 
 db = SQLAlchemy()
 mail = Mail()
 socketio = SocketIO(cors_allowed_origins="*")
+limiter = Limiter(
+    key_func=get_remote_address,
+    default_limits=[],
+    storage_uri="memory://"
+)
 
 def create_app():
     
@@ -51,6 +60,7 @@ def create_app():
     app.config['MAIL_USERNAME'] = os.getenv('EMAIL_USER')
     app.config['MAIL_PASSWORD'] = os.getenv('EMAIL_PASS')
     app.config['MAIL_DEFAULT_SENDER'] = os.getenv('EMAIL_USER')
+    app.config['CSRF_SECRET'] = os.getenv('CSRF_SECRET', app.config['SECRET_KEY'])
 
     # Cors  for ReactJS/ NextJS frontend
     # CORS(app, supports_credentials=True, origins=["http://localhost:3000"])
@@ -67,7 +77,7 @@ def create_app():
         app, 
         origins=allowed_origins,
         supports_credentials=True,
-        allow_headers=["Authorization", "Content-Type"],
+        allow_headers=["Authorization", "Content-Type", "X-CSRF-Token"],
         methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]
     )
 
@@ -75,6 +85,37 @@ def create_app():
     db.init_app(app)
     mail.init_app(app)
     socketio.init_app(app, cors_allowed_origins=allowed_origins)
+    limiter.init_app(app)
+
+    @app.before_request
+    def csrf_protect():
+        """Simple CSRF check for unsafe methods."""
+        if app.config.get("SKIP_CSRF"):
+            return
+
+        if not app.config.get("CSRF_SECRET"):
+            return
+
+        safe_methods = {"GET", "HEAD", "OPTIONS"}
+        if os.getenv("FLASK_ENV", "development") == "development" and request.method == "OPTIONS":
+            return
+
+        if request.method in safe_methods:
+            return
+
+        # allow csrf endpoint itself
+        if request.path.endswith("/csrf"):
+            return
+
+        token = request.headers.get("X-CSRF-Token")
+        if not token:
+            return {"message": "CSRF token missing"}, 403
+        try:
+            verify_csrf_token(token, app.config["CSRF_SECRET"])
+        except jwt.ExpiredSignatureError:
+            return {"message": "CSRF token expired"}, 403
+        except Exception:
+            return {"message": "Invalid CSRF token"}, 403
 
     from app.models.renault_arrival_form import ArrivalFormModel_RT
     from app.models.manitou_arrival_form import ArrivalFormModel_MA

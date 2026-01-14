@@ -234,99 +234,105 @@ const KhoLogData = ({ title, apiUrl }) => {
         )
     });
 
-    if (loading) {
-        return (
-            <Box maw="100%" mx="auto" px="md" ta="center">
-                <Title order={1} mt="md" mb="lg">Loading Form Data...</Title>
-                <Loader size="lg" />
-            </Box>
-        );
-    }
-
-    if (error) {
-        return (
-            <Text c="red" ta="center" mt="xl">Error: {error}</Text>
-        );
-    }
-
     return (
         <Container size="xl" my="xl">
             <Title order={1} mb="xl" ta="center">{title}</Title>
-            <Text ta="center" c="dimmed" mt="-md" mb="xs">
-                Total Entries: {filteredLogs.length}
-            </Text>
-            <Paper shadow="sm" radius="md" p="md" mb="md">
-                <Group justify="space-between" align="flex-end" mb="md">
-                    <TextInput
-                        label="Search Unit"
-                        placeholder="by VIN, Brand, Unit Type, or Customer"
-                        value={searchQuery}
-                        onChange={(e) => {
-                            setSearchQuery(e.currentTarget.value);
-                            setActivePage(1);
-                        }}
-                        w={400}
-                    />
-                    <Group gap="xs">
-                        {user?.permissions?.includes("download_kho_log") && (
-                            <Button
-                                onClick={downloadExcel}
-                                variant="outline"
-                                color="#A91D3A"
-                                size="lg"
-                                p={0}
-                                w={32}
-                                h={32}
-                                style={{
-                                    height: "100%",
-                                    width: "40px",
-                                    paddingTop: "2px",
-                                    paddingBottom: "2px",
-                                    marginTop: "23px",
-                                }}
-                            >
-                                <IconDownload size={16} />
-                            </Button>
-                        )}
-                        <Select
-                            label="Show Rows"
-                            data={["10", "20", "30", "50"]}
-                            value={rowsPerPage}
-                            onChange={(val) => {
-                                setRowsPerPage(val);
-                                setActivePage(1);
-                            }}
-                            w={80}
-                        />
-                    </Group>
-                </Group>
-            </Paper>
+            
+            {!loading && !error && (
+                <Text ta="center" c="dimmed" mt="-md" mb="xs">
+                    Total Units: {filteredLogs.length}
+                </Text>
+            )}
 
-            <Paper shadow="sm" radius="md" p="md">
-                <Table stickyHeader highlightOnHover>
-                    <Table.Thead>
-                        <Table.Tr>
-                            <Table.Th>No.</Table.Th>
-                            <Table.Th>Dealer Code</Table.Th>
-                            <Table.Th>Customer</Table.Th>
-                            <Table.Th>Location</Table.Th>
-                            <Table.Th>Brand</Table.Th>
-                            <Table.Th>Type/Model</Table.Th>
-                            <Table.Th>VIN</Table.Th>
-                            <Table.Th>BAST Date</Table.Th>
-                            <Table.Th>Requestor</Table.Th>
-                            <Table.Th>Created On</Table.Th>
-                            <Table.Th>PDF Review</Table.Th>
-                        </Table.Tr>
-                    </Table.Thead>
-                    <Table.Tbody>{rows}</Table.Tbody>
-                </Table>
-            </Paper>
-
-            {totalPages > 1 && (
-                <Box mt="md" ta="center">
-                    <Pagination total={totalPages} value={activePage} onChange={setActivePage} />
+            {loading && (
+                <Box ta="center">
+                    <Loader size="lg" />
+                    <Text mt="md">Load Data...</Text>
                 </Box>
+            )}
+
+            {error && (
+                <Text c="red" ta="center">
+                    Error Occured: {error}
+                </Text>
+            )}
+
+            {!loading && !error && (
+                <>
+                    <Paper shadow="sm" radius="md" p="md" mb="md">
+                        <Group justify="space-between" align="flex-end" mb="md">
+                            <TextInput
+                                label="Search Unit"
+                                placeholder="by VIN, Brand, Unit Type, or Customer"
+                                value={searchQuery}
+                                onChange={(e) => {
+                                    setSearchQuery(e.currentTarget.value);
+                                    setActivePage(1);
+                                }}
+                                w={400}
+                            />
+                            <Group gap="xs">
+                                {user?.permissions?.includes("download_kho_log") && (
+                                    <Button
+                                        onClick={downloadExcel}
+                                        variant="outline"
+                                        color="#A91D3A"
+                                        size="lg"
+                                        p={0}
+                                        w={32}
+                                        h={32}
+                                        style={{
+                                            height: "100%",
+                                            width: "40px",
+                                            paddingTop: "2px",
+                                            paddingBottom: "2px",
+                                            marginTop: "23px",
+                                        }}
+                                    >
+                                        <IconDownload size={16} />
+                                    </Button>
+                                )}
+                                <Select
+                                    label="Show Rows"
+                                    data={["10", "20", "30", "50"]}
+                                    value={rowsPerPage}
+                                    onChange={(val) => {
+                                        setRowsPerPage(val);
+                                        setActivePage(1);
+                                    }}
+                                    w={80}
+                                />
+                            </Group>
+                        </Group>
+                    </Paper>
+
+                    <Paper shadow="sm" radius="md" p="md">
+                        <Table stickyHeader highlightOnHover>
+                            <Table.Thead>
+                                <Table.Tr>
+                                    <Table.Th>No.</Table.Th>
+                                    <Table.Th>Dealer Code</Table.Th>
+                                    <Table.Th>Customer</Table.Th>
+                                    <Table.Th>Location</Table.Th>
+                                    <Table.Th>Brand</Table.Th>
+                                    <Table.Th>Type/Model</Table.Th>
+                                    <Table.Th>VIN</Table.Th>
+                                    <Table.Th>BAST Date</Table.Th>
+                                    <Table.Th>Requestor</Table.Th>
+                                    <Table.Th>Created On</Table.Th>
+                                    <Table.Th>PDF Review</Table.Th>
+                                </Table.Tr>
+                            </Table.Thead>
+                            <Table.Tbody>{rows}</Table.Tbody>
+                        </Table>
+                    </Paper>
+
+                    {totalPages > 1 && (
+                        <Box mt="md" ta="center">
+                            <Pagination total={totalPages} value={activePage} onChange={setActivePage} />
+                        </Box>
+                    )}
+                </>
             )}
 
             <Modal

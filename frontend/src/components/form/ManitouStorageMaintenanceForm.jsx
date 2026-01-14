@@ -306,16 +306,6 @@ export function ManitouStorageMaintenanceForm() {
         console.log('Form Submitted (Frontend Data)', values);
         setUploading(true);
 
-        const token = localStorage.getItem('access_token');
-        if (!token) {
-            notifications.show({
-                title: "Authentication Error",
-                message: "Please log in again. Authentication token is missing.",
-                color: "red",
-            });
-            return;
-        }
-
         console.log('Form Submitted (Frontend Data)', values);
 
         const payload = {

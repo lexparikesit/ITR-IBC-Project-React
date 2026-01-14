@@ -296,17 +296,6 @@ export function RenaultCommissioningForm() {
         setUploading(true);
 
         try {
-            const token = localStorage.getItem("access_token");
-            if (!token) {
-                notifications.show({
-                    title: "Authentication Error",
-                    message: "Please log in again. Authentication token is missing.",
-                    color: "red",
-                });
-                console.log("Authentication token is missing.");
-                return;
-            }
-
             const payload = {
                 brand: 'renault',
                 reportInfo: {

@@ -24,6 +24,11 @@ class User(db.Model):
     otps: Mapped[List["UserOtp"]] = relationship(back_populates="user")
     reset_tokens: Mapped[List["PasswordResetToken"]] = relationship(back_populates="user")
     user_roles = db.relationship("IBCUserRoles", back_populates="user") 
+    
+    refresh_tokens: Mapped[List["RefreshToken"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan"
+    )
 
 class UserOtp(db.Model):
 
@@ -85,3 +90,16 @@ class IBCUserRoles(db.Model):
     role_id = db.Column(UNIQUEIDENTIFIER, db.ForeignKey('IBC_Roles.role_id'), nullable=False, primary_key=True)
     user = db.relationship("User", back_populates="user_roles")
     role = db.relationship("IBCRoles", back_populates="user_roles")
+
+class RefreshToken(db.Model):
+
+    __tablename__ = 'IBC_Refresh_Tokens'
+
+    token_id = db.Column(UNIQUEIDENTIFIER, primary_key=True, default=uuid.uuid4)
+    user_id = db.Column(UNIQUEIDENTIFIER, db.ForeignKey('IBC_Users.userid'), nullable=False)
+    token_hash = db.Column(db.String(255), unique=True, nullable=False)
+    expires_at = db.Column(db.DateTime, nullable=False)
+    revoked_at = db.Column(db.DateTime)
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
+
+    user: Mapped[User] = relationship(back_populates="refresh_tokens")
