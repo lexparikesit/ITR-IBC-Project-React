@@ -58,7 +58,8 @@ export function NotificationsProvider({ children }) {
 
         const socket = io(socketBase, {
             withCredentials: true,
-            transports: ["websocket"],
+            transports: ["polling"],
+            upgrade: false,
         });
 
         socket.on("notification:new", (notification) => {

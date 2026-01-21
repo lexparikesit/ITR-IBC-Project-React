@@ -18,7 +18,8 @@ def _extract_token():
     if auth_header and auth_header.startswith("Bearer "):
         return auth_header.split(" ", 1)[1]
 
-    return None
+    cookie_token = request.cookies.get("auth_token") or request.cookies.get("session_token")
+    return cookie_token
 
 
 def register_notifications_events(socketio):

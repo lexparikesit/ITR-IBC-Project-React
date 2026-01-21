@@ -6,11 +6,22 @@ import React, {
     useState,
     useEffect
 } from "react"
-import { useRouter } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import apiClient from "@/libs/api";
 
 // create context
 const UserContext = createContext(null);
+
+const PUBLIC_ROUTES = [
+    "/login",
+    "/forgot-password",
+    "/reset-password",
+    "/otp",
+    "/otp-verify",
+];
+
+const isPublicRoute = (pathname) =>
+    PUBLIC_ROUTES.some((route) => pathname === route);
 
 // hook custome
 export const useUser = () => {
@@ -26,6 +37,7 @@ export const UserProvider = ({ children }) => {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
     const router = useRouter();
+    const pathname = usePathname();
 
     const fetchUser = async () => {
         try {
@@ -53,8 +65,12 @@ export const UserProvider = ({ children }) => {
     };
 
     useEffect(() => {
+        if (isPublicRoute(pathname)) {
+            setLoading(false);
+            return;
+        }
         fetchUser();
-    }, []);
+    }, [pathname]);
 
     const login = (userData) => {
         setUser(userData);

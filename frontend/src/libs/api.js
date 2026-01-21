@@ -1,10 +1,12 @@
 import axios from 'axios';
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://api-ibc.itr-compass.co.id/api";
+
 const apiClient = axios.create({
-    baseURL: process.env.NEXT_PUBLIC_API_URL || "https://api-ibc.itr-compass.co.id/api",
+    baseURL: API_BASE_URL,
     timeout: 60000,
     withCredentials: true,
-})
+});
 
 let csrfToken = null;
 const safeMethods = ['get', 'head', 'options'];
@@ -12,10 +14,47 @@ let isRefreshing = false;
 let refreshPromise = null;
 
 const csrfClient = axios.create({
-    baseURL: process.env.NEXT_PUBLIC_API_URL || "https://api-ibc.itr-compass.co.id/api",
+    baseURL: API_BASE_URL,
     timeout: 60000,
     withCredentials: true,
 });
+
+const AUTH_ENDPOINTS = [
+    "/login",
+    "/login-otp",
+    "/refresh",
+    "/logout",
+    "/resend-otp",
+    "/register",
+    "/forgot-password",
+    "/csrf",
+];
+
+const PUBLIC_ROUTES = [
+    "/login",
+    "/forgot-password",
+    "/reset-password",
+    "/otp",
+    "/otp-verify",
+];
+
+function isPublicRoute(pathname) {
+    return PUBLIC_ROUTES.some((route) => pathname === route);
+}
+
+function getRequestPath(config) {
+    if (!config) return "";
+    try {
+        const base = config.baseURL || API_BASE_URL;
+        return new URL(config.url || "", base).pathname;
+    } catch (err) {
+        return config.url || "";
+    }
+}
+
+function isAuthEndpoint(pathname) {
+    return AUTH_ENDPOINTS.some((segment) => pathname.includes(segment));
+}
 
 async function ensureCsrfToken() {
     if (csrfToken) return csrfToken;
@@ -49,10 +88,12 @@ apiClient.interceptors.response.use(
         const status = error.response?.status;
         const message = (error.response?.data?.message || "").toString().toLowerCase();
         const config = error.config || {};
+        const path = getRequestPath(config);
 
         const isCsrfError = status === 403 && message.includes("csrf");
         const isAuthError = status === 401;
-        const isRefreshCall = config?.url?.includes('/refresh');
+        const isRefreshCall = path.includes("/refresh");
+        const skipAuthRetry = isAuthEndpoint(path);
 
         if (isCsrfError && !config._csrfRetried) {
             try {
@@ -68,7 +109,7 @@ apiClient.interceptors.response.use(
         }
 
         // If 401, try refresh once, then retry original request; if still fails, logout hard
-        if (isAuthError && !config._retryAuth && !isRefreshCall) {
+        if (isAuthError && !config._retryAuth && !isRefreshCall && !skipAuthRetry) {
             try {
                 if (!isRefreshing) {
                     isRefreshing = true;
@@ -82,10 +123,14 @@ apiClient.interceptors.response.use(
             } catch (e) {
                 isRefreshing = false;
                 refreshPromise = null;
-                // Hard logout: best-effort call, then redirect
-                try { await apiClient.post('/logout'); } catch (_) {}
+                // Hard logout: clear local state, then redirect
                 if (typeof window !== 'undefined') {
-                    window.location = '/login';
+                    localStorage.removeItem("user_data");
+                    localStorage.removeItem("user_email_for_otp");
+                    const currentPath = window.location?.pathname || "";
+                    if (!isPublicRoute(currentPath)) {
+                        window.location = '/login';
+                    }
                 }
             }
         }
