@@ -46,3 +46,107 @@ a {
   }
 }
 
+.print-only {
+  display: none;
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+
+  body {
+    background: #ffffff;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  .print-area,
+  .print-area * {
+    visibility: visible !important;
+  }
+
+  .print-area {
+    position: static;
+    width: 100%;
+  }
+
+  .mantine-Modal-overlay {
+    display: none !important;
+  }
+
+  .mantine-Modal-content {
+    box-shadow: none !important;
+  }
+
+  .mantine-ScrollArea-root,
+  .mantine-ScrollArea-viewport {
+    max-height: none !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  .print-area table {
+    page-break-inside: auto;
+  }
+
+  .print-area tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+
+  .unit-info-grid {
+    margin-top: 12px;
+  }
+}
+
+.print-header {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  grid-template-rows: auto;
+  align-items: center;
+  row-gap: 2px;
+  margin-bottom: 0;
+}
+
+.print-header-title {
+  grid-column: 2;
+}
+
+.print-header-logo {
+  grid-column: 1;
+  justify-self: start;
+}
+
+.print-logo {
+  height: 34px;
+  width: auto;
+  object-fit: contain;
+}
+
+.print-footer {
+  font-size: 10px;
+  color: #6b7280;
+  position: fixed;
+  left: 12mm;
+  right: 12mm;
+  bottom: 10mm;
+}
+
+@media print {
+  .print-logo {
+    height: 40px;
+  }
+}
+

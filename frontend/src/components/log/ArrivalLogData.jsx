@@ -21,7 +21,8 @@ import {
     SimpleGrid,
 } from '@mantine/core';
 import * as XLSX from 'xlsx';
-import { IconSearch, IconEye, IconAlertCircle, IconDownload } from '@tabler/icons-react';
+import { IconSearch, IconEye, IconAlertCircle, IconDownload, IconPrinter } from '@tabler/icons-react';
+import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { useDisclosure } from '@mantine/hooks';
 import { notifications } from "@mantine/notifications";
 import { BRAND_CHECKLIST_MAP } from '@/config/ArrivalMap';
@@ -29,6 +30,7 @@ import { useUser } from '@/context/UserContext';
 import apiClient from '@/libs/api';
 
 const EXCLUDED_KEYS = ['remarks', 'notes', 'checklist_items', 'id', 'arrivalId', 'details'];
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api-ibc.itr-compass.co.id/api';
 const formatKeyToLabel = (key) => {
     if (!key) return '';
     if (key === 'hourMeter') return 'Hour Meter (HM)'; 
@@ -216,6 +218,485 @@ const formatDateSDLG = (input) => {
     });
 };
 
+const loadLogoImage = async (pdfDoc) => {
+    const paths = ['/images/ITR-logo.png', '/ITR-logo.png'];
+
+    for (const path of paths) {
+        try {
+            const response = await fetch(path);
+            if (!response.ok) continue;
+            const bytes = new Uint8Array(await response.arrayBuffer());
+            return await pdfDoc.embedPng(bytes);
+        } catch (error) {
+            // Ignore and try next path
+        }
+    }
+    return null;
+};
+
+const loadRemoteImage = async (pdfDoc, url, cache) => {
+    if (!url || typeof url !== 'string') return null;
+    const cached = cache.get(url);
+    if (cached !== undefined) return cached;
+
+    try {
+        const targetUrl = url.startsWith('http')
+            ? `${API_BASE_URL}/media/proxy?url=${encodeURIComponent(url)}`
+            : url;
+        const response = await fetch(targetUrl, { credentials: 'include' });
+        if (!response.ok) {
+            cache.set(url, null);
+            return null;
+        }
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        const contentType = (response.headers.get('content-type') || '').toLowerCase();
+        let image = null;
+
+        if (contentType.includes('png')) {
+            image = await pdfDoc.embedPng(bytes);
+        } else if (contentType.includes('jpeg') || contentType.includes('jpg')) {
+            image = await pdfDoc.embedJpg(bytes);
+        } else {
+            try {
+                image = await pdfDoc.embedPng(bytes);
+            } catch (err) {
+                image = await pdfDoc.embedJpg(bytes);
+            }
+        }
+
+        if (!image) {
+            cache.set(url, null);
+            return null;
+        }
+
+        const result = { image, width: image.width, height: image.height };
+        cache.set(url, result);
+        return result;
+    } catch (error) {
+        cache.set(url, null);
+        return null;
+    }
+};
+
+const safeFileName = (value) => {
+    const base = String(value || 'arrival_check_log');
+    return base
+        .replace(/[^a-z0-9_-]+/gi, '_')
+        .replace(/^_+|_+$/g, '')
+        .toLowerCase() || 'arrival_check_log';
+};
+
+const wrapText = (text, font, size, maxWidth) => {
+    const content = String(text ?? '');
+    if (!content) return [''];
+
+    const words = content.split(/\s+/);
+    const lines = [];
+    let line = '';
+
+    const pushLine = (value) => {
+        if (value) lines.push(value);
+    };
+
+    words.forEach((word) => {
+        const testLine = line ? `${line} ${word}` : word;
+        const width = font.widthOfTextAtSize(testLine, size);
+        if (width <= maxWidth) {
+            line = testLine;
+            return;
+        }
+
+        if (line) {
+            pushLine(line);
+            line = '';
+        }
+
+        if (font.widthOfTextAtSize(word, size) <= maxWidth) {
+            line = word;
+        } else {
+            let chunk = '';
+            for (const ch of word) {
+                const testChunk = `${chunk}${ch}`;
+                if (font.widthOfTextAtSize(testChunk, size) > maxWidth && chunk) {
+                    lines.push(chunk);
+                    chunk = ch;
+                } else {
+                    chunk = testChunk;
+                }
+            }
+            line = chunk;
+        }
+    });
+
+    pushLine(line);
+    return lines.length ? lines : [''];
+};
+
+const buildChecklistTable = (details) => {
+    if (!details || !details.checklist_items) {
+        return { columns: [], rows: [] };
+    }
+
+    const brand = (details.brand || '').toLowerCase();
+    const rows = [];
+
+    if (brand === 'sdlg') {
+        const sdlgMap = BRAND_CHECKLIST_MAP.sdlg;
+        const technicalRequirements = sdlgMap ? sdlgMap.technicalRequirements : [];
+        details.checklist_items.forEach((item, index) => {
+            const itemContent = technicalRequirements[index] || item.itemName || 'N/A';
+            const statusText = getStatusLabels('sdlg', item.status).text;
+            rows.push({
+                no: String(index + 1),
+                item: itemContent,
+                status: statusText,
+            });
+        });
+        return {
+            columns: [
+                { key: 'no', label: 'No.', width: 35 },
+                { key: 'item', label: 'Technical Requirement', width: 350 },
+                { key: 'status', label: 'Status', width: 160, padLeft: 110 },
+            ],
+            rows,
+        };
+    }
+
+    const map = BRAND_CHECKLIST_MAP[brand];
+    const sectionKeys = map ? Object.keys(map.sections) : [];
+    const sorted = details.checklist_items
+        .slice()
+        .sort((a, b) => {
+            if (!map) return 0;
+            return sectionKeys.indexOf(a.section) - sectionKeys.indexOf(b.section);
+        })
+        .map((item) => {
+            const { section: normSec, item: normItem } = getNormalizedLabel(brand, item.section, item.itemName);
+            return {
+                section: stripSectionIndex(normSec),
+                itemLabel: normItem,
+                status: getStatusLabels(brand, item.status).text,
+                remarks: brand === 'manitou' ? (item.caption || '-') : (item.remarks || item.caption || '-'),
+                imageUrl: item.image_url,
+            };
+        });
+
+    let lastSection = '';
+    const hasImages = sorted.some((row) => row.imageUrl && row.imageUrl.startsWith('https://'));
+
+    sorted.forEach((row) => {
+        const sectionValue = row.section === lastSection ? '' : row.section;
+        lastSection = row.section;
+        rows.push({
+            section: sectionValue,
+            item: row.itemLabel,
+            status: row.status,
+            remarks: row.remarks,
+            image: hasImages && brand !== 'renault' ? (row.imageUrl || '-') : undefined,
+        });
+    });
+
+    const baseColumns = [
+        { key: 'section', label: 'Section', width: 120 },
+        { key: 'item', label: 'Item', width: 210 },
+        { key: 'status', label: 'Status', width: 70 },
+        { key: 'remarks', label: 'Remarks', width: 115 },
+    ];
+
+    if (brand === 'renault') {
+        baseColumns[3].padLeft = 18;
+    }
+
+    if (hasImages && brand !== 'renault') {
+        baseColumns.length = 0;
+        baseColumns.push(
+            { key: 'section', label: 'Section', width: 110 },
+            { key: 'item', label: 'Item', width: 140 },
+            { key: 'status', label: 'Status', width: 70 },
+            { key: 'remarks', label: 'Remarks', width: 95 },
+            { key: 'image', label: 'Image', width: 100 }
+        );
+    }
+
+    return { columns: baseColumns, rows };
+};
+
+const createArrivalPdf = async ({ details, unitInfoData, remarks, printedBy }) => {
+    const pdfDoc = await PDFDocument.create();
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const bold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+    const logoImage = await loadLogoImage(pdfDoc);
+    const imageCache = new Map();
+    const pageWidth = 595.28;
+    const pageHeight = 841.89;
+    const margin = 40;
+    const lineHeight = 12;
+    const sectionGap = 16;
+    let page = pdfDoc.addPage([pageWidth, pageHeight]);
+    let y = pageHeight - margin;
+
+    const drawCentered = (text, size, yPos) => {
+        const textWidth = bold.widthOfTextAtSize(text, size);
+        page.drawText(text, {
+            x: (pageWidth - textWidth) / 2,
+            y: yPos,
+            size,
+            font: bold,
+            color: rgb(0, 0, 0),
+        });
+    };
+
+    const drawSectionTitle = (text, gap = sectionGap) => {
+        y -= gap;
+        page.drawText(text, {
+            x: margin,
+            y,
+            size: 12,
+            font: bold,
+            color: rgb(0, 0, 0),
+        });
+        y -= lineHeight;
+    };
+
+    const ensureSpace = (needed) => {
+        if (y - needed >= margin) return;
+        page = pdfDoc.addPage([pageWidth, pageHeight]);
+        y = pageHeight - margin;
+    };
+
+    const drawWrappedLine = (text, x, maxWidth, size = 10, fontToUse = font) => {
+        const lines = wrapText(text, fontToUse, size, maxWidth);
+        lines.forEach((line) => {
+            ensureSpace(lineHeight);
+            page.drawText(line, { x, y, size, font: fontToUse, color: rgb(0, 0, 0) });
+            y -= lineHeight;
+        });
+    };
+
+    const headerTitle = 'Indo Traktor Form Arrival Check';
+    const titleSize = 14;
+    let headerBlockHeight = titleSize;
+
+    if (logoImage) {
+        const logoWidth = 110;
+        const logoHeight = (logoImage.height / logoImage.width) * logoWidth;
+        const logoX = margin;
+        const logoY = y - (logoHeight / 2) + (titleSize / 2);
+        page.drawImage(logoImage, {
+            x: logoX,
+            y: logoY,
+            width: logoWidth,
+            height: logoHeight,
+        });
+        headerBlockHeight = Math.max(headerBlockHeight, logoHeight);
+    }
+
+    drawCentered(headerTitle, titleSize, y);
+    const headerGap = Math.max(10, headerBlockHeight - 18);
+    y -= headerGap;
+
+    drawSectionTitle('Unit Information', 14);
+
+    const infoLines = unitInfoData.map((info) => ({
+        label: info.label,
+        value: info.value,
+    }));
+
+    const gapAfterTitle = 8;
+    y -= gapAfterTitle;
+
+    const half = Math.ceil(infoLines.length / 2);
+    const left = infoLines.slice(0, half);
+    const right = infoLines.slice(half);
+    const columnWidth = (pageWidth - margin * 2) / 2;
+    const rightColumnOffset = 28;
+    const labelWidth = 110;
+    const startY = y;
+
+    left.forEach((item, idx) => {
+        const rowY = startY - idx * lineHeight;
+        page.drawText(`${item.label}:`, {
+            x: margin,
+            y: rowY,
+            size: 10,
+            font: bold,
+            color: rgb(0, 0, 0),
+        });
+        page.drawText(String(item.value ?? ''), {
+            x: margin + labelWidth,
+            y: rowY,
+            size: 10,
+            font,
+            color: rgb(0, 0, 0),
+        });
+    });
+
+    right.forEach((item, idx) => {
+        const rowY = startY - idx * lineHeight;
+        page.drawText(`${item.label}:`, {
+            x: margin + columnWidth + rightColumnOffset,
+            y: rowY,
+            size: 10,
+            font: bold,
+            color: rgb(0, 0, 0),
+        });
+        page.drawText(String(item.value ?? ''), {
+            x: margin + columnWidth + rightColumnOffset + labelWidth,
+            y: rowY,
+            size: 10,
+            font,
+            color: rgb(0, 0, 0),
+        });
+    });
+
+    y = startY - Math.max(left.length, right.length) * lineHeight - 6;
+
+    drawSectionTitle(`Checklist Inspection Items (${toCapitalCase(details.brand)})`, 26);
+    y -= 6;
+
+    const { columns, rows } = buildChecklistTable(details);
+    const contentWidth = pageWidth - margin * 2;
+    const totalWidth = columns.reduce((acc, col) => acc + col.width, 0);
+    const scale = totalWidth > 0 ? contentWidth / totalWidth : 1;
+    const scaledColumns = columns.map((col) => ({ ...col, width: col.width * scale }));
+
+    const drawTableHeader = () => {
+        ensureSpace(lineHeight * 2);
+        let x = margin;
+        scaledColumns.forEach((col) => {
+            const padLeft = col.padLeft || 0;
+            page.drawText(col.label, {
+                x: x + padLeft,
+                y,
+                size: 10,
+                font: bold,
+                color: rgb(0, 0, 0),
+            });
+            x += col.width;
+        });
+        y -= lineHeight;
+        page.drawLine({
+            start: { x: margin, y },
+            end: { x: pageWidth - margin, y },
+            thickness: 1,
+            color: rgb(0.8, 0.8, 0.8),
+        });
+        y -= lineHeight;
+    };
+
+    if (scaledColumns.length && rows.length) {
+        drawTableHeader();
+    }
+
+    for (const row of rows) {
+        const cellData = [];
+        let maxLines = 1;
+        let maxImageHeight = 0;
+
+        for (const col of scaledColumns) {
+            if (col.key === 'image') {
+                const url = row[col.key];
+                const embed = await loadRemoteImage(pdfDoc, url, imageCache);
+                let drawWidth = 0;
+                let drawHeight = 0;
+                if (embed) {
+                    const maxWidth = Math.max(col.width - 6, 10);
+                    const maxHeight = 36;
+                    const scale = Math.min(maxWidth / embed.width, maxHeight / embed.height, 1);
+                    drawWidth = embed.width * scale;
+                    drawHeight = embed.height * scale;
+                    maxImageHeight = Math.max(maxImageHeight, drawHeight);
+                }
+                cellData.push({ type: 'image', embed, drawWidth, drawHeight });
+            } else {
+                const value = row[col.key] ?? '-';
+                const padLeft = col.padLeft || 0;
+                const maxWidth = Math.max(col.width - 6 - padLeft, 20);
+                const lines = wrapText(value, font, 9, maxWidth);
+                maxLines = Math.max(maxLines, lines.length || 1);
+                cellData.push({ type: 'text', lines, padLeft });
+            }
+        }
+
+        const rowHeight = Math.max(maxLines * lineHeight + 2, maxImageHeight + 6);
+        ensureSpace(rowHeight + lineHeight);
+        let x = margin;
+
+        cellData.forEach((cell, idx) => {
+            const col = scaledColumns[idx];
+            if (cell.type === 'image') {
+                if (cell.embed) {
+                    const imageX = x + (col.width - cell.drawWidth) / 2;
+                    const imageY = y - cell.drawHeight + 4;
+                    page.drawImage(cell.embed.image, {
+                        x: imageX,
+                        y: imageY,
+                        width: cell.drawWidth,
+                        height: cell.drawHeight,
+                    });
+                } else {
+                    page.drawText('-', {
+                        x,
+                        y,
+                        size: 9,
+                        font,
+                        color: rgb(0, 0, 0),
+                    });
+                }
+            } else {
+                const padLeft = cell.padLeft || 0;
+                cell.lines.forEach((line, lineIdx) => {
+                    page.drawText(line, {
+                        x: x + padLeft,
+                        y: y - lineIdx * lineHeight,
+                        size: 9,
+                        font,
+                        color: rgb(0, 0, 0),
+                    });
+                });
+            }
+            x += col.width;
+        });
+
+        y -= rowHeight;
+        if (y < margin + lineHeight * 2) {
+            page = pdfDoc.addPage([pageWidth, pageHeight]);
+            y = pageHeight - margin;
+            drawTableHeader();
+        }
+    }
+
+    drawSectionTitle('General Notes / Remarks', 26);
+    drawWrappedLine(remarks || '-', margin, contentWidth, 10, font);
+
+    const nowLabel = new Date().toLocaleString('id-ID', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+    });
+    const footerText = printedBy
+        ? `Printed out by ${printedBy} • ${nowLabel}`
+        : `Printed out by - • ${nowLabel}`;
+    const footerSize = 9;
+    const footerY = margin - 6;
+    if (y < footerY + lineHeight * 2) {
+        page = pdfDoc.addPage([pageWidth, pageHeight]);
+        y = pageHeight - margin;
+    }
+    page.drawText(footerText, {
+        x: margin,
+        y: footerY,
+        size: footerSize,
+        font,
+        color: rgb(0.45, 0.45, 0.45),
+    });
+
+    return pdfDoc.save();
+};
+
 const LogData = ({ title, apiUrl }) => {
     const [logs, setLogs] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -225,12 +706,76 @@ const LogData = ({ title, apiUrl }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [activePage, setActivePage] = useState(1);
     const [rowsPerPage, setRowsPerPage] = useState('10');
+    const [isPrinting, setIsPrinting] = useState(false);
     const [lookupTables, setLookupTables] = useState({
         models: {},
         technicians: {},
         approvers: {}
     });
     const { user } = useUser()
+    const printedByName = (() => {
+        if (!user) return '';
+        const fullName = `${user.firstName || ''} ${user.lastName || ''}`.trim();
+        return fullName || user.username || user.email || '';
+    })();
+    const printedAt = new Date().toLocaleString('id-ID', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+    });
+    const canPrint = Boolean(selectedLogDetails && !selectedLogDetails.error);
+
+    const handlePrint = () => {
+        if (!canPrint) return;
+        window.print();
+    };
+
+    useEffect(() => {
+        const handleBeforePrint = () => setIsPrinting(true);
+        const handleAfterPrint = () => setIsPrinting(false);
+        window.addEventListener('beforeprint', handleBeforePrint);
+        window.addEventListener('afterprint', handleAfterPrint);
+        return () => {
+            window.removeEventListener('beforeprint', handleBeforePrint);
+            window.removeEventListener('afterprint', handleAfterPrint);
+        };
+    }, []);
+
+    const handleDownloadPdf = async () => {
+        if (!canPrint) return;
+
+        try {
+            const bytes = await createArrivalPdf({
+                details: selectedLogDetails,
+                unitInfoData,
+                remarks,
+                printedBy: printedByName,
+            });
+            const brandLabel = toCapitalCase(selectedLogDetails?.brand || '');
+            const vinValue = selectedLogDetails?.VIN || selectedLogDetails?.vin || '';
+            const fileBase = safeFileName(
+                `Arrival Check - ${brandLabel || 'brand'} - ${vinValue || 'vin'}`
+            );
+            const blob = new Blob([bytes], { type: 'application/pdf' });
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `${fileBase}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (error) {
+            notifications.show({
+                title: 'Download Failed',
+                message: 'Unable to generate PDF. Please try again.',
+                color: 'red',
+            });
+        }
+    };
 
     const downloadExcel = () => {
         if (!user?.permissions?.includes('download_arrival_log')) {
@@ -640,239 +1185,276 @@ const LogData = ({ title, apiUrl }) => {
                         Failed to load details: {selectedLogDetails.error}
                     </Alert>
                 ) : (
-                    <Stack gap="xl">
-                        <Box>
-                            <Title 
-                                order={4} 
-                                mb="sm" 
-                                pb="xs"
-                                style={{ borderBottom: '1px solid var(--mantine-color-gray-2)' }}
-                            >
-                                Unit Information
-                            </Title>
-                            
-                            <SimpleGrid 
-                                cols={{ base: 1, sm: 2, lg: 3 }} 
-                                spacing={{ base: 'md', sm: 'xl' }}
-                                verticalSpacing="sm"
-                            >
-                                {unitInfoData.map((data) => (
-                                    <Group key={data.key} gap="sm" wrap="nowrap">
-                                        <Text fw={700} w={120} style={{ minWidth: '100px' }}>{data.label}:</Text>
-                                        <Text>{data.value}</Text>
-                                    </Group>
-                                ))}
-                            </SimpleGrid>
-                        </Box>
-
-                        <Box>
-                            <Title 
-                                order={4} 
-                                mt="md"
-                                mb="sm" 
-                                pb="xs"
-                                style={{ borderBottom: '1px solid var(--mantine-color-gray-2)' }}
-                            >
-                                Checklist Inspection Items ({toCapitalCase(selectedLogDetails.brand)})
-                            </Title>
-                            
-                            {selectedLogDetails.checklist_items && selectedLogDetails.checklist_items.length > 0 ? (
-                                <>
-                                    {selectedLogDetails.brand && selectedLogDetails.brand.toLowerCase() === 'sdlg' ? (
-                                        <Table withRowBorders={true} highlightOnHover>
-                                            <Table.Thead>
-                                                <Table.Tr>
-                                                    <Table.Th style={{ width: '50px' }}>No.</Table.Th>
-                                                    <Table.Th style={{ width: '85%' }}>Technical Requirement</Table.Th>
-                                                    <Table.Th style={{ width: '15%', textAlign: 'center' }}>Status</Table.Th>
-                                                </Table.Tr>
-                                            </Table.Thead>
-                                            <Table.Tbody>
-                                                {selectedLogDetails.checklist_items
-                                                    .map((item, index) => {
-                                                        const sdlgMap = BRAND_CHECKLIST_MAP['sdlg'];
-                                                        const technicalRequirements = sdlgMap ? sdlgMap.technicalRequirements : [];
-                                                        const itemContent = technicalRequirements[index] || item.itemName || 'Technical Requirement Missing';
-                                                        const { text: statusText, color: statusColor } = getStatusLabels('sdlg', item.status);
-                                                        
-                                                        return (
-                                                            <Table.Tr key={index}>
-                                                                <Table.Td>{index + 1}</Table.Td>
-                                                                <Table.Td>{itemContent}</Table.Td>
-                                                                <Table.Td style={{ textAlign: 'center' }}>
-                                                                    <Text fw={700} c={statusColor}>
-                                                                        {statusText}
-                                                                    </Text>
-                                                                </Table.Td>
-                                                            </Table.Tr>
-                                                        );
-                                                    })}
-                                            </Table.Tbody>
-                                        </Table>
-                                        
-                                    ) : selectedLogDetails.brand && selectedLogDetails.brand.toLowerCase() === 'renault' ? (
-                                        <Table withRowBorders={true} highlightOnHover>
-                                            <Table.Thead>
-                                                <Table.Tr>
-                                                    <Table.Th>Section</Table.Th>
-                                                    <Table.Th>Item</Table.Th>
-                                                    <Table.Th style={{ width: '100px' }}>Status</Table.Th>
-                                                    <Table.Th>Remarks/Caption</Table.Th>
-                                                </Table.Tr>
-                                            </Table.Thead>
-                                            <Table.Tbody>
-                                                {(() => {
-                                                    const brand = selectedLogDetails.brand;
-                                                    const sorted = selectedLogDetails.checklist_items
-                                                        .slice()
-                                                        .sort((a, b) => {
-                                                            const map = BRAND_CHECKLIST_MAP[(brand || '').toLowerCase()];
-                                                            if (!map) return 0;
-                                                            const sectionKeys = Object.keys(map.sections);
-                                                            const rankA = sectionKeys.indexOf(a.section);
-                                                            const rankB = sectionKeys.indexOf(b.section);
-                                                            if (rankA !== rankB) return rankA - rankB;
-                                                            return 0;
-                                                        })
-                                                        .map((item) => {
-                                                            const { section: normSec, item: normItem } = getNormalizedLabel(brand, item.section, item.itemName);
-                                                            return {
-                                                                section: stripSectionIndex(normSec),
-                                                                itemLabel: normItem,
-                                                                status: item.status,
-                                                                remarks: item.remarks || item.caption || '-',
-                                                            };
-                                                        });
-
-                                                    const counts = {};
-                                                    sorted.forEach(r => { counts[r.section] = (counts[r.section] || 0) + 1; });
-                                                    const emitted = {};
-
-                                                    return sorted.map((row, idx) => {
-                                                        const { text: statusText, color: statusColor } = getStatusLabels(brand, row.status);
-                                                        const firstForSection = !emitted[row.section];
-                                                        emitted[row.section] = (emitted[row.section] || 0) + 1;
-
-                                                        return (
-                                                            <Table.Tr key={idx}>
-                                                                {firstForSection && (
-                                                                    <Table.Td rowSpan={counts[row.section]} style={{ textAlign: 'center', verticalAlign: 'middle', fontWeight: 600 }}>
-                                                                        {row.section}
-                                                                    </Table.Td>
-                                                                )}
-                                                                <Table.Td>{row.itemLabel}</Table.Td>
-                                                                <Table.Td>
-                                                                    <Text fw={700} c={statusColor}>{statusText}</Text>
-                                                                </Table.Td>
-                                                                <Table.Td>{row.remarks}</Table.Td>
-                                                            </Table.Tr>
-                                                        );
-                                                    });
-                                                })()}
-                                            </Table.Tbody>
-                                        </Table>
-                                    ):(
-                                        <Table withRowBorders={true} highlightOnHover>
-                                            <Table.Thead>
-                                                <Table.Tr>
-                                                    <Table.Th>Section</Table.Th>
-                                                    <Table.Th>Item</Table.Th>
-                                                    <Table.Th style={{ width: '100px' }}>Status</Table.Th>
-                                                    <Table.Th>Remarks/Caption</Table.Th>
-                                                    <Table.Th>Image</Table.Th>
-                                                </Table.Tr>
-                                            </Table.Thead>
-                                            <Table.Tbody>
-                                                {(() => {
-                                                    const brand = selectedLogDetails.brand;
-                                                    const sorted = selectedLogDetails.checklist_items
-                                                        .slice()
-                                                        .sort((a, b) => {
-                                                            const map = BRAND_CHECKLIST_MAP[(brand || '').toLowerCase()];
-                                                            if (!map) return 0;
-                                                            const sectionKeys = Object.keys(map.sections);
-                                                            const rankA = sectionKeys.indexOf(a.section);
-                                                            const rankB = sectionKeys.indexOf(b.section);
-                                                            if (rankA !== rankB) return rankA - rankB;
-                                                            return 0;
-                                                        })
-                                                        .map((item) => {
-                                                            const { section: normSec, item: normItem } = getNormalizedLabel(brand, item.section, item.itemName);
-                                                            return {
-                                                                section: stripSectionIndex(normSec),
-                                                                itemLabel: normItem,
-                                                                status: item.status,
-                                                                remarks: brand.toLowerCase() === 'manitou' ? (item.caption || '-') : (item.remarks || '-'),
-                                                                imageUrl: item.image_url,
-                                                            };
-                                                        });
-
-                                                    const counts = {};
-                                                    sorted.forEach(r => { counts[r.section] = (counts[r.section] || 0) + 1; });
-                                                    const emitted = {};
-
-                                                    return sorted.map((row, idx) => {
-                                                        const { text: statusText, color: statusColor } = getStatusLabels(brand, row.status);
-                                                        const firstForSection = !emitted[row.section];
-                                                        emitted[row.section] = (emitted[row.section] || 0) + 1;
-
-                                                        return (
-                                                            <Table.Tr key={idx}>
-                                                                {firstForSection && (
-                                                                    <Table.Td rowSpan={counts[row.section]} style={{ textAlign: 'center', verticalAlign: 'middle', fontWeight: 600 }}>
-                                                                        {row.section}
-                                                                    </Table.Td>
-                                                                )}
-                                                                <Table.Td>{row.itemLabel}</Table.Td>
-                                                                <Table.Td>
-                                                                    <Text fw={700} c={statusColor}>{statusText}</Text>
-                                                                </Table.Td>
-                                                                <Table.Td>{row.remarks}</Table.Td>
-                                                                <Table.Td>
-                                                                    {row.imageUrl && row.imageUrl.startsWith('https://') ? (
-                                                                        <Box style={{ width: '100px', height: '100px', overflow: 'hidden' }}>
-                                                                            <img
-                                                                                src={row.imageUrl}
-                                                                                alt="Inspection"
-                                                                                style={{ width: '100%', height: 'auto', objectFit: 'cover' }}
-                                                                                onError={(e) => {
-                                                                                    e.target.style.display = 'none';
-                                                                                    e.target.parentElement.innerHTML = '<span style=\"color: red\">Image Failed to Load</span>';
-                                                                                }}
-                                                                            />
-                                                                        </Box>
-                                                                    ) : '-'}
-                                                                </Table.Td>
-                                                            </Table.Tr>
-                                                        );
-                                                    });
-                                                })()}
-                                            </Table.Tbody>
-                                        </Table>
-                                    )}
-                                </>
-                            ) : (
-                                <Text c="gray">No detailed checklist items found for this unit.</Text>
+                    <>
+                        <div className="print-area">
+                            {isPrinting && (
+                                <div className="print-header print-only">
+                                    <img
+                                        src="/images/ITR-logo.png"
+                                        alt="Indotraktor Utama"
+                                        className="print-logo print-header-logo"
+                                        onError={(event) => {
+                                            event.currentTarget.style.display = 'none';
+                                        }}
+                                    />
+                                    <div className="print-header-title">
+                                        <Title order={3} ta="center">
+                                            Indo Traktor Form Arrival Check
+                                        </Title>
+                                    </div>
+                                </div>
                             )}
-                        </Box>
-                        
-                        <Box>
-                            <Title 
-                                order={4} 
-                                mt="md"
-                                mb="sm" 
-                                pb="xs"
-                                style={{ borderBottom: '1px solid var(--mantine-color-gray-2)' }}
-                            >
-                                General Notes / Remarks
-                            </Title>
-                            <Paper withBorder p="md" radius="md">
-                                <Text style={{ whiteSpace: 'pre-wrap' }}>
-                                    {remarks}
+                            {isPrinting && (
+                                <Text className="print-footer print-only">
+                                    Printed out by {printedByName || '-'} • {printedAt}
                                 </Text>
-                            </Paper>
-                        </Box>
-                    </Stack>
+                            )}
+                            <Stack gap="xl">
+                                <Box>
+                                    <Title 
+                                        order={4} 
+                                        mb="sm" 
+                                        pb="xs"
+                                        style={{ borderBottom: '1px solid var(--mantine-color-gray-2)' }}
+                                    >
+                                        Unit Information
+                                    </Title>
+                                    
+                                    <SimpleGrid 
+                                        cols={{ base: 1, sm: 2, lg: 3 }} 
+                                        spacing={{ base: 'md', sm: 'xl' }}
+                                        verticalSpacing="sm"
+                                        className="unit-info-grid"
+                                    >
+                                        {unitInfoData.map((data) => (
+                                            <Group key={data.key} gap="sm" wrap="nowrap">
+                                                <Text fw={700} w={120} style={{ minWidth: '100px' }}>{data.label}:</Text>
+                                                <Text>{data.value}</Text>
+                                            </Group>
+                                        ))}
+                                    </SimpleGrid>
+                                </Box>
+
+                                <Box>
+                                    <Title 
+                                        order={4} 
+                                        mt="md"
+                                        mb="sm" 
+                                        pb="xs"
+                                        style={{ borderBottom: '1px solid var(--mantine-color-gray-2)' }}
+                                    >
+                                        Checklist Inspection Items ({toCapitalCase(selectedLogDetails.brand)})
+                                    </Title>
+                            
+                                    {selectedLogDetails.checklist_items && selectedLogDetails.checklist_items.length > 0 ? (
+                                        <>
+                                            {selectedLogDetails.brand && selectedLogDetails.brand.toLowerCase() === 'sdlg' ? (
+                                                <Table withRowBorders={true} highlightOnHover>
+                                                    <Table.Thead>
+                                                        <Table.Tr>
+                                                            <Table.Th style={{ width: '50px' }}>No.</Table.Th>
+                                                            <Table.Th style={{ width: '85%' }}>Technical Requirement</Table.Th>
+                                                            <Table.Th style={{ width: '15%', textAlign: 'center' }}>Status</Table.Th>
+                                                        </Table.Tr>
+                                                    </Table.Thead>
+                                                    <Table.Tbody>
+                                                        {selectedLogDetails.checklist_items
+                                                            .map((item, index) => {
+                                                                const sdlgMap = BRAND_CHECKLIST_MAP['sdlg'];
+                                                                const technicalRequirements = sdlgMap ? sdlgMap.technicalRequirements : [];
+                                                                const itemContent = technicalRequirements[index] || item.itemName || 'Technical Requirement Missing';
+                                                                const { text: statusText, color: statusColor } = getStatusLabels('sdlg', item.status);
+                                                                
+                                                                return (
+                                                                    <Table.Tr key={index}>
+                                                                        <Table.Td>{index + 1}</Table.Td>
+                                                                        <Table.Td>{itemContent}</Table.Td>
+                                                                        <Table.Td style={{ textAlign: 'center' }}>
+                                                                            <Text fw={700} c={statusColor}>
+                                                                                {statusText}
+                                                                            </Text>
+                                                                        </Table.Td>
+                                                                    </Table.Tr>
+                                                                );
+                                                            })}
+                                                    </Table.Tbody>
+                                                </Table>
+                                                
+                                            ) : selectedLogDetails.brand && selectedLogDetails.brand.toLowerCase() === 'renault' ? (
+                                                <Table withRowBorders={true} highlightOnHover>
+                                                    <Table.Thead>
+                                                        <Table.Tr>
+                                                            <Table.Th>Section</Table.Th>
+                                                            <Table.Th>Item</Table.Th>
+                                                            <Table.Th style={{ width: '100px' }}>Status</Table.Th>
+                                                            <Table.Th>Remarks/Caption</Table.Th>
+                                                        </Table.Tr>
+                                                    </Table.Thead>
+                                                    <Table.Tbody>
+                                                        {(() => {
+                                                            const brand = selectedLogDetails.brand;
+                                                            const sorted = selectedLogDetails.checklist_items
+                                                                .slice()
+                                                                .sort((a, b) => {
+                                                                    const map = BRAND_CHECKLIST_MAP[(brand || '').toLowerCase()];
+                                                                    if (!map) return 0;
+                                                                    const sectionKeys = Object.keys(map.sections);
+                                                                    const rankA = sectionKeys.indexOf(a.section);
+                                                                    const rankB = sectionKeys.indexOf(b.section);
+                                                                    if (rankA !== rankB) return rankA - rankB;
+                                                                    return 0;
+                                                                })
+                                                                .map((item) => {
+                                                                    const { section: normSec, item: normItem } = getNormalizedLabel(brand, item.section, item.itemName);
+                                                                    return {
+                                                                        section: stripSectionIndex(normSec),
+                                                                        itemLabel: normItem,
+                                                                        status: item.status,
+                                                                        remarks: item.remarks || item.caption || '-',
+                                                                    };
+                                                                });
+
+                                                            const counts = {};
+                                                            sorted.forEach(r => { counts[r.section] = (counts[r.section] || 0) + 1; });
+                                                            const emitted = {};
+
+                                                            return sorted.map((row, idx) => {
+                                                                const { text: statusText, color: statusColor } = getStatusLabels(brand, row.status);
+                                                                const firstForSection = !emitted[row.section];
+                                                                emitted[row.section] = (emitted[row.section] || 0) + 1;
+
+                                                                return (
+                                                                    <Table.Tr key={idx}>
+                                                                        {firstForSection && (
+                                                                            <Table.Td rowSpan={counts[row.section]} style={{ textAlign: 'center', verticalAlign: 'middle', fontWeight: 600 }}>
+                                                                                {row.section}
+                                                                            </Table.Td>
+                                                                        )}
+                                                                        <Table.Td>{row.itemLabel}</Table.Td>
+                                                                        <Table.Td>
+                                                                            <Text fw={700} c={statusColor}>{statusText}</Text>
+                                                                        </Table.Td>
+                                                                        <Table.Td>{row.remarks}</Table.Td>
+                                                                    </Table.Tr>
+                                                                );
+                                                            });
+                                                        })()}
+                                                    </Table.Tbody>
+                                                </Table>
+                                            ) : (
+                                                <Table withRowBorders={true} highlightOnHover>
+                                                    <Table.Thead>
+                                                        <Table.Tr>
+                                                            <Table.Th>Section</Table.Th>
+                                                            <Table.Th>Item</Table.Th>
+                                                            <Table.Th style={{ width: '100px' }}>Status</Table.Th>
+                                                            <Table.Th>Remarks/Caption</Table.Th>
+                                                            <Table.Th>Image</Table.Th>
+                                                        </Table.Tr>
+                                                    </Table.Thead>
+                                                    <Table.Tbody>
+                                                        {(() => {
+                                                            const brand = selectedLogDetails.brand;
+                                                            const sorted = selectedLogDetails.checklist_items
+                                                                .slice()
+                                                                .sort((a, b) => {
+                                                                    const map = BRAND_CHECKLIST_MAP[(brand || '').toLowerCase()];
+                                                                    if (!map) return 0;
+                                                                    const sectionKeys = Object.keys(map.sections);
+                                                                    const rankA = sectionKeys.indexOf(a.section);
+                                                                    const rankB = sectionKeys.indexOf(b.section);
+                                                                    if (rankA !== rankB) return rankA - rankB;
+                                                                    return 0;
+                                                                })
+                                                                .map((item) => {
+                                                                    const { section: normSec, item: normItem } = getNormalizedLabel(brand, item.section, item.itemName);
+                                                                    return {
+                                                                        section: stripSectionIndex(normSec),
+                                                                        itemLabel: normItem,
+                                                                        status: item.status,
+                                                                        remarks: brand.toLowerCase() === 'manitou' ? (item.caption || '-') : (item.remarks || '-'),
+                                                                        imageUrl: item.image_url,
+                                                                    };
+                                                                });
+
+                                                            const counts = {};
+                                                            sorted.forEach(r => { counts[r.section] = (counts[r.section] || 0) + 1; });
+                                                            const emitted = {};
+
+                                                            return sorted.map((row, idx) => {
+                                                                const { text: statusText, color: statusColor } = getStatusLabels(brand, row.status);
+                                                                const firstForSection = !emitted[row.section];
+                                                                emitted[row.section] = (emitted[row.section] || 0) + 1;
+
+                                                                return (
+                                                                    <Table.Tr key={idx}>
+                                                                        {firstForSection && (
+                                                                            <Table.Td rowSpan={counts[row.section]} style={{ textAlign: 'center', verticalAlign: 'middle', fontWeight: 600 }}>
+                                                                                {row.section}
+                                                                            </Table.Td>
+                                                                        )}
+                                                                        <Table.Td>{row.itemLabel}</Table.Td>
+                                                                        <Table.Td>
+                                                                            <Text fw={700} c={statusColor}>{statusText}</Text>
+                                                                        </Table.Td>
+                                                                        <Table.Td>{row.remarks}</Table.Td>
+                                                                        <Table.Td>
+                                                                            {row.imageUrl && row.imageUrl.startsWith('https://') ? (
+                                                                                <Box style={{ width: '100px', height: '100px', overflow: 'hidden' }}>
+                                                                                    <img
+                                                                                        src={row.imageUrl}
+                                                                                        alt="Inspection"
+                                                                                        style={{ width: '100%', height: 'auto', objectFit: 'cover' }}
+                                                                                        onError={(e) => {
+                                                                                            e.target.style.display = 'none';
+                                                                                            e.target.parentElement.innerHTML = '<span style=\"color: red\">Image Failed to Load</span>';
+                                                                                        }}
+                                                                                    />
+                                                                                </Box>
+                                                                            ) : '-'}
+                                                                        </Table.Td>
+                                                                    </Table.Tr>
+                                                                );
+                                                            });
+                                                        })()}
+                                                    </Table.Tbody>
+                                                </Table>
+                                            )}
+                                        </>
+                                    ) : (
+                                        <Text c="gray">No detailed checklist items found for this unit.</Text>
+                                    )}
+                                </Box>
+                                
+                                <Box>
+                                    <Title 
+                                        order={4} 
+                                        mt="md"
+                                        mb="sm" 
+                                        pb="xs"
+                                        style={{ borderBottom: '1px solid var(--mantine-color-gray-2)' }}
+                                    >
+                                        General Notes / Remarks
+                                    </Title>
+                                    <Paper withBorder p="md" radius="md">
+                                        <Text style={{ whiteSpace: 'pre-wrap' }}>
+                                            {remarks}
+                                        </Text>
+                                    </Paper>
+                                </Box>
+                                <Group justify="flex-end" className="no-print">
+                                    <Button
+                                        leftSection={<IconDownload size={16} />}
+                                        variant="filled"
+                                        onClick={handleDownloadPdf}
+                                        disabled={!canPrint}
+                                    >
+                                        Download PDF
+                                    </Button>
+                                </Group>
+                            </Stack>
+                        </div>
+                    </>
                 )}
             </Modal>
         </Container>

@@ -24,6 +24,7 @@ import {
 } from '@mantine/core';
 import * as XLSX from "xlsx";
 import { IconSearch, IconEye, IconAlertCircle, IconDownload } from '@tabler/icons-react';
+import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { useDisclosure } from '@mantine/hooks';
 import { notifications } from "@mantine/notifications";
 import { BRAND_CHECKLIST_MAP, RENAULT_SECTION_ORDER } from '@/config/CommissioningMap';
@@ -31,6 +32,7 @@ import { useUser } from "@/context/UserContext";
 import apiClient from "@/libs/api";
 
 const EXCLUDED_KEYS = ['remarks', 'notes', 'checklist_items', 'id', 'details', 'major_components', 'generalRemarks'];
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api-ibc.itr-compass.co.id/api';
 const formatKeyToLabel = (key) => {
     if (!key) return '';
     if (key === 'woNumber') return 'WO Number';
@@ -71,10 +73,22 @@ const toCapitalCase = (str) => {
     return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
 };
 
+// Remove trailing numeric suffixes from section labels (e.g., "01. Engine" -> "Engine")
+const stripSectionIndex = (label) => {
+    if (!label) return '';
+    const text = String(label).trim();
+    return text.replace(/[\s._-]*\(?0*\d+\)?\.?\s*/i, '').trim() || text;
+};
+
 const BRAND_ID_MAP = {
     'manitou': 'MA',
     'renault': 'RT',
     'sdlg': 'SDLG',
+};
+const BRAND_LABEL_MAP = {
+    manitou: 'Manitou',
+    renault: 'Renault Trucks',
+    sdlg: 'SDLG',
 };
 
 const getNormalizedLabel = (brand, sectionKey, itemKey) => {
@@ -200,6 +214,636 @@ const formatDateOnly = (toDateTimeString) => {
     }
 };
 
+const loadLogoImage = async (pdfDoc) => {
+    const paths = ['/images/ITR-logo.png', '/ITR-logo.png'];
+
+    for (const path of paths) {
+        try {
+            const response = await fetch(path);
+            if (!response.ok) continue;
+            const bytes = new Uint8Array(await response.arrayBuffer());
+            return await pdfDoc.embedPng(bytes);
+        } catch (error) {
+            // Ignore and try next path
+        }
+    }
+    return null;
+};
+
+const loadRemoteImage = async (pdfDoc, url, cache) => {
+    if (!url || typeof url !== 'string') return null;
+    const cached = cache.get(url);
+    if (cached !== undefined) return cached;
+
+    try {
+        const targetUrl = url.startsWith('http')
+            ? `${API_BASE_URL}/media/proxy?url=${encodeURIComponent(url)}`
+            : url;
+        const response = await fetch(targetUrl, { credentials: 'include' });
+        if (!response.ok) {
+            cache.set(url, null);
+            return null;
+        }
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        const contentType = (response.headers.get('content-type') || '').toLowerCase();
+        let image = null;
+
+        if (contentType.includes('png')) {
+            image = await pdfDoc.embedPng(bytes);
+        } else if (contentType.includes('jpeg') || contentType.includes('jpg')) {
+            image = await pdfDoc.embedJpg(bytes);
+        } else {
+            try {
+                image = await pdfDoc.embedPng(bytes);
+            } catch (err) {
+                image = await pdfDoc.embedJpg(bytes);
+            }
+        }
+
+        if (!image) {
+            cache.set(url, null);
+            return null;
+        }
+
+        const result = { image, width: image.width, height: image.height };
+        cache.set(url, result);
+        return result;
+    } catch (error) {
+        cache.set(url, null);
+        return null;
+    }
+};
+
+const safeFileName = (value) => {
+    const base = String(value || 'commissioning_log');
+    return base
+        .replace(/[^a-z0-9_-]+/gi, '_')
+        .replace(/^_+|_+$/g, '')
+        .toLowerCase() || 'commissioning_log';
+};
+
+const wrapText = (text, font, size, maxWidth) => {
+    const content = String(text ?? '');
+    if (!content) return [''];
+
+    const words = content.split(/\s+/);
+    const lines = [];
+    let line = '';
+
+    const pushLine = (value) => {
+        if (value) lines.push(value);
+    };
+
+    words.forEach((word) => {
+        const testLine = line ? `${line} ${word}` : word;
+        const width = font.widthOfTextAtSize(testLine, size);
+        if (width <= maxWidth) {
+            line = testLine;
+            return;
+        }
+
+        if (line) {
+            pushLine(line);
+            line = '';
+        }
+
+        if (font.widthOfTextAtSize(word, size) <= maxWidth) {
+            line = word;
+        } else {
+            let chunk = '';
+            for (const ch of word) {
+                const testChunk = `${chunk}${ch}`;
+                if (font.widthOfTextAtSize(testChunk, size) > maxWidth && chunk) {
+                    lines.push(chunk);
+                    chunk = ch;
+                } else {
+                    chunk = testChunk;
+                }
+            }
+            line = chunk;
+        }
+    });
+
+    pushLine(line);
+    return lines.length ? lines : [''];
+};
+
+const buildChecklistTable = (details) => {
+    if (!details || !details.checklist_items) {
+        return { columns: [], rows: [] };
+    }
+
+    const brand = (details.brand || '').toLowerCase();
+    const rows = [];
+
+    if (brand === 'sdlg') {
+        const sdlgRequirements = BRAND_CHECKLIST_MAP.sdlg.requirements || [];
+        details.checklist_items.forEach((item, index) => {
+            const { text: statusText } = getStatusLabels('sdlg', item.status);
+            const requirementText = sdlgRequirements[index] || `Requirement ${index + 1}`;
+            rows.push({
+                item: requirementText,
+                status: statusText,
+            });
+        });
+        return {
+            columns: [
+                { key: 'item', label: 'Technical Requirement', width: 360 },
+                { key: 'status', label: 'Status', width: 120, padLeft: 60 },
+            ],
+            rows,
+        };
+    }
+
+    const map = BRAND_CHECKLIST_MAP[brand];
+    const sectionKeys = map ? Object.keys(map.sections) : [];
+    const sectionRank = (sectionKey) => {
+        if (brand === 'renault' && Array.isArray(RENAULT_SECTION_ORDER)) {
+            const idx = RENAULT_SECTION_ORDER.indexOf(sectionKey);
+            return idx === -1 ? 9999 : idx;
+        }
+        if (!map) return 9999;
+        const idx = sectionKeys.indexOf(sectionKey);
+        return idx === -1 ? 9999 : idx;
+    };
+    const itemRank = (sectionKey, itemKey, normItem) => {
+        if (!map || !map.items || !map.items[sectionKey]) return 9999;
+        const arr = map.items[sectionKey];
+        const normalizedKey = (itemKey || '').toLowerCase();
+        let idx = arr.findIndex((i) => String(i.id || '').toLowerCase() === normalizedKey);
+        if (idx === -1) {
+            idx = arr.findIndex(
+                (i) => (i.itemKey || '').toLowerCase() === normalizedKey
+            );
+        }
+        if (idx === -1) {
+            idx = arr.findIndex(
+                (i) => (i.label || '').toLowerCase() === (normItem || '').toLowerCase()
+            );
+        }
+        return idx === -1 ? 9999 : idx;
+    };
+
+    const getRenaultItemLabel = (sectionKey, itemKey) => {
+        if (!map || !map.items || !map.items[sectionKey]) return itemKey || 'N/A';
+        const normalizedKey = String(itemKey || '').toLowerCase();
+        const found = map.items[sectionKey].find((item) =>
+            String(item.id || '').toLowerCase() === normalizedKey ||
+            String(item.itemKey || '').toLowerCase() === normalizedKey
+        );
+        return found?.label || itemKey || 'N/A';
+    };
+
+    const sorted = details.checklist_items
+        .slice()
+        .map((item) => {
+            const rawItemKey = item.itemName || item.itemKey || item.id || '';
+            const statusValue = item.status ?? item.checklist;
+            const { section: normSec, item: normItem } = getNormalizedLabel(
+                brand,
+                item.section,
+                rawItemKey
+            );
+            const itemLabel = brand === 'renault'
+                ? getRenaultItemLabel(item.section, rawItemKey)
+                : normItem;
+            return {
+                rawSection: item.section,
+                section: stripSectionIndex(normSec),
+                isSectionStart: false,
+                itemKey: rawItemKey,
+                itemLabel: brand === 'renault' ? `${rawItemKey}. ${itemLabel}` : itemLabel,
+                status: getStatusLabels(brand, statusValue).text,
+                remarks: item.remarks || item.caption || item.notes || '-',
+                imageUrl: item.image_url || item.imageUrl || item.image_blob_name,
+            };
+        })
+        .sort((a, b) => {
+            const sec = sectionRank(a.rawSection) - sectionRank(b.rawSection);
+            if (sec !== 0) return sec;
+            return itemRank(a.rawSection, a.itemKey, a.itemLabel) -
+                itemRank(b.rawSection, b.itemKey, b.itemLabel);
+        });
+
+    let lastSection = '';
+    const hasImages = sorted.some(
+        (row) => typeof row.imageUrl === 'string' && row.imageUrl.startsWith('https://')
+    );
+
+    sorted.forEach((row) => {
+        const isSectionStart = row.section !== lastSection;
+        const sectionValue = isSectionStart ? row.section : '';
+        lastSection = row.section;
+        rows.push({
+            section: sectionValue,
+            isSectionStart,
+            item: row.itemLabel,
+            status: row.status,
+            remarks: row.remarks,
+            image: hasImages && typeof row.imageUrl === 'string' ? row.imageUrl : '-',
+        });
+    });
+
+    const baseColumns = [
+        { key: 'section', label: 'Section', width: 120 },
+        { key: 'item', label: 'Item', width: 210 },
+        { key: 'status', label: 'Status', width: 70 },
+        { key: 'remarks', label: 'Remarks', width: 115 },
+    ];
+
+    if (hasImages) {
+        return {
+            columns: [
+                { key: 'section', label: 'Section', width: 110 },
+                { key: 'item', label: 'Item', width: 140 },
+                { key: 'status', label: 'Status', width: 70 },
+                { key: 'remarks', label: 'Remarks', width: 95 },
+                { key: 'image', label: 'Image', width: 100 },
+            ],
+            rows,
+            sectionGap: brand === 'renault' ? 15 : 0,
+        };
+    }
+
+    return { columns: baseColumns, rows, sectionGap: brand === 'renault' ? 15 : 0 };
+};
+
+const createCommissioningPdf = async ({
+    details,
+    unitInfoData,
+    remarks,
+    majorComponents,
+    printedBy,
+    printedAt,
+}) => {
+    const pdfDoc = await PDFDocument.create();
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const bold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+    const logoImage = await loadLogoImage(pdfDoc);
+    const imageCache = new Map();
+    const pageWidth = 595.28;
+    const pageHeight = 841.89;
+    const margin = 40;
+    const lineHeight = 12;
+    const sectionGap = 16;
+    let page = pdfDoc.addPage([pageWidth, pageHeight]);
+    let y = pageHeight - margin;
+
+    const contentWidth = pageWidth - margin * 2;
+
+    const drawCentered = (text, size, yPos) => {
+        const textWidth = bold.widthOfTextAtSize(text, size);
+        page.drawText(text, {
+            x: (pageWidth - textWidth) / 2,
+            y: yPos,
+            size,
+            font: bold,
+            color: rgb(0, 0, 0),
+        });
+    };
+
+    const drawSectionTitle = (text, gap = sectionGap) => {
+        y -= gap;
+        page.drawText(text, {
+            x: margin,
+            y,
+            size: 12,
+            font: bold,
+            color: rgb(0, 0, 0),
+        });
+        y -= lineHeight;
+    };
+
+    const ensureSpace = (needed) => {
+        if (y - needed >= margin) return;
+        page = pdfDoc.addPage([pageWidth, pageHeight]);
+        y = pageHeight - margin;
+    };
+
+    const ensureSpaceForSection = (titleGap, minBodyLines = 1) => {
+        const needed = titleGap + lineHeight + minBodyLines * lineHeight;
+        ensureSpace(needed);
+    };
+
+    const drawWrappedLine = (text, x, maxWidth, size = 10, fontToUse = font) => {
+        const lines = wrapText(text, fontToUse, size, maxWidth);
+        lines.forEach((line) => {
+            ensureSpace(lineHeight);
+            page.drawText(line, { x, y, size, font: fontToUse, color: rgb(0, 0, 0) });
+            y -= lineHeight;
+        });
+    };
+
+    const drawTable = async (columns, rows, options = {}) => {
+        const { afterTitleGap = 0, rowGap = 0, sectionGap = 0 } = options;
+        if (afterTitleGap) {
+            y -= afterTitleGap;
+        }
+        if (!columns.length || !rows.length) {
+            drawWrappedLine('No data available.', margin, contentWidth, 10);
+            return;
+        }
+
+        const totalWidth = columns.reduce((acc, col) => acc + col.width, 0) || 1;
+        const scale = contentWidth / totalWidth;
+        const scaledColumns = columns.map((col) => ({ ...col, width: col.width * scale }));
+
+        const drawTableHeader = () => {
+            ensureSpace(lineHeight * 2);
+            let x = margin;
+            scaledColumns.forEach((col) => {
+                const padLeft = col.padLeft || 0;
+                page.drawText(col.label, {
+                    x: x + padLeft,
+                    y,
+                    size: 10,
+                    font: bold,
+                    color: rgb(0, 0, 0),
+                });
+                x += col.width;
+            });
+            y -= lineHeight;
+            page.drawLine({
+                start: { x: margin, y },
+                end: { x: pageWidth - margin, y },
+                thickness: 1,
+                color: rgb(0.8, 0.8, 0.8),
+            });
+            y -= lineHeight;
+        };
+
+        drawTableHeader();
+
+        for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
+            const row = rows[rowIndex];
+            const cellData = [];
+            let maxLines = 1;
+            let maxImageHeight = 0;
+
+            for (const col of scaledColumns) {
+                if (col.key === 'image') {
+                    const url = row[col.key];
+                    const embed = await loadRemoteImage(pdfDoc, url, imageCache);
+                    let drawWidth = 0;
+                    let drawHeight = 0;
+                    if (embed) {
+                        const maxWidth = Math.max(col.width - 6, 10);
+                        const maxHeight = 36;
+                        const scale = Math.min(
+                            maxWidth / embed.width,
+                            maxHeight / embed.height,
+                            1
+                        );
+                        drawWidth = embed.width * scale;
+                        drawHeight = embed.height * scale;
+                        maxImageHeight = Math.max(maxImageHeight, drawHeight);
+                    }
+                    cellData.push({ type: 'image', embed, drawWidth, drawHeight });
+                } else {
+                    const value = row[col.key] ?? '-';
+                    const padLeft = col.padLeft || 0;
+                    const maxWidth = Math.max(col.width - 6 - padLeft, 20);
+                    const lines = wrapText(value, font, 9, maxWidth);
+                    maxLines = Math.max(maxLines, lines.length || 1);
+                    cellData.push({ type: 'text', lines, padLeft });
+                }
+            }
+
+            const rowHeight = Math.max(maxLines * lineHeight + 2, maxImageHeight + 6);
+            const sectionBreak = sectionGap && row.isSectionStart && rowIndex > 0 ? sectionGap : 0;
+            ensureSpace(rowHeight + lineHeight + rowGap + sectionBreak);
+            if (sectionBreak) {
+                y -= sectionBreak;
+            }
+            let x = margin;
+
+            cellData.forEach((cell, idx) => {
+                const col = scaledColumns[idx];
+                if (cell.type === 'image') {
+                    if (cell.embed) {
+                        const imageX = x + (col.width - cell.drawWidth) / 2;
+                        const imageY = y - cell.drawHeight + 4;
+                        page.drawImage(cell.embed.image, {
+                            x: imageX,
+                            y: imageY,
+                            width: cell.drawWidth,
+                            height: cell.drawHeight,
+                        });
+                    } else {
+                        page.drawText('-', {
+                            x,
+                            y,
+                            size: 9,
+                            font,
+                            color: rgb(0, 0, 0),
+                        });
+                    }
+                } else {
+                    const padLeft = cell.padLeft || 0;
+                    cell.lines.forEach((line, lineIdx) => {
+                        page.drawText(line, {
+                            x: x + padLeft,
+                            y: y - lineIdx * lineHeight,
+                            size: 9,
+                            font,
+                            color: rgb(0, 0, 0),
+                        });
+                    });
+                }
+                x += col.width;
+            });
+
+            y -= rowHeight;
+            if (rowGap) {
+                y -= rowGap;
+            }
+            if (y < margin + lineHeight * 2) {
+                page = pdfDoc.addPage([pageWidth, pageHeight]);
+                y = pageHeight - margin;
+                drawTableHeader();
+            }
+        }
+    };
+
+    const headerTitle = 'Indo Traktor Form Commissioning';
+    const titleSize = 14;
+    let headerBlockHeight = titleSize;
+
+    if (logoImage) {
+        const logoWidth = 110;
+        const logoHeight = (logoImage.height / logoImage.width) * logoWidth;
+        const logoX = margin;
+        const logoY = y - logoHeight / 2 + titleSize / 2;
+        page.drawImage(logoImage, {
+            x: logoX,
+            y: logoY,
+            width: logoWidth,
+            height: logoHeight,
+        });
+        headerBlockHeight = Math.max(headerBlockHeight, logoHeight);
+    }
+
+    drawCentered(headerTitle, titleSize, y);
+    const headerGap = Math.max(10, headerBlockHeight - 18);
+    y -= headerGap;
+
+    drawSectionTitle('Unit Information', 14);
+    y -= 8;
+
+    const infoLines = unitInfoData.map((info) => ({
+        label: info.label,
+        value: info.value,
+    }));
+
+    const half = Math.ceil(infoLines.length / 2);
+    const left = infoLines.slice(0, half);
+    const right = infoLines.slice(half);
+    const columnWidth = contentWidth / 2;
+    const rightColumnOffset = 28;
+    const labelWidth = 110;
+    const valueWidthLeft = Math.max(columnWidth - labelWidth - 4, 40);
+    const valueWidthRight = Math.max(columnWidth - rightColumnOffset - labelWidth - 4, 40);
+    const totalRows = Math.max(left.length, right.length);
+
+    const shouldWrapValue = (label) => label === 'Transmission Type' || label === 'Customer';
+
+    for (let idx = 0; idx < totalRows; idx += 1) {
+        const leftItem = left[idx];
+        const rightItem = right[idx];
+        const leftLabelLines = leftItem
+            ? wrapText(`${leftItem.label}:`, bold, 10, Math.max(labelWidth - 2, 20))
+            : [];
+        const rightLabelLines = rightItem
+            ? wrapText(`${rightItem.label}:`, bold, 10, Math.max(labelWidth - 2, 20))
+            : [];
+        const leftLines = leftItem
+            ? (shouldWrapValue(leftItem.label)
+                ? wrapText(String(leftItem.value ?? ''), font, 10, valueWidthLeft)
+                : [String(leftItem.value ?? '')])
+            : [];
+        const rightLines = rightItem
+            ? (shouldWrapValue(rightItem.label)
+                ? wrapText(String(rightItem.value ?? ''), font, 10, valueWidthRight)
+                : [String(rightItem.value ?? '')])
+            : [];
+        const rowLines = Math.max(
+            leftLines.length || 1,
+            rightLines.length || 1,
+            leftLabelLines.length || 1,
+            rightLabelLines.length || 1
+        );
+
+        ensureSpace(rowLines * lineHeight);
+
+        if (leftItem) {
+            leftLabelLines.forEach((line, lineIdx) => {
+                page.drawText(line, {
+                    x: margin,
+                    y: y - lineIdx * lineHeight,
+                    size: 10,
+                    font: bold,
+                    color: rgb(0, 0, 0),
+                });
+            });
+            leftLines.forEach((line, lineIdx) => {
+                page.drawText(line, {
+                    x: margin + labelWidth,
+                    y: y - lineIdx * lineHeight,
+                    size: 10,
+                    font,
+                    color: rgb(0, 0, 0),
+                });
+            });
+        }
+
+        if (rightItem) {
+            rightLabelLines.forEach((line, lineIdx) => {
+                page.drawText(line, {
+                    x: margin + columnWidth + rightColumnOffset,
+                    y: y - lineIdx * lineHeight,
+                    size: 10,
+                    font: bold,
+                    color: rgb(0, 0, 0),
+                });
+            });
+            rightLines.forEach((line, lineIdx) => {
+                page.drawText(line, {
+                    x: margin + columnWidth + rightColumnOffset + labelWidth,
+                    y: y - lineIdx * lineHeight,
+                    size: 10,
+                    font,
+                    color: rgb(0, 0, 0),
+                });
+            });
+        }
+
+        y -= rowLines * lineHeight;
+    }
+
+    y -= 6;
+
+    if ((details.brand || '').toLowerCase() === 'renault' && majorComponents && majorComponents.length > 0) {
+        drawSectionTitle('Major Components', 26);
+        const componentRows = majorComponents.map((comp) => ({
+            component: comp.component || '-',
+            make: comp.make || '-',
+            typeModel: comp.typeModel || '-',
+            serialNumber: comp.serialNumber || '-',
+            partNumber: comp.partNumber || '-',
+            remarks: comp.remarks || '-',
+        }));
+        await drawTable(
+            [
+                { key: 'component', label: 'Component', width: 90 },
+                { key: 'make', label: 'Make', width: 70 },
+                { key: 'typeModel', label: 'Type/Model', width: 90 },
+                { key: 'serialNumber', label: 'Serial No', width: 90 },
+                { key: 'partNumber', label: 'Part No', width: 80 },
+                { key: 'remarks', label: 'Remarks', width: 90 },
+            ],
+            componentRows,
+            { afterTitleGap: 8 }
+        );
+    }
+
+    const brandLabel = toCapitalCase(details.brand);
+    drawSectionTitle(`Checklist Inspection Items (${brandLabel})`, 26);
+    y -= 6;
+
+    const { columns, rows, sectionGap: checklistSectionGap } = buildChecklistTable(details);
+    await drawTable(columns, rows, { sectionGap: checklistSectionGap });
+
+    ensureSpaceForSection(26, 2);
+    drawSectionTitle('General Notes / Remarks', 26);
+    drawWrappedLine(remarks || '-', margin, contentWidth, 10);
+
+    const timestamp = printedAt || new Date().toLocaleString('id-ID', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+    });
+    const footerText = printedBy
+        ? `Printed out by ${printedBy} - ${timestamp}`
+        : `Printed out by - ${timestamp}`;
+    const footerY = margin - 6;
+    if (y < footerY + lineHeight * 2) {
+        page = pdfDoc.addPage([pageWidth, pageHeight]);
+        y = pageHeight - margin;
+    }
+    page.drawText(footerText, {
+        x: margin,
+        y: footerY,
+        size: 9,
+        font,
+        color: rgb(0.45, 0.45, 0.45),
+    });
+
+    return pdfDoc.save();
+};
+
 const LogData = ({ title, apiUrl }) => {
     const [logs, setLogs] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -231,14 +875,7 @@ const LogData = ({ title, apiUrl }) => {
             No: index + 1,
             "WO Number": log.woNumber || 'N/A',
             "Type/Model": lookupTables.models[log.model] || log.model || 'N/A',
-            Brand:
-                log.brand || "manitou"
-                    ? "Manitou"
-                    : log.brand === "renault"
-                        ? "Renault Trucks"
-                        : log.brand === "sdlg"
-                            ? "SDLG"
-                            : log.brand || "N/A",
+            Brand: BRAND_LABEL_MAP[(log.brand || '').toLowerCase()] || log.brand || "N/A",
             VIN: log.VIN || "N/A",
             "Date of Check": log.dateOfCheck
                 ? new Date(log.dateOfCheck).toLocaleDateString("id-ID")
@@ -280,7 +917,10 @@ const LogData = ({ title, apiUrl }) => {
             let value = details[key];
             let label = formatKeyToLabel(key);
 
-            if (lowerKey === 'model' && lookupTables.models[value]) {
+            if (lowerKey === 'brand') {
+                const brandKey = String(value || '').toLowerCase();
+                value = BRAND_LABEL_MAP[brandKey] || value || 'N/A';
+            } else if (lowerKey === 'model' && lookupTables.models[value]) {
                 value = lookupTables.models[value];
             } else if (lowerKey === 'technician' && lookupTables.technicians[value]) {
                 value = lookupTables.technicians[value];
@@ -583,6 +1223,58 @@ const toTitleCase = (str) => {
     const brand = selectedLogDetails?.brand;
     const checklist_items = selectedLogDetails?.checklist_items;
     const major_components = selectedLogDetails?.major_components;
+    const printedByName = (() => {
+        if (!user) return '';
+        const fullName = `${user.firstName || ''} ${user.lastName || ''}`.trim();
+        return fullName || user.username || user.email || '';
+    })();
+    const printedAt = new Date().toLocaleString('id-ID', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+    });
+    const canDownload = Boolean(selectedLogDetails && !selectedLogDetails.error);
+
+    const handleDownloadPdf = async () => {
+        if (!canDownload) return;
+
+        try {
+            const bytes = await createCommissioningPdf({
+                details: selectedLogDetails,
+                unitInfoData,
+                remarks,
+                majorComponents: major_components || [],
+                printedBy: printedByName,
+                printedAt,
+            });
+            const brandValue = (selectedLogDetails?.brand || '').toLowerCase();
+            const brandLabel = BRAND_LABEL_MAP[brandValue] || toCapitalCase(selectedLogDetails?.brand || '');
+            const vinValue = selectedLogDetails?.VIN || selectedLogDetails?.vin || '';
+            const woNumber = selectedLogDetails?.woNumber || '';
+            const fileBase = safeFileName(
+                `Commissioning - ${brandLabel || 'brand'} - ${vinValue || woNumber || 'log'}`
+            );
+            const blob = new Blob([bytes], { type: 'application/pdf' });
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `${fileBase}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (error) {
+            console.error('Commissioning PDF error:', error);
+            notifications.show({
+                title: 'Download Failed',
+                message: 'Unable to generate PDF. Please try again.',
+                color: 'red',
+            });
+        }
+    };
 
     return (
         <Container size="xl" my="xl">
@@ -819,10 +1511,12 @@ const toTitleCase = (str) => {
                                                     const sectionTitle = sectionMap[sectionKey] || sectionKey;
 
                                                     return (
-                                                        <Box key={sectionKey} p="md" withRowBorders radius="md">
+                                                        <Box key={sectionKey} p="md" radius="md">
                                                             <Title order={5} mb="sm">{sectionTitle}</Title>
                                                             <Grid gutter="xl">
-                                                                {Object.keys(sectionItems).map((itemId) => {
+                                                                {Object.keys(sectionItems)
+                                                                    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+                                                                    .map((itemId) => {
                                                                     const itemStatus = sectionItems[itemId];
                                                                     const itemLabel = BRAND_CHECKLIST_MAP[brandLower]?.items?.[sectionKey]?.find(item => item.id === itemId)?.label || `Item ${itemId}`;
                                                                     return (
@@ -1001,6 +1695,11 @@ const toTitleCase = (str) => {
                             </Text>
                         </Paper>
                     </Box>
+                    <Group justify="flex-end" mt="md">
+                        <Button leftSection={<IconDownload size={16} />} onClick={handleDownloadPdf} disabled={!canDownload}>
+                            Download PDF
+                        </Button>
+                    </Group>
                     </>
                 )}
             </Modal>

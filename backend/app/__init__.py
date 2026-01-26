@@ -185,6 +185,9 @@ def create_app():
     from app.routes.notifications_routes import notifications_bp
     app.register_blueprint(notifications_bp)
 
+    from app.routes.media_routes import media_bp
+    app.register_blueprint(media_bp)
+
     from app.sockets import register_socket_events
     register_socket_events(socketio)
 

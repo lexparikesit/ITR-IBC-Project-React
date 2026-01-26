@@ -28,6 +28,7 @@ import { notifications } from '@mantine/notifications';
 import { useUser } from '@/context/UserContext';
 import { DateInput } from '@mantine/dates';
 import apiClient from '@/libs/api';
+import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 
 const BRAND_NAME_MAP = {
     'MA': 'Manitou',
@@ -191,6 +192,363 @@ const formatLocalTime = (isoString) => {
         hour12: false,
         timeZone: 'Asia/Jakarta'
     }).replace(/\./g, ':');
+};
+
+const loadLogoImage = async (pdfDoc) => {
+    const paths = ['/images/ITR-logo.png', '/ITR-logo.png'];
+
+    for (const path of paths) {
+        try {
+            const response = await fetch(path);
+            if (!response.ok) continue;
+            const bytes = new Uint8Array(await response.arrayBuffer());
+            return await pdfDoc.embedPng(bytes);
+        } catch (error) {
+            // Try next path
+        }
+    }
+    return null;
+};
+
+const safeFileName = (value) => {
+    const base = String(value || 'ibc_log');
+    return base
+        .replace(/[^a-z0-9_-]+/gi, '_')
+        .replace(/^_+|_+$/g, '')
+        .toLowerCase() || 'ibc_log';
+};
+
+const wrapText = (text, font, size, maxWidth) => {
+    const content = String(text ?? '');
+    if (!content) return [''];
+
+    const words = content.split(/\s+/);
+    const lines = [];
+    let line = '';
+
+    const pushLine = (value) => {
+        if (value) lines.push(value);
+    };
+
+    words.forEach((word) => {
+        const testLine = line ? `${line} ${word}` : word;
+        const width = font.widthOfTextAtSize(testLine, size);
+        if (width <= maxWidth) {
+            line = testLine;
+            return;
+        }
+
+        if (line) {
+            pushLine(line);
+            line = '';
+        }
+
+        if (font.widthOfTextAtSize(word, size) <= maxWidth) {
+            line = word;
+        } else {
+            let chunk = '';
+            for (const ch of word) {
+                const testChunk = `${chunk}${ch}`;
+                if (font.widthOfTextAtSize(testChunk, size) > maxWidth && chunk) {
+                    lines.push(chunk);
+                    chunk = ch;
+                } else {
+                    chunk = testChunk;
+                }
+            }
+            line = chunk;
+        }
+    });
+
+    pushLine(line);
+    return lines.length ? lines : [''];
+};
+
+const createIbcPdf = async ({ details, unitInfoData, lookupTables, printedBy, printedAt }) => {
+    const pdfDoc = await PDFDocument.create();
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const bold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+    const logoImage = await loadLogoImage(pdfDoc);
+    const pageWidth = 595.28;
+    const pageHeight = 841.89;
+    const margin = 40;
+    const lineHeight = 12;
+    const sectionGap = 16;
+    let page = pdfDoc.addPage([pageWidth, pageHeight]);
+    let y = pageHeight - margin;
+
+    const contentWidth = pageWidth - margin * 2;
+
+    const drawCentered = (text, size, yPos) => {
+        const textWidth = bold.widthOfTextAtSize(text, size);
+        page.drawText(text, {
+            x: (pageWidth - textWidth) / 2,
+            y: yPos,
+            size,
+            font: bold,
+            color: rgb(0, 0, 0),
+        });
+    };
+
+    const ensureSpace = (needed) => {
+        if (y - needed >= margin) return;
+        page = pdfDoc.addPage([pageWidth, pageHeight]);
+        y = pageHeight - margin;
+    };
+
+    const drawSectionTitle = (text, gap = sectionGap) => {
+        y -= gap;
+        page.drawText(text, {
+            x: margin,
+            y,
+            size: 12,
+            font: bold,
+            color: rgb(0, 0, 0),
+        });
+        y -= lineHeight;
+    };
+
+    const drawWrappedLine = (text, x, maxWidth, size = 10, fontToUse = font) => {
+        const lines = wrapText(text, fontToUse, size, maxWidth);
+        lines.forEach((line) => {
+            ensureSpace(lineHeight);
+            page.drawText(line, { x, y, size, font: fontToUse, color: rgb(0, 0, 0) });
+            y -= lineHeight;
+        });
+    };
+
+    const drawTable = (title, columns, rows, options = {}) => {
+        const { afterTitleGap = 0 } = options;
+        drawSectionTitle(title, 14);
+        if (afterTitleGap) {
+            y -= afterTitleGap;
+        }
+        if (!rows.length) {
+            drawWrappedLine('No data available.', margin, contentWidth, 10);
+            return;
+        }
+
+        const totalWidth = columns.reduce((acc, col) => acc + col.width, 0) || 1;
+        const scale = contentWidth / totalWidth;
+        const scaledColumns = columns.map((col) => ({
+            ...col,
+            width: col.width * scale,
+        }));
+
+        const drawHeader = () => {
+            ensureSpace(lineHeight * 2);
+            let x = margin;
+            scaledColumns.forEach((col) => {
+                page.drawText(col.label, {
+                    x,
+                    y,
+                    size: 10,
+                    font: bold,
+                    color: rgb(0, 0, 0),
+                });
+                x += col.width;
+            });
+            y -= lineHeight;
+            page.drawLine({
+                start: { x: margin, y },
+                end: { x: pageWidth - margin, y },
+                thickness: 1,
+                color: rgb(0.8, 0.8, 0.8),
+            });
+            y -= lineHeight;
+        };
+
+        drawHeader();
+
+        rows.forEach((row) => {
+            const cells = scaledColumns.map((col) => {
+                const value = row[col.key] ?? '-';
+                return wrapText(value, font, 9, col.width - 6);
+            });
+            const maxLines = Math.max(...cells.map((c) => c.length || 1));
+            const rowHeight = maxLines * lineHeight + 2;
+            ensureSpace(rowHeight + lineHeight);
+            let x = margin;
+            cells.forEach((lines, idx) => {
+                lines.forEach((line, lineIdx) => {
+                    page.drawText(line, {
+                        x,
+                        y: y - lineIdx * lineHeight,
+                        size: 9,
+                        font,
+                        color: rgb(0, 0, 0),
+                    });
+                });
+                x += scaledColumns[idx].width;
+            });
+            y -= rowHeight;
+            if (y < margin + lineHeight * 2) {
+                page = pdfDoc.addPage([pageWidth, pageHeight]);
+                y = pageHeight - margin;
+                drawHeader();
+            }
+        });
+    };
+
+    const headerTitle = 'Indo Traktor Form IBC';
+    const titleSize = 14;
+    let headerBlockHeight = titleSize;
+
+    if (logoImage) {
+        const logoWidth = 110;
+        const logoHeight = (logoImage.height / logoImage.width) * logoWidth;
+        const logoX = margin;
+        const logoY = y - (logoHeight / 2) + (titleSize / 2);
+        page.drawImage(logoImage, {
+            x: logoX,
+            y: logoY,
+            width: logoWidth,
+            height: logoHeight,
+        });
+        headerBlockHeight = Math.max(headerBlockHeight, logoHeight);
+    }
+
+    drawCentered(headerTitle, titleSize, y);
+    y -= Math.max(10, headerBlockHeight - 18);
+
+    drawSectionTitle('IBC Header Information', 12);
+    y -= 15;
+
+    const infoLines = unitInfoData.filter((item) => item.key !== 'IBC_ID');
+    const half = Math.ceil(infoLines.length / 2);
+    const left = infoLines.slice(0, half);
+    const right = infoLines.slice(half);
+    const columnWidth = contentWidth / 2;
+    const labelWidth = 120;
+    const rightOffset = 18;
+    const startY = y;
+
+    left.forEach((item, idx) => {
+        const rowY = startY - idx * lineHeight;
+        page.drawText(`${item.label}:`, {
+            x: margin,
+            y: rowY,
+            size: 10,
+            font: bold,
+            color: rgb(0, 0, 0),
+        });
+        page.drawText(String(item.value ?? ''), {
+            x: margin + labelWidth,
+            y: rowY,
+            size: 10,
+            font,
+            color: rgb(0, 0, 0),
+        });
+    });
+
+    right.forEach((item, idx) => {
+        const rowY = startY - idx * lineHeight;
+        page.drawText(`${item.label}:`, {
+            x: margin + columnWidth + rightOffset,
+            y: rowY,
+            size: 10,
+            font: bold,
+            color: rgb(0, 0, 0),
+        });
+        page.drawText(String(item.value ?? ''), {
+            x: margin + columnWidth + rightOffset + labelWidth,
+            y: rowY,
+            size: 10,
+            font,
+            color: rgb(0, 0, 0),
+        });
+    });
+
+    y = startY - Math.max(left.length, right.length) * lineHeight - 6;
+
+    const units = (details?.ibc_trans || []).map((unit, idx) => ({
+        no: String(idx + 1),
+        vin: unit.VIN || '-',
+        attachment: unit.AttachmentType || '-',
+        supplier: unit.AttachmentSupplier || '-',
+        address: unit.DeliveryAddress || '-',
+        pic: unit.DeliveryCustPIC || '-',
+        plan: formatDateOnly(unit.DeliveryPlan),
+        remarks: unit.Remarks || '-',
+    }));
+
+    drawTable(
+        `Unit Information - ${details?.ibc_trans?.length || 0} Units`,
+        [
+            { key: 'no', label: 'No.', width: 30 },
+            { key: 'vin', label: 'VIN', width: 85 },
+            { key: 'attachment', label: 'Attachment', width: 80 },
+            { key: 'supplier', label: 'Supplier', width: 65 },
+            { key: 'address', label: 'Deliv. Address', width: 110 },
+            { key: 'pic', label: 'PIC', width: 60 },
+            { key: 'plan', label: 'Deliv. Plan', width: 65 },
+            { key: 'remarks', label: 'Remarks', width: 90 },
+        ],
+        units,
+        { afterTitleGap: 10 }
+    );
+
+    const packages = (details?.ibc_packages || []).map((pkg, idx) => ({
+        no: String(idx + 1),
+        type: lookupTables.packages?.[pkg.PackagesType] || pkg.PackagesType || '-',
+        desc: pkg.PackageDesc || '-',
+    }));
+
+    drawTable(
+        `Packages Includes - ${details?.ibc_packages?.length || 0} Packages`,
+        [
+            { key: 'no', label: 'No.', width: 30 },
+            { key: 'type', label: 'Package Type', width: 120 },
+            { key: 'desc', label: 'Package Description', width: 230 },
+        ],
+        packages,
+        { afterTitleGap: 10 }
+    );
+
+    const accessories = (details?.ibc_accessories || []).map((acc, idx) => ({
+        no: String(idx + 1),
+        accessory: lookupTables.accessories?.[acc.IBC_Accessories] || acc.IBC_Accessories || '-',
+        remarks: acc.Remarks || '-',
+        qty: String(acc.qty_acc ?? '-'),
+    }));
+
+    drawTable(
+        `Accessories Includes - ${details?.ibc_accessories?.length || 0} Accessories`,
+        [
+            { key: 'no', label: 'No.', width: 30 },
+            { key: 'accessory', label: 'Accessory', width: 140 },
+            { key: 'remarks', label: 'Accessory Description', width: 230 },
+            { key: 'qty', label: 'Qty', width: 40 },
+        ],
+        accessories,
+        { afterTitleGap: 10 }
+    );
+
+    const timestamp = printedAt || new Date().toLocaleString('id-ID', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+    });
+    const footerText = printedBy
+        ? `Printed out by ${printedBy} - ${timestamp}`
+        : `Printed out by - ${timestamp}`;
+    const footerY = margin - 6;
+    if (y < footerY + lineHeight * 2) {
+        page = pdfDoc.addPage([pageWidth, pageHeight]);
+        y = pageHeight - margin;
+    }
+    page.drawText(footerText, {
+        x: margin,
+        y: footerY,
+        size: 9,
+        font,
+        color: rgb(0.45, 0.45, 0.45),
+    });
+
+    return pdfDoc.save();
 };
 
 const toTitleCase = (str) => {
@@ -878,6 +1236,52 @@ const IBCLogData = ({ title, apiUrl }) => {
         return getUnitInformationData(selectedLogDetails, lookupTables);
     }, [selectedLogDetails, lookupTables]);
 
+    const printedByName = (() => {
+        if (!user) return '';
+        const fullName = `${user.firstName || ''} ${user.lastName || ''}`.trim();
+        return fullName || user.username || user.email || '';
+    })();
+    const printedAt = new Date().toLocaleString('id-ID', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+    });
+
+    const handleDownloadPdf = async () => {
+        if (!selectedLogDetails || selectedLogDetails.error) return;
+
+        try {
+            const bytes = await createIbcPdf({
+                details: selectedLogDetails,
+                unitInfoData,
+                lookupTables,
+                printedBy: printedByName,
+                printedAt,
+            });
+            const brandLabel = BRAND_NAME_MAP[selectedLogDetails.Brand_ID] || selectedLogDetails.Brand_ID || 'brand';
+            const ibcNo = selectedLogDetails.IBC_No || 'ibc';
+            const fileBase = safeFileName(`IBC - ${brandLabel} - ${ibcNo}`);
+            const blob = new Blob([bytes], { type: 'application/pdf' });
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `${fileBase}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (error) {
+            notifications.show({
+                title: 'Download Failed',
+                message: 'Unable to generate PDF. Please try again.',
+                color: 'red',
+            });
+        }
+    };
+
     const downloadExcel = () => {
         if (!user?.permissions?.includes('download_ibc_log')) {
             notifications.show({
@@ -1472,13 +1876,16 @@ const IBCLogData = ({ title, apiUrl }) => {
                                 <Text c="dimmed">No accessories information available.</Text>
                             )}
                         </Box>
-                        {user?.permissions?.includes('edit_ibc') && (
-                            <Group justify="flex-end">
+                        <Group justify="flex-end">
+                            <Button leftSection={<IconDownload size={16} />} onClick={handleDownloadPdf}>
+                                Download PDF
+                            </Button>
+                            {user?.permissions?.includes('edit_ibc') && (
                                 <Button color="blue" onClick={handleStartEditing}>
                                     Edit IBC
                                 </Button>
-                            </Group>
-                        )}
+                            )}
+                        </Group>
                     </Stack>
                 )}
             </Modal>
