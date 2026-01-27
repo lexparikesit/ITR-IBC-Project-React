@@ -134,6 +134,9 @@ def jwt_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         """Extract and verify JWT token from Authorization header or auth_token cookie."""
+        # Allow CORS preflight without auth
+        if request.method == "OPTIONS":
+            return "", 200
 
         token = None
 

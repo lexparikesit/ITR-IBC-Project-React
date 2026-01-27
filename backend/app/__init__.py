@@ -97,8 +97,8 @@ def create_app():
             return
 
         safe_methods = {"GET", "HEAD", "OPTIONS"}
-        if os.getenv("FLASK_ENV", "development") == "development" and request.method == "OPTIONS":
-            return
+        # if os.getenv("FLASK_ENV", "development") == "development" and request.method == "OPTIONS":
+        #     return
 
         if request.method in safe_methods:
             return

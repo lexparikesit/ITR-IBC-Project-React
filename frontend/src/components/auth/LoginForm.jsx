@@ -10,7 +10,7 @@ import { IconAt, IconLock } from "@tabler/icons-react";
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { notifications } from "@mantine/notifications";
-import apiClient from "@/libs/api";
+import apiClient, { prefetchCsrfToken } from "@/libs/api";
 
 const LoginForm = () => {
 	const [username, setUsername] = useState("");
@@ -23,6 +23,7 @@ const LoginForm = () => {
 		setIsLoading(true);
 
 		try {
+			await prefetchCsrfToken();
 			const response = await apiClient.post("/login", {
 				username: username,
 				password: password,

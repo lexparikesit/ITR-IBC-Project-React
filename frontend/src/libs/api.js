@@ -9,6 +9,8 @@ const apiClient = axios.create({
 });
 
 let csrfToken = null;
+const ACCESS_TOKEN_KEY = "access_token";
+let accessToken = null;
 const safeMethods = ['get', 'head', 'options'];
 let isRefreshing = false;
 let refreshPromise = null;
@@ -56,16 +58,47 @@ function isAuthEndpoint(pathname) {
     return AUTH_ENDPOINTS.some((segment) => pathname.includes(segment));
 }
 
+if (typeof window !== 'undefined') {
+    accessToken = localStorage.getItem(ACCESS_TOKEN_KEY);
+    if (accessToken) {
+        apiClient.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
+    }
+}
+
+export function setAccessToken(token) {
+    accessToken = token || null;
+    if (typeof window !== 'undefined') {
+        if (accessToken) {
+            localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
+            apiClient.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
+        } else {
+            localStorage.removeItem(ACCESS_TOKEN_KEY);
+            delete apiClient.defaults.headers.common['Authorization'];
+        }
+    }
+}
+
 async function ensureCsrfToken() {
     if (csrfToken) return csrfToken;
     const res = await csrfClient.get('/csrf');
     csrfToken = res.data?.csrfToken;
+    if (csrfToken) {
+        apiClient.defaults.headers.common['X-CSRF-Token'] = csrfToken;
+    }
     return csrfToken;
+}
+
+export async function prefetchCsrfToken() {
+    return ensureCsrfToken();
 }
 
 apiClient.interceptors.request.use(
     async (config) => {
         const method = (config.method || 'get').toLowerCase();
+        if (!config.headers?.Authorization && accessToken) {
+            config.headers = config.headers || {};
+            config.headers['Authorization'] = `Bearer ${accessToken}`;
+        }
         if (!safeMethods.includes(method) && !config.headers['X-CSRF-Token']) {
             try {
                 const token = await ensureCsrfToken();
@@ -102,6 +135,9 @@ apiClient.interceptors.response.use(
                 config._csrfRetried = true;
                 config.headers = config.headers || {};
                 config.headers['X-CSRF-Token'] = token;
+                if (token) {
+                    apiClient.defaults.headers.common['X-CSRF-Token'] = token;
+                }
                 return apiClient(config);
             } catch (e) {
                 // fall through to reject

@@ -5,7 +5,7 @@ import { Button, Stack, PinInput, Text } from "@mantine/core";
 import { redirect, useRouter } from "next/navigation";
 import { notifications } from "@mantine/notifications";
 import { useUser } from "@/context/UserContext"; 
-import apiClient from "@/libs/api";
+import apiClient, { prefetchCsrfToken, setAccessToken } from "@/libs/api";
 
 export default function OtpForm() {
 	const [otp, setOtp] = useState("");
@@ -77,6 +77,7 @@ export default function OtpForm() {
 		setIsLoading(true);
 
 		try {
+			await prefetchCsrfToken();
 			const response = await apiClient.post("/login-otp", {
 				email: userEmail,
 				otp_code: otp,
@@ -86,6 +87,9 @@ export default function OtpForm() {
 			console.log("API Respond for Verification", data);
 
 			if (data.user_id && data.email && data.user) {
+				if (data.access_token) {
+					setAccessToken(data.access_token);
+				}
 				try {
 					const userRes = await apiClient.get("/user/me");
 					const userData = userRes.data;
@@ -150,6 +154,7 @@ export default function OtpForm() {
         }
 
 		try {
+			await prefetchCsrfToken();
 			const response = await apiClient.post("/resend-otp", {
 				email: userEmail,
 			});

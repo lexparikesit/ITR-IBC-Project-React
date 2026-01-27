@@ -4,4 +4,7 @@ __pycache__/
 
 # sensitive key and temporary file
 backend/keys/
+frontend/*.zip
+frontend/*.png
+frontend/lrt
 git reset --soft HEAD~1

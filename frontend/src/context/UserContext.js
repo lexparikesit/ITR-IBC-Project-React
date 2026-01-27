@@ -7,7 +7,7 @@ import React, {
     useEffect
 } from "react"
 import { usePathname, useRouter } from "next/navigation"
-import apiClient from "@/libs/api";
+import apiClient, { setAccessToken } from "@/libs/api";
 
 // create context
 const UserContext = createContext(null);
@@ -80,6 +80,7 @@ export const UserProvider = ({ children }) => {
     const logout = () => {
         setUser(null);
         localStorage.removeItem("user_data");
+        setAccessToken(null);
         apiClient.post("/logout").catch(() => {});
         router.push("/login");
     };
